@@ -61,6 +61,11 @@ async function fetchJson<T>(path: string, options?: FetchOptions): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+function cacheBust(url: string): string {
+  const sep = url.includes("?") ? "&" : "?";
+  return `${url}${sep}_t=${Date.now()}`;
+}
+
 export type Health = { status: string; timestamp: string };
 
 export type ContaInstagramRes = {
@@ -243,11 +248,11 @@ export const api = {
         body: payload,
       }),
     getCronograma: () =>
-      fetchJson<{ cronograma: CronogramaItem[]; total: number }>("/api/postador/cronograma"),
+      fetchJson<{ cronograma: CronogramaItem[]; total: number }>(cacheBust("/api/postador/cronograma")),
     deleteCronograma: (id: string) =>
       fetchJson<{ ok: boolean }>(`/api/postador/cronograma/${id}`, { method: "DELETE" }),
     getAgendados: () =>
-      fetchJson<{ agendados: AgendadoItem[]; total: number }>("/api/postador/agendados"),
+      fetchJson<{ agendados: AgendadoItem[]; total: number }>(cacheBust("/api/postador/agendados")),
     saveAgendado: (payload: {
       caption: string;
       media_url?: string | null;

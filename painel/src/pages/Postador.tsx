@@ -1118,7 +1118,9 @@ function AgendadosList({
                 type="button"
                 onClick={() => {
                   if (window.confirm("Excluir este agendamento?")) {
-                    api.postador.deleteAgendado(item.id).then(() => load());
+                    api.postador.deleteAgendado(item.id)
+                      .then(() => load())
+                      .catch(e => alert("Erro ao excluir: " + e.message));
                   }
                 }}
                 className="btn-ghost shrink-0 rounded-lg py-1.5 px-3 text-xs text-red-600 hover:bg-red-50"

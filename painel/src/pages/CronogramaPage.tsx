@@ -71,7 +71,9 @@ export function CronogramaPage() {
                     <span className="text-xs font-medium text-slate-500">{item.media_type}</span>
                     <button onClick={() => {
                         if(window.confirm('Excluir este agendamento?')) {
-                          api.postador.deleteAgendado(item.id).then(() => load());
+                          api.postador.deleteAgendado(item.id)
+                            .then(() => load())
+                            .catch(e => alert("Erro ao cancelar: " + e.message));
                         }
                       }} className="text-xs text-red-600 font-semibold hover:text-red-700 bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-md transition-colors">Cancelar</button>
                   </div>
@@ -109,7 +111,9 @@ export function CronogramaPage() {
                     <button 
                       onClick={() => {
                         if(window.confirm('Remover esta publicação do histórico?')) {
-                          api.postador.deleteCronograma(item.id).then(() => load());
+                          api.postador.deleteCronograma(item.id)
+                            .then(() => load())
+                            .catch(e => alert("Erro ao remover: " + e.message));
                         }
                       }}
                       className="text-[10px] uppercase tracking-wider font-bold text-slate-400 hover:text-red-500 transition-colors"

@@ -94,6 +94,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
   // DELETE /api/postador/cronograma/:id — excluir item do histórico
   fastify.delete<{ Params: { id: string } }>("/cronograma/:id", async (request, reply) => {
     const { id } = request.params;
+    console.log(`[API] DELETE cronograma: ${id}`);
     const ok = await deleteCronograma(id);
     return reply.send({ ok });
   });
@@ -152,6 +153,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
   // DELETE /api/postador/agendados/:id
   fastify.delete<{ Params: { id: string } }>("/agendados/:id", async (request, reply) => {
     const { id } = request.params;
+    console.log(`[API] DELETE agendado: ${id}`);
     const ok = await deleteAgendado(id);
     if (!ok) return reply.status(404).send({ error: "Agendado não encontrado." });
     return reply.send({ ok: true });
@@ -160,6 +162,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/postador/agendados/:id/publicar — publicar um agendado agora (body: conta_id opcional)
   fastify.post<{ Params: { id: string } }>("/agendados/:id/publicar", async (request, reply) => {
     const { id } = request.params;
+    console.log(`[API] POST publicar agendado: ${id}`);
     const body = request.body as { conta_id?: string };
     const agendado = await getAgendado(id);
     if (!agendado) {

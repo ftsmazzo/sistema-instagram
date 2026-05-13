@@ -184,6 +184,12 @@ export async function gerarJornadaPorLink(
   const resText = await complete(SYSTEM_JORNADA, user, options?.provider, options?.model);
   
   try {
+    const firstArr = resText.indexOf("[");
+    const lastArr = resText.lastIndexOf("]");
+    if (firstArr !== -1 && lastArr !== -1 && lastArr > firstArr) {
+      const jsonStr = resText.substring(firstArr, lastArr + 1);
+      return JSON.parse(jsonStr);
+    }
     const limpo = resText.replace(/```json/gi, '').replace(/```/g, '').trim();
     return JSON.parse(limpo);
   } catch (err) {
