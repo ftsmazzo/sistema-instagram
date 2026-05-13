@@ -96,16 +96,12 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // POST /api/postador/cronograma/:id/delete — excluir item do histórico
-  fastify.post<{ Params: { id: string } }>(
-    "/cronograma/:id/delete",
-    { config: { skipBodyParsing: false } },
-    async (request, reply) => {
-      const { id } = request.params;
-      console.log(`[API] DELETE cronograma: ${id}`);
-      const ok = await deleteCronograma(id);
-      return reply.send({ ok });
-    }
-  );
+  fastify.post<{ Params: { id: string } }>("/cronograma/:id/delete", async (request, reply) => {
+    const { id } = request.params;
+    console.log(`[API] DELETE cronograma: ${id}`);
+    const ok = await deleteCronograma(id);
+    return reply.send({ ok });
+  });
 
   // GET /api/postador/agendados — lista de posts salvos para agendar
   fastify.get("/agendados", async (_request, reply) => {
@@ -159,17 +155,13 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // POST /api/postador/agendados/:id/delete
-  fastify.post<{ Params: { id: string } }>(
-    "/agendados/:id/delete",
-    { config: { skipBodyParsing: false } },
-    async (request, reply) => {
-      const { id } = request.params;
-      console.log(`[API] DELETE agendado: ${id}`);
-      const ok = await deleteAgendado(id);
-      if (!ok) return reply.status(404).send({ error: "Agendado não encontrado." });
-      return reply.send({ ok: true });
-    }
-  );
+  fastify.post<{ Params: { id: string } }>("/agendados/:id/delete", async (request, reply) => {
+    const { id } = request.params;
+    console.log(`[API] DELETE agendado: ${id}`);
+    const ok = await deleteAgendado(id);
+    if (!ok) return reply.status(404).send({ error: "Agendado não encontrado." });
+    return reply.send({ ok: true });
+  });
 
   // POST /api/postador/agendados/:id/publicar — publicar um agendado agora (body: conta_id opcional)
   fastify.post<{ Params: { id: string } }>("/agendados/:id/publicar", async (request, reply) => {
