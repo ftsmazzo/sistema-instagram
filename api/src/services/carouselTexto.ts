@@ -51,27 +51,27 @@ async function addTextToImage(imageUrl: string, text: string): Promise<string> {
   const H = meta.height ?? INSTAGRAM_MAX_SIDE;
 
   // ─── Tipografia dinâmica ───────────────────────────────────────────────────
-  let fontSize = 72;
-  const maxChars = text.length > 60 ? 20 : text.length > 30 ? 22 : 25;
-  if (text.length > 50) fontSize = 62;
-  if (text.length > 80) fontSize = 52;
+  let fontSize = 50;
+  const maxChars = text.length > 60 ? 24 : text.length > 30 ? 26 : 28;
+  if (text.length > 50) fontSize = 43;
+  if (text.length > 80) fontSize = 36;
 
   const lines = wrapText(text, maxChars).slice(0, 4);
   if (lines.length === 4 && wrapText(text, maxChars).length > 4)
     lines[3] = lines[3].replace(/\s+\S*$/, "…");
 
-  const lineH = fontSize * 1.25;
+  const lineH = fontSize * 1.3;
   const textBlockH = lines.length * lineH;
 
   // ─── Dimensões do painel de fundo ─────────────────────────────────────────
-  const panelH = textBlockH + 110;
+  const panelH = textBlockH + 80;
   const panelY = H - panelH;
 
   // Accent bar (linha colorida no topo do painel)
-  const accentH = 8;
+  const accentH = 5;
 
   // ─── Geração de linhas SVG ────────────────────────────────────────────────
-  const startY = panelY + 55 + fontSize * 0.5;
+  const startY = panelY + 40 + fontSize * 0.5;
   const svgLines = lines
     .map((line, i) => {
       const safe = escapeXml(line);
@@ -112,16 +112,16 @@ async function addTextToImage(imageUrl: string, text: string): Promise<string> {
   </defs>
 
   <!-- Painel de fundo gradiente -->
-  <rect x="0" y="${panelY - 80}" width="${W}" height="${panelH + 80}" fill="url(#panelGrad)"/>
+  <rect x="0" y="${panelY - 60}" width="${W}" height="${panelH + 60}" fill="url(#panelGrad)"/>
 
   <!-- Linha accent vibrante (barra colorida) -->
   <rect x="0" y="${panelY}" width="${W}" height="${accentH}" fill="url(#accentGrad)"/>
 
   <!-- Ponto de brilho no lado esquerdo da barra -->
-  <circle cx="60" cy="${panelY + accentH / 2}" r="28" fill="rgba(124,58,237,0.35)" filter="url(#glow)"/>
+  <circle cx="60" cy="${panelY + accentH / 2}" r="18" fill="rgba(124,58,237,0.30)" filter="url(#glow)"/>
 
   <!-- Decoração: pequeno traço vertical colorido antes do texto -->
-  <rect x="${W / 2 - 130}" y="${startY - fontSize * 0.65}" width="5" height="${textBlockH}" fill="url(#accentGrad)" rx="2"/>
+  <rect x="${W / 2 - 130}" y="${startY - fontSize * 0.65}" width="4" height="${textBlockH}" fill="url(#accentGrad)" rx="2"/>
 
   <!-- Bloco de texto -->
   ${svgLines}

@@ -233,16 +233,38 @@ export async function gerarJornadaPorLink(
 }
 
 /**
- * Gera um CTA curto e criativo para ser usado em uma imagem, baseado no contexto da legenda.
+ * Gera um texto curto e criativo para sobrepor na imagem, baseado no post da jornada.
+ * Cada chamada deve retornar uma frase diferente e impactante.
  */
 export async function gerarCTAImagem(
   captionContext: string,
   options?: GerarCaptionOptions
 ): Promise<string> {
-  const system = `Você é um copywriter especialista em CTAs curtos e impactantes para serem escritos SOBRE imagens do Instagram (templates SVG).
-O usuário enviará a legenda completa do post.
-Sua tarefa é criar UMA FRASE CURTA (máximo 50 caracteres) que resuma o benefício ou gere curiosidade.
-Regras: Direto, sem aspas, sem hashtags, sem emojis. Retorne APENAS a frase curta e criativa.`;
-  const user = `Legenda do post:\n\n${captionContext}\n\nGere um CTA curto para a imagem:`;
+  const exemplos = [
+    "Seu próximo lar te espera",
+    "Vista e se apaixone",
+    "Localização privilegiada",
+    "Realize o seu sonho",
+    "Oportunidade única",
+    "Agende sua visita",
+    "Conforto e sofisticação",
+    "Viva bem, viva aqui",
+  ];
+  const exemploStr = exemplos.map((e, i) => `${i + 1}. "${e}"`).join("\n");
+
+  const system = `Você é um copywriter especialista em marketing imobiliário premium para Instagram.
+Crie UMA frase curta (4 a 7 palavras, máximo 45 caracteres) para ser escrita em destaque SOBRE a foto do imóvel.
+
+REGRAS OBRIGATÓRIAS:
+- Frase única, não genérica
+- Reflita o ângulo emocional desta imagem específica (qualidade de vida, sonho, exclusividade, localização)
+- Nunca repita frases óbvias como "Casa dos sonhos", "Venha conferir" ou "Entre em contato"
+- Sem hashtags, aspas, emojis ou pontuação excessiva
+- Retorne APENAS a frase, nada mais
+
+Exemplos de bom nível (use como inspiração, não copie):
+${exemploStr}`;
+
+  const user = `Legenda deste post:\n\n${captionContext}\n\nCrie uma frase impactante e diferente das anteriores para sobrepor nesta foto:`;
   return complete(system, user, options?.provider, options?.model);
 }
