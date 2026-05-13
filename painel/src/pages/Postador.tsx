@@ -1085,7 +1085,7 @@ function AgendadosList({
               </button>
               <button
                 type="button"
-                onClick={() => api.postador.deleteAgendado(item.id).then(load)}
+                onClick={() => api.postador.deleteAgendado(item.id).then(() => load())}
                 className="btn-ghost shrink-0 rounded-lg py-1.5 text-sm text-red-600 hover:bg-red-50"
               >
                 Excluir
