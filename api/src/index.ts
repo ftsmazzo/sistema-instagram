@@ -1,7 +1,6 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
-import multipart from "@fastify/multipart";
 import { ensureTables } from "./db/index.js";
 import { healthRoutes } from "./routes/health.js";
 import { configRoutes } from "./routes/config.js";
@@ -21,7 +20,7 @@ async function build() {
 
   await app.register(cors, { origin: true });
   await app.register(jwt, { secret: JWT_SECRET, sign: { expiresIn: "14d" } });
-  await app.register(multipart, { limits: { fileSize: 50 * 1024 * 1024 } }); // 50 MB para upload vídeo/imagem do Postador
+  // multipart registrado apenas nas rotas de upload dentro de postadorRoutes
 
   await app.register(healthRoutes, { prefix: "/" });
   await app.register(authRoutes, { prefix: "/api/auth" });

@@ -250,7 +250,7 @@ export const api = {
     getCronograma: () =>
       fetchJson<{ cronograma: CronogramaItem[]; total: number }>(cacheBust("/api/postador/cronograma")),
     deleteCronograma: (id: string) =>
-      fetchJson<{ ok: boolean }>(`/api/postador/cronograma/${id}/delete`, { method: "POST" }),
+      fetchJson<{ ok: boolean }>(`/api/postador/cronograma/${id}/delete`, { method: "POST", body: {} }),
     getAgendados: () =>
       fetchJson<{ agendados: AgendadoItem[]; total: number }>(cacheBust("/api/postador/agendados")),
     saveAgendado: (payload: {
@@ -266,7 +266,7 @@ export const api = {
         body: payload,
       }),
     deleteAgendado: (id: string) =>
-      fetchJson<{ ok: boolean }>(`/api/postador/agendados/${id}/delete`, { method: "POST" }),
+      fetchJson<{ ok: boolean }>(`/api/postador/agendados/${id}/delete`, { method: "POST", body: {} }),
     publicarAgendado: (id: string, conta_id?: string | null) =>
       fetchJson<{ ok: boolean; id_container?: string; id_media?: string; link_post?: string; message?: string }>(
         `/api/postador/agendados/${id}/publicar`,

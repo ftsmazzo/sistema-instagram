@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { createReadStream } from "fs";
 import { stat } from "fs/promises";
 import { join } from "path";
+import multipart from "@fastify/multipart";
 import { gerarCaption as gerarCaptionIA, refazerCaption as refazerCaptionIA, gerarJornadaPorLink, gerarCTAImagem } from "../services/caption.js";
 import { uploadMedia, getUploadsDir, isStorageConfigured } from "../services/storage.js";
 import { rasparPaginaImovel, montarDescricaoParaCaption, baixarEEnviarParaCloudinary } from "../services/imovel.js";
@@ -62,6 +63,9 @@ async function recordCrmPostagemAposPublicar(
  * Postador: IA no backend, armazenamento (Cloudinary / local / MinIO), Graph API para publicar.
  */
 export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
+  // Registra multipart apenas dentro deste plugin (evita conflito com rotas JSON)
+  await fastify.register(multipart, { limits: { fileSize: 50 * 1024 * 1024 } });
+
   // GET /api/postador/media/:filename — serve arquivos do armazenamento local (self-hosted)
   fastify.get<{ Params: { filename: string } }>("/media/:filename", async (request, reply) => {
     const { filename } = request.params;
@@ -92,12 +96,16 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // POST /api/postador/cronograma/:id/delete — excluir item do histórico
-  fastify.post<{ Params: { id: string } }>("/cronograma/:id/delete", async (request, reply) => {
-    const { id } = request.params;
-    console.log(`[API] DELETE cronograma: ${id}`);
-    const ok = await deleteCronograma(id);
-    return reply.send({ ok });
-  });
+  fastify.post<{ Params: { id: string } }>(
+    "/cronograma/:id/delete",
+    { config: { skipBodyParsing: false } },
+    async (request, reply) => {
+      const { id } = request.params;
+      console.log(`[API] DELETE cronograma: ${id}`);
+      const ok = await deleteCronograma(id);
+      return reply.send({ ok });
+    }
+  );
 
   // GET /api/postador/agendados — lista de posts salvos para agendar
   fastify.get("/agendados", async (_request, reply) => {
@@ -151,13 +159,17 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // POST /api/postador/agendados/:id/delete
-  fastify.post<{ Params: { id: string } }>("/agendados/:id/delete", async (request, reply) => {
-    const { id } = request.params;
-    console.log(`[API] DELETE agendado: ${id}`);
-    const ok = await deleteAgendado(id);
-    if (!ok) return reply.status(404).send({ error: "Agendado não encontrado." });
-    return reply.send({ ok: true });
-  });
+  fastify.post<{ Params: { id: string } }>(
+    "/agendados/:id/delete",
+    { config: { skipBodyParsing: false } },
+    async (request, reply) => {
+      const { id } = request.params;
+      console.log(`[API] DELETE agendado: ${id}`);
+      const ok = await deleteAgendado(id);
+      if (!ok) return reply.status(404).send({ error: "Agendado não encontrado." });
+      return reply.send({ ok: true });
+    }
+  );
 
   // POST /api/postador/agendados/:id/publicar — publicar um agendado agora (body: conta_id opcional)
   fastify.post<{ Params: { id: string } }>("/agendados/:id/publicar", async (request, reply) => {
