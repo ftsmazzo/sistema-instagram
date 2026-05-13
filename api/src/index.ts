@@ -5,12 +5,11 @@ import multipart from "@fastify/multipart";
 import { ensureTables } from "./db/index.js";
 import { healthRoutes } from "./routes/health.js";
 import { configRoutes } from "./routes/config.js";
-import { postagensRoutes } from "./routes/postagens.js";
 import { agentesRoutes } from "./routes/agentes.js";
 import { postadorRoutes } from "./routes/postador.js";
 import { authRoutes } from "./routes/auth.js";
 import { meWorkspaceRoutes } from "./routes/meWorkspace.js";
-import { internalAgentRoutes } from "./routes/internalAgent.js";
+import { startCronJob } from "./services/cron.js";
 
 const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || "0.0.0.0";
@@ -27,11 +26,11 @@ async function build() {
   await app.register(healthRoutes, { prefix: "/" });
   await app.register(authRoutes, { prefix: "/api/auth" });
   await app.register(meWorkspaceRoutes, { prefix: "/api/me" });
-  await app.register(internalAgentRoutes, { prefix: "/api/internal" });
   await app.register(configRoutes, { prefix: "/api/config" });
-  await app.register(postagensRoutes, { prefix: "/api/postagens" });
   await app.register(agentesRoutes, { prefix: "/api/agentes" });
   await app.register(postadorRoutes, { prefix: "/api/postador" });
+
+  startCronJob(app);
 
   return app;
 }

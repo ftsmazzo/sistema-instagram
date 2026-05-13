@@ -56,7 +56,6 @@ export function Postador() {
   const [provedorImagem, setProvedorImagem] = useState<"openai" | "gemini">("gemini");
   const [instrucoesImagem, setInstrucoesImagem] = useState("");
   const [textosCarrossel, setTextosCarrossel] = useState<string[]>([]);
-  const [useGeminiParaTexto, setUseGeminiParaTexto] = useState(false);
   const [caption, setCaption] = useState<string | null>(null);
   const [mediaUrl, setMediaUrl] = useState<string | null>(null);
   const [mediaUrls, setMediaUrls] = useState<string[]>([]);
@@ -71,6 +70,7 @@ export function Postador() {
   const [feedback, setFeedback] = useState("");
   const [linkPost, setLinkPost] = useState<string | null>(null);
   const [agendadoSuccess, setAgendadoSuccess] = useState<string | null>(null);
+  const [dataAgendamento, setDataAgendamento] = useState("");
   const [promptImagemIA, setPromptImagemIA] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -232,11 +232,12 @@ export function Postador() {
     setAgendadoSuccess(null);
     setLoading(true);
     try {
+      const dateIso = dataAgendamento ? new Date(dataAgendamento).toISOString() : undefined;
       const payload = isCarousel
-        ? { caption, media_urls: mediaUrls, media_type: "CAROUSEL" as const }
-        : { caption, media_url: mediaUrl!, media_type: (mediaType ?? "IMAGE") as "IMAGE" | "REELS" };
+        ? { caption, media_urls: mediaUrls, media_type: "CAROUSEL" as const, data_agendamento: dateIso, conta_id: contaSelecionadaId }
+        : { caption, media_url: mediaUrl!, media_type: (mediaType ?? "IMAGE") as "IMAGE" | "REELS", data_agendamento: dateIso, conta_id: contaSelecionadaId };
       await api.postador.saveAgendado(payload);
-      setAgendadoSuccess("Post salvo para agendar. Você pode publicá-lo na seção «Posts agendados».");
+      setAgendadoSuccess(dateIso ? "Post agendado com sucesso para a data informada." : "Post salvo. Você pode publicá-lo na seção «Posts agendados».");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao salvar agendado.");
     } finally {
@@ -309,7 +310,7 @@ export function Postador() {
     setError(null);
     setLoading(true);
     try {
-      const res = await api.postador.carouselAdicionarTexto(mediaUrls, textosCarrossel, useGeminiParaTexto);
+      const res = await api.postador.carouselAdicionarTexto(mediaUrls, textosCarrossel);
       const urls = res.image_urls ?? [];
       setMediaUrls(urls);
       setPreviewUrls(urls);
@@ -359,6 +360,7 @@ export function Postador() {
     setFeedback("");
     setLinkPost(null);
     setAgendadoSuccess(null);
+    setDataAgendamento("");
     setPromptImagemIA("");
     setStep("form");
     setError(null);
@@ -746,18 +748,8 @@ export function Postador() {
                   ))}
                 </div>
                 <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  <p className="text-sm font-medium text-gray-700 mb-2">Texto em cada imagem (opcional)</p>
-                  <p className="text-xs text-gray-500 mb-2">Digite o texto que será sobreposto em cada slide. Deixe em branco para não alterar.</p>
-                  <label className="flex items-center gap-2 mb-2">
-                    <input
-                      type="checkbox"
-                      checked={useGeminiParaTexto}
-                      onChange={(e) => setUseGeminiParaTexto(e.target.checked)}
-                      className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
-                    />
-                    <span className="text-sm text-gray-700">Usar IA (Gemini) para inserir o texto</span>
-                  </label>
-                  <p className="text-xs text-gray-500 mb-2">Se marcar, a API usará Gemini/Imagen para desenhar o texto na imagem (requer GEMINI_API_KEY). Caso contrário, usa overlay no servidor.</p>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Textos para o Carrossel (Opcional)</p>
+                  <p className="text-xs text-gray-500 mb-4">Adicione títulos atrativos para as imagens. O sistema aplicará um design profissional automaticamente com o texto inserido.</p>
                   <div className="space-y-2 mb-2">
                     {previewUrls.map((_, i) => (
                       <div key={i} className="flex items-center gap-2">
@@ -860,13 +852,24 @@ export function Postador() {
             >
               {loading ? "Publicando..." : "Aprovar e publicar"}
             </button>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="dataAgendamento" className="text-xs font-medium text-gray-700">Agendar para (opcional)</label>
+              <input 
+                id="dataAgendamento"
+                type="datetime-local" 
+                value={dataAgendamento} 
+                onChange={(e) => setDataAgendamento(e.target.value)} 
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm h-10 text-gray-900 focus:ring-1 focus:ring-indigo-500" 
+                disabled={loading} 
+              />
+            </div>
             <button
               type="button"
               onClick={handleSalvarAgendar}
               disabled={loading || !temMidiaParaPublicar}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+              className="inline-flex items-center mt-5 px-4 h-10 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
             >
-              Salvar para agendar
+              {dataAgendamento ? "Agendar" : "Salvar rascunho"}
             </button>
             <div className="flex-1 min-w-[200px] flex flex-col gap-2">
               <textarea

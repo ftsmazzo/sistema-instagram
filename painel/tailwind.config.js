@@ -4,13 +4,37 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"DM Sans"', "system-ui", "sans-serif"],
-        display: ['"Fraunces"', "Georgia", "serif"],
+        sans: ['"Inter"', "system-ui", "sans-serif"],
+        display: ['"Outfit"', "system-ui", "sans-serif"],
       },
       boxShadow: {
-        soft: "0 2px 8px -2px rgb(15 23 42 / 0.06), 0 8px 24px -8px rgb(15 23 42 / 0.08)",
-        lift: "0 12px 40px -12px rgb(15 23 42 / 0.12)",
+        soft: "0 4px 20px -2px rgba(0, 0, 0, 0.05)",
+        lift: "0 10px 40px -10px rgba(0, 0, 0, 0.08)",
+        glow: "0 0 20px rgba(99, 102, 241, 0.4)",
       },
+      colors: {
+        brand: {
+          50: '#eff6ff',
+          100: '#dbeafe',
+          500: '#3b82f6',
+          600: '#2563eb',
+          900: '#1e3a8a',
+        }
+      },
+      animation: {
+        'fade-in': 'fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+        'slide-up': 'slideUp 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' },
+        },
+        slideUp: {
+          '0%': { transform: 'translateY(15px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' },
+        }
+      }
     },
   },
   plugins: [],

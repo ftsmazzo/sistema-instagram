@@ -41,6 +41,9 @@ CREATE TABLE IF NOT EXISTS postador_agendados (
   media_url text,
   media_urls jsonb,
   media_type text NOT NULL,
+  data_agendamento timestamptz,
+  conta_id text,
+  status text NOT NULL DEFAULT 'pendente',
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -182,6 +185,12 @@ CREATE INDEX IF NOT EXISTS idx_leads_org ON leads (organization_id);
 CREATE INDEX IF NOT EXISTS idx_leads_updated ON leads (updated_at DESC);
 `;
 
+const MIGRATE_AGENDAMENTO_COLS = `
+ALTER TABLE postador_agendados ADD COLUMN IF NOT EXISTS data_agendamento timestamptz;
+ALTER TABLE postador_agendados ADD COLUMN IF NOT EXISTS conta_id text;
+ALTER TABLE postador_agendados ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'pendente';
+`;
+
 let initDone = false;
 
 export async function ensureTables(): Promise<void> {
@@ -191,5 +200,6 @@ export async function ensureTables(): Promise<void> {
   await p.query(MIGRATE_AGENT_COLS);
   await p.query(ORG_PROFILE_COLS);
   await p.query(AGENT_CRM_SQL);
+  await p.query(MIGRATE_AGENDAMENTO_COLS);
   initDone = true;
 }

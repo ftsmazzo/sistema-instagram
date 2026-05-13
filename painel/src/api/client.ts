@@ -68,11 +68,6 @@ export type ContaInstagramRes = {
   nome: string;
   ig_user_id: string;
   has_token: boolean;
-  has_agent_token: boolean;
-  agent_ativo: boolean;
-  agent_nome: string;
-  agent_prompt_comentarios: string;
-  agent_prompt_direct: string;
 };
 
 /** Perfil da empresa (workspace + automações). */
@@ -98,11 +93,6 @@ export type ContaInstagramInput = {
   nome: string;
   ig_user_id: string;
   access_token?: string;
-  agent_access_token?: string;
-  agent_ativo?: boolean;
-  agent_nome?: string;
-  agent_prompt_comentarios?: string;
-  agent_prompt_direct?: string;
 };
 
 export type CronogramaItem = {
@@ -122,32 +112,13 @@ export type AgendadoItem = {
   media_url: string | null;
   media_urls: string[] | null;
   media_type: "IMAGE" | "REELS" | "CAROUSEL";
+  data_agendamento?: string | null;
+  conta_id?: string | null;
+  status?: string;
   created_at: string;
 };
 
-export type Postagem = {
-  id?: number;
-  id_post?: string;
-  caption_post?: string;
-  media_type?: string;
-  media_url?: string;
-  link_post?: string;
-  data_post?: string;
-  media_description?: string;
-  hashtags?: string | null;
-  mencoes?: string | null;
-  processado?: boolean;
-  processado_at?: string | null;
-  created_at?: string;
-  updated_at?: string;
-};
 
-export type PostagensResponse = {
-  postagens: Postagem[];
-  total: number;
-};
-
-export type RasparResponse = PostagensResponse & { triggered: boolean };
 
 export type AuthStatus = {
   database: boolean;
@@ -202,12 +173,7 @@ export const api = {
       method: "PUT",
       body,
     }),
-  getPostagens: () => fetchJson<PostagensResponse>("/api/postagens"),
-  rasparPostagens: () =>
-    fetchJson<RasparResponse>("/api/postagens/raspar", {
-      method: "POST",
-      body: {},
-    }),
+
   postador: {
     gerarCaption: (
       descricao: string,
@@ -281,6 +247,8 @@ export const api = {
       media_url?: string | null;
       media_urls?: string[] | null;
       media_type: "IMAGE" | "REELS" | "CAROUSEL";
+      data_agendamento?: string | null;
+      conta_id?: string | null;
     }) =>
       fetchJson<{ ok: boolean; agendado: AgendadoItem }>("/api/postador/agendados", {
         method: "POST",
@@ -298,10 +266,10 @@ export const api = {
         method: "POST",
         body: { prompt, provider: provider ?? "openai" },
       }),
-    carouselAdicionarTexto: (image_urls: string[], texts: string[], use_gemini?: boolean) =>
+    carouselAdicionarTexto: (image_urls: string[], texts: string[]) =>
       fetchJson<{ image_urls: string[] }>("/api/postador/carousel-adicionar-texto", {
         method: "POST",
-        body: { image_urls, texts, use_gemini: use_gemini === true },
+        body: { image_urls, texts },
       }),
     uploadMidia: (file: File) => {
       const form = new FormData();

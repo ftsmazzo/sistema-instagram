@@ -11,6 +11,9 @@ export type AgendadoItem = {
   media_url: string | null;
   media_urls: string[] | null;
   media_type: "IMAGE" | "REELS" | "CAROUSEL";
+  data_agendamento?: string | null;
+  conta_id?: string | null;
+  status?: string;
   created_at: string;
 };
 
@@ -38,9 +41,12 @@ async function listFromDb(): Promise<AgendadoItem[]> {
     media_url: string | null;
     media_urls: string[] | null;
     media_type: string;
+    data_agendamento: string | null;
+    conta_id: string | null;
+    status: string;
     created_at: string;
   }>(
-    "SELECT id, caption, media_url, media_urls, media_type, created_at::text FROM postador_agendados ORDER BY created_at DESC"
+    "SELECT id, caption, media_url, media_urls, media_type, data_agendamento::text, conta_id, status, created_at::text FROM postador_agendados ORDER BY created_at DESC"
   );
   return res.rows.map((r) => ({
     id: r.id,
@@ -48,7 +54,10 @@ async function listFromDb(): Promise<AgendadoItem[]> {
     media_url: r.media_url ?? null,
     media_urls: Array.isArray(r.media_urls) ? r.media_urls : null,
     media_type: r.media_type as "IMAGE" | "REELS" | "CAROUSEL",
-    created_at: typeof r.created_at === "string" ? r.created_at : new Date(r.created_at as Date).toISOString(),
+    data_agendamento: r.data_agendamento ? (typeof r.data_agendamento === "string" ? r.data_agendamento : new Date(r.data_agendamento as unknown as Date).toISOString()) : null,
+    conta_id: r.conta_id,
+    status: r.status,
+    created_at: typeof r.created_at === "string" ? r.created_at : new Date(r.created_at as unknown as Date).toISOString(),
   }));
 }
 
@@ -72,6 +81,9 @@ async function addToFile(item: Omit<AgendadoItem, "id" | "created_at">): Promise
     media_url: item.media_url ?? null,
     media_urls: item.media_urls ?? null,
     media_type: item.media_type,
+    data_agendamento: item.data_agendamento ?? null,
+    conta_id: item.conta_id ?? null,
+    status: item.status ?? "pendente",
     created_at,
   };
   list.unshift(full);
@@ -85,14 +97,17 @@ async function addToDb(item: Omit<AgendadoItem, "id" | "created_at">): Promise<A
   const id = genId();
   const created_at = new Date().toISOString();
   await pool.query(
-    `INSERT INTO postador_agendados (id, caption, media_url, media_urls, media_type, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
+    `INSERT INTO postador_agendados (id, caption, media_url, media_urls, media_type, data_agendamento, conta_id, status, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
     [
       id,
       item.caption,
       item.media_url ?? null,
       item.media_urls ? JSON.stringify(item.media_urls) : null,
       item.media_type,
+      item.data_agendamento ?? null,
+      item.conta_id ?? null,
+      item.status ?? 'pendente',
       created_at,
     ]
   );
@@ -102,6 +117,9 @@ async function addToDb(item: Omit<AgendadoItem, "id" | "created_at">): Promise<A
     media_url: item.media_url ?? null,
     media_urls: item.media_urls ?? null,
     media_type: item.media_type,
+    data_agendamento: item.data_agendamento ?? null,
+    conta_id: item.conta_id ?? null,
+    status: item.status ?? 'pendente',
     created_at,
   };
 }
@@ -125,8 +143,11 @@ async function getFromDb(id: string): Promise<AgendadoItem | null> {
     media_url: string | null;
     media_urls: unknown;
     media_type: string;
+    data_agendamento: string | null;
+    conta_id: string | null;
+    status: string;
     created_at: string;
-  }>("SELECT id, caption, media_url, media_urls, media_type, created_at::text FROM postador_agendados WHERE id = $1", [
+  }>("SELECT id, caption, media_url, media_urls, media_type, data_agendamento::text, conta_id, status, created_at::text FROM postador_agendados WHERE id = $1", [
     id,
   ]);
   const r = res.rows[0];
@@ -138,7 +159,10 @@ async function getFromDb(id: string): Promise<AgendadoItem | null> {
     media_url: r.media_url ?? null,
     media_urls,
     media_type: r.media_type as "IMAGE" | "REELS" | "CAROUSEL",
-    created_at: typeof r.created_at === "string" ? r.created_at : new Date(r.created_at as Date).toISOString(),
+    data_agendamento: r.data_agendamento ? (typeof r.data_agendamento === "string" ? r.data_agendamento : new Date(r.data_agendamento as unknown as Date).toISOString()) : null,
+    conta_id: r.conta_id,
+    status: r.status,
+    created_at: typeof r.created_at === "string" ? r.created_at : new Date(r.created_at as unknown as Date).toISOString(),
   };
 }
 
@@ -166,4 +190,41 @@ async function deleteFromDb(id: string): Promise<boolean> {
 export async function deleteAgendado(id: string): Promise<boolean> {
   if (isDbConfigured()) return deleteFromDb(id);
   return deleteFromFile(id);
+}
+
+export async function updateAgendadoStatus(id: string, status: string): Promise<void> {
+  if (!isDbConfigured()) return;
+  await ensureTables();
+  const pool = getPool();
+  await pool.query("UPDATE postador_agendados SET status = $1 WHERE id = $2", [status, id]);
+}
+
+export async function listAgendadosPendentesParaPostar(): Promise<AgendadoItem[]> {
+  if (!isDbConfigured()) return [];
+  await ensureTables();
+  const pool = getPool();
+  const res = await pool.query<{
+    id: string;
+    caption: string;
+    media_url: string | null;
+    media_urls: string[] | null;
+    media_type: string;
+    data_agendamento: string | null;
+    conta_id: string | null;
+    status: string;
+    created_at: string;
+  }>(
+    "SELECT id, caption, media_url, media_urls, media_type, data_agendamento::text, conta_id, status, created_at::text FROM postador_agendados WHERE status = 'pendente' AND data_agendamento IS NOT NULL AND data_agendamento::timestamptz <= now() ORDER BY data_agendamento ASC"
+  );
+  return res.rows.map((r) => ({
+    id: r.id,
+    caption: r.caption,
+    media_url: r.media_url ?? null,
+    media_urls: Array.isArray(r.media_urls) ? r.media_urls : null,
+    media_type: r.media_type as "IMAGE" | "REELS" | "CAROUSEL",
+    data_agendamento: typeof r.data_agendamento === "string" ? r.data_agendamento : new Date(r.data_agendamento as unknown as Date).toISOString(),
+    conta_id: r.conta_id,
+    status: r.status,
+    created_at: typeof r.created_at === "string" ? r.created_at : new Date(r.created_at as unknown as Date).toISOString(),
+  }));
 }

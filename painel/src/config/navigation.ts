@@ -23,10 +23,10 @@ export const navGroups: NavGroup[] = [
 export const navItems: NavItem[] = [
   { path: "/", label: "Início", groupId: "overview" },
   { path: "/postador", label: "Postador", groupId: "instagram" },
-  { path: "/postagens", label: "Postagens raspadas", groupId: "instagram" },
+
   { path: "/cronograma", label: "Cronograma", groupId: "instagram" },
   { path: "/admin", label: "Administração", groupId: "config" },
-  { path: "/agentes", label: "Agentes e leads", groupId: "automation" },
+
   { path: "/whatsapp", label: "WhatsApp", groupId: "automation" },
   { path: "/perfil", label: "Perfil", groupId: "account" },
 ];

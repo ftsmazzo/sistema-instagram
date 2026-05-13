@@ -10,7 +10,7 @@ type PageShellProps = {
 
 export function PageShell({ title, description, children, wide }: PageShellProps) {
   return (
-    <div className={`mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10 ${wide ? "max-w-5xl" : "max-w-4xl"}`}>
+    <div className={`mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-10 page-enter ${wide ? "max-w-5xl" : "max-w-4xl"}`}>
       <header className="mb-8 lg:mb-10">
         <h1 className="font-display text-3xl sm:text-[2rem] font-semibold tracking-tight text-slate-900">{title}</h1>
         {description ? (

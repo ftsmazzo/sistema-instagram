@@ -83,13 +83,12 @@ export function LoginPage() {
           )}
 
           {status?.database === false && (
-            <div className="alert-warn mb-6">
-              API sem <code className="rounded bg-amber-100/80 px-1 text-xs">DATABASE_URL</code>: o login multiusuário não está
-              ativo. Use{" "}
-              <Link to="/admin" className="font-semibold text-amber-950 underline decoration-amber-700/50 underline-offset-2">
-                Administração
-              </Link>{" "}
-              no modo legado.
+            <div className="alert-error mb-6">
+              <p className="font-semibold text-red-900">Erro Crítico: Banco de Dados não configurado</p>
+              <p className="mt-1 text-sm text-red-800">
+                A plataforma exige um banco de dados PostgreSQL para funcionar. Configure a variável de ambiente{" "}
+                <code className="rounded bg-red-100 px-1 font-mono text-xs">DATABASE_URL</code> no servidor backend e reinicie.
+              </p>
             </div>
           )}
 
@@ -177,13 +176,7 @@ export function LoginPage() {
             </button>
           </form>
 
-          {status?.database === false && (
-            <p className="mt-8 text-center text-sm text-slate-500">
-              <Link to="/" className="font-medium text-indigo-600 hover:text-indigo-500">
-                Voltar ao painel (modo sem login)
-              </Link>
-            </p>
-          )}
+
         </div>
       </div>
     </div>

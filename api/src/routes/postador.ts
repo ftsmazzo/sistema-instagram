@@ -104,11 +104,15 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       media_url?: string;
       media_urls?: string[];
       media_type?: string;
+      data_agendamento?: string;
+      conta_id?: string;
     };
     const caption = (body?.caption ?? "").trim();
     const media_url = body?.media_url?.trim() || null;
     const media_urls = Array.isArray(body?.media_urls) ? body.media_urls.filter((u) => typeof u === "string" && u.trim()) : null;
     const media_type = body?.media_type === "REELS" ? "REELS" : body?.media_type === "CAROUSEL" ? "CAROUSEL" : "IMAGE";
+    const data_agendamento = body?.data_agendamento?.trim() || null;
+    const conta_id = body?.conta_id?.trim() || null;
 
     if (!caption) {
       return reply.status(400).send({ error: "Campo 'caption' é obrigatório para salvar o agendado." });
@@ -127,6 +131,9 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
         media_url: media_type === "CAROUSEL" ? null : media_url,
         media_urls: media_type === "CAROUSEL" ? media_urls : null,
         media_type,
+        data_agendamento,
+        conta_id,
+        status: data_agendamento ? 'pendente' : 'draft'
       });
       return reply.send({ ok: true, agendado: item });
     } catch (err) {
@@ -264,17 +271,16 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // POST /api/postador/carousel-adicionar-texto — overlay de texto em cada imagem; use_gemini=true tenta Gemini primeiro
+  // POST /api/postador/carousel-adicionar-texto — overlay de texto em cada imagem usando template SVG
   fastify.post("/carousel-adicionar-texto", async (request, reply) => {
-    const body = request.body as { image_urls?: string[]; texts?: string[]; use_gemini?: boolean };
+    const body = request.body as { image_urls?: string[]; texts?: string[] };
     const imageUrls = Array.isArray(body?.image_urls) ? body.image_urls.filter((u) => typeof u === "string" && u.trim()) : [];
     const texts = Array.isArray(body?.texts) ? body.texts.map((t) => (typeof t === "string" ? t : "")) : [];
-    const useGemini = body?.use_gemini === true;
     if (!imageUrls.length) {
       return reply.status(400).send({ error: "Campo 'image_urls' (array) é obrigatório." });
     }
     try {
-      const newUrls = await adicionarTextoCarrossel(imageUrls, texts, useGemini);
+      const newUrls = await adicionarTextoCarrossel(imageUrls, texts);
       return reply.send({ image_urls: newUrls });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao adicionar texto nas imagens.";
