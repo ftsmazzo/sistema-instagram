@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { createReadStream } from "fs";
 import { stat } from "fs/promises";
 import { join } from "path";
-import { gerarCaption as gerarCaptionIA, refazerCaption as refazerCaptionIA } from "../services/caption.js";
+import { gerarCaption as gerarCaptionIA, refazerCaption as refazerCaptionIA, gerarJornadaPorLink } from "../services/caption.js";
 import { uploadMedia, getUploadsDir, isStorageConfigured } from "../services/storage.js";
 import { rasparPaginaImovel, montarDescricaoParaCaption, baixarEEnviarParaCloudinary } from "../services/imovel.js";
 import { publishToInstagram, publishCarouselToInstagram } from "../services/instagram.js";
@@ -325,24 +325,35 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      const carousel = uploaded.length > 1;
-      const caption = await gerarCaptionIA(descricao, carousel ? "CAROUSEL" : "IMAGE", {
+      const journey = await gerarJornadaPorLink(descricao, {
         provider: providerNorm ?? (provider === "openai" ? "openai" : undefined),
         model: model || undefined,
       });
 
-      if (carousel) {
-        return reply.send({
-          caption,
-          media_urls: uploaded,
-          media_type: "CAROUSEL" as const,
-        });
-      }
-      return reply.send({
-        caption,
-        media_url: uploaded[0] ?? undefined,
-        media_type: "IMAGE" as const,
+      const responsePosts = journey.map((post, i) => {
+        let postUrls: string[] = [];
+        if (uploaded.length > 0) {
+           if (uploaded.length >= 3) {
+             const chunkSize = Math.ceil(uploaded.length / 3);
+             postUrls = uploaded.slice(i * chunkSize, (i + 1) * chunkSize);
+             // fallback caso a divisão deixe o último vazio
+             if (postUrls.length === 0) postUrls = [uploaded[uploaded.length - 1]];
+           } else {
+             postUrls = [uploaded[i % uploaded.length]];
+           }
+        }
+        
+        return {
+          post_number: post.post_number,
+          estrategia: post.estrategia,
+          caption: post.caption,
+          media_urls: postUrls.length > 1 ? postUrls : undefined,
+          media_url: postUrls.length === 1 ? postUrls[0] : undefined,
+          media_type: postUrls.length > 1 ? "CAROUSEL" : "IMAGE"
+        };
       });
+
+      return reply.send({ jornada: responsePosts });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao processar URL do imóvel";
       if (msg.includes("OPENAI_API_KEY") || msg.includes("ANTHROPIC_API_KEY")) {

@@ -135,3 +135,59 @@ export async function refazerCaption(
   const user = `Legenda atual:\n\n${captionAtual}\n\nPedido do usuário: ${feedback}\n\nNova legenda (só o texto formatado):`;
   return complete(SYSTEM_REFAZER, user, options?.provider, options?.model);
 }
+
+const SYSTEM_JORNADA = `Você é um estrategista de conteúdo para Instagram focado no setor imobiliário.
+O usuário enviará os dados extraídos da página de um imóvel.
+Sua tarefa é criar uma JORNADA DE CONTEÚDO com EXATAMENTE 3 posts distintos e sequenciais sobre esse mesmo imóvel para serem postados ao longo de uma semana.
+
+<workflow>
+1. Post 1: Teaser/Atenção - Focar na dor do cliente ou no maior diferencial do imóvel.
+2. Post 2: Detalhes/Desejo - Explorar os ambientes, a qualidade de vida e a planta.
+3. Post 3: Urgência/Call to Action - Convite para visita, preço (se houver) e gatilho de escassez.
+</workflow>
+
+<regras>
+- Cada post deve ter sua própria legenda formatada perfeitamente para o Instagram (com emojis bem distribuídos e parágrafos separados por \\n\\n).
+- Cada legenda DEVE finalizar com um Call to Action forte convidando para COMENTAR na foto.
+- Inclua até 10 hashtags no final de cada legenda.
+- A saída DEVE SER EXCLUSIVAMENTE UM ARRAY JSON válido (sem markdown de blocos de código tipo \`\`\`json). Não escreva NADA além do JSON.
+</regras>
+
+<formato_json>
+[
+  {
+    "post_number": 1,
+    "estrategia": "Teaser/Atenção",
+    "caption": "texto da legenda 1 aqui..."
+  },
+  {
+    "post_number": 2,
+    "estrategia": "Detalhes/Desejo",
+    "caption": "texto da legenda 2 aqui..."
+  },
+  {
+    "post_number": 3,
+    "estrategia": "Urgência/Call to Action",
+    "caption": "texto da legenda 3 aqui..."
+  }
+]
+</formato_json>`;
+
+/**
+ * Gera 3 captions em sequência (Jornada) para um imóvel a partir da URL.
+ */
+export async function gerarJornadaPorLink(
+  descricao: string,
+  options?: GerarCaptionOptions
+): Promise<Array<{ post_number: number; estrategia: string; caption: string }>> {
+  const user = `Dados extraídos do imóvel:\n\n""" ${descricao} """\n\nGere o ARRAY JSON estrito com as 3 legendas:`;
+  const resText = await complete(SYSTEM_JORNADA, user, options?.provider, options?.model);
+  
+  try {
+    const limpo = resText.replace(/```json/gi, '').replace(/```/g, '').trim();
+    return JSON.parse(limpo);
+  } catch (err) {
+    console.error("Erro ao fazer parse da Jornada JSON. Retorno da IA:", resText);
+    throw new Error("A Inteligência Artificial não retornou o formato JSON corretamente.");
+  }
+}

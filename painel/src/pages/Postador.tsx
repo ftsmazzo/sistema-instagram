@@ -255,24 +255,29 @@ export function Postador() {
     setLoading(true);
     try {
       const res = await api.postador.gerarPorUrl(urlImovel.trim(), provider, effectiveModel);
-      setCaption(res.caption);
-      if (res.media_type === "CAROUSEL" && res.media_urls && res.media_urls.length > 1) {
-        setMediaType("CAROUSEL");
-        setMediaUrls(res.media_urls);
-        setMediaUrl(null);
-        setPreviewUrls(res.media_urls);
-        setTextosCarrossel(new Array(res.media_urls.length).fill(""));
-      } else {
-        const one = res.media_url ?? res.media_urls?.[0] ?? null;
-        setMediaType("IMAGE");
-        setMediaUrl(one);
-        setMediaUrls(one ? [one] : []);
-        setPreviewUrls(one ? [one] : []);
-        setTextosCarrossel(one ? [""] : []);
+      if (res.jornada && res.jornada.length > 0) {
+        let successCount = 0;
+        for (let i = 0; i < res.jornada.length; i++) {
+           const post = res.jornada[i];
+           const payload = post.media_type === "CAROUSEL"
+             ? { caption: post.caption, media_urls: post.media_urls, media_type: "CAROUSEL" as const, conta_id: contaSelecionadaId }
+             : { caption: post.caption, media_url: post.media_url!, media_type: "IMAGE" as const, conta_id: contaSelecionadaId };
+           
+           // Agendamento sugerido espaçado de 2 em 2 dias a partir de hoje
+           const date = new Date();
+           date.setDate(date.getDate() + (i * 2));
+           const dateIso = date.toISOString();
+           
+           await api.postador.saveAgendado({ ...payload, data_agendamento: dateIso });
+           successCount++;
+        }
+        setAgendadoSuccess(`Jornada Automática concluída! ${successCount} posts gerados e agendados. Consulte seus 'Próximos Posts'.`);
+        setStep("form");
+        setWizardStep(1);
+        setUrlImovel("");
       }
-      setStep("review");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Falha ao gerar post a partir do link.");
+      setError(e instanceof Error ? e.message : "Falha ao gerar jornada a partir do link.");
     } finally {
       setLoading(false);
     }
@@ -944,6 +949,8 @@ function AgendadosList({
 
   useEffect(() => {
     load();
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
   }, []);
 
   useEffect(() => {

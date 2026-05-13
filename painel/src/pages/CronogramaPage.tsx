@@ -7,8 +7,8 @@ export function CronogramaPage() {
   const [agendados, setAgendados] = useState<AgendadoItem[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const load = () => {
-    setLoading(true);
+  const load = (silent = false) => {
+    if (!silent) setLoading(true);
     Promise.all([
       api.postador.getCronograma(),
       api.postador.getAgendados()
@@ -19,14 +19,20 @@ export function CronogramaPage() {
         setAgendados((resA.agendados ?? []).filter(a => a.status !== 'published'));
       })
       .catch(() => {
-        setCronograma([]);
-        setAgendados([]);
+        if (!silent) {
+          setCronograma([]);
+          setAgendados([]);
+        }
       })
-      .finally(() => setLoading(false));
+      .finally(() => {
+        if (!silent) setLoading(false);
+      });
   };
 
   useEffect(() => {
     load();
+    const t = setInterval(() => load(true), 5000);
+    return () => clearInterval(t);
   }, []);
 
   const formatDate = (d: string) => new Date(d).toLocaleString("pt-BR", {
