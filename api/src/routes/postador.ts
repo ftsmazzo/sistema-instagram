@@ -91,8 +91,8 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ cronograma: list, total: list.length });
   });
 
-  // DELETE /api/postador/cronograma/:id — excluir item do histórico
-  fastify.delete<{ Params: { id: string } }>("/cronograma/:id", async (request, reply) => {
+  // POST /api/postador/cronograma/:id/delete — excluir item do histórico
+  fastify.post<{ Params: { id: string } }>("/cronograma/:id/delete", async (request, reply) => {
     const { id } = request.params;
     console.log(`[API] DELETE cronograma: ${id}`);
     const ok = await deleteCronograma(id);
@@ -150,8 +150,8 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // DELETE /api/postador/agendados/:id
-  fastify.delete<{ Params: { id: string } }>("/agendados/:id", async (request, reply) => {
+  // POST /api/postador/agendados/:id/delete
+  fastify.post<{ Params: { id: string } }>("/agendados/:id/delete", async (request, reply) => {
     const { id } = request.params;
     console.log(`[API] DELETE agendado: ${id}`);
     const ok = await deleteAgendado(id);
