@@ -103,6 +103,42 @@ async function complete(
   return callOpenAI(system, user, m);
 }
 
+async function completeLong(
+  system: string,
+  user: string,
+  provider?: Provider | null,
+  model?: string | null
+): Promise<string> {
+  const p: Provider = provider === "claude" ? "claude" : "openai";
+  const m = (model?.trim() || (p === "openai" ? DEFAULT_MODEL_OPENAI : DEFAULT_MODEL_CLAUDE)) as string;
+  // Usa max_tokens maior para respostas longas como jornada JSON
+  if (p === "claude") {
+    const anthropic = getAnthropic();
+    const res = await anthropic.messages.create({
+      model: m,
+      max_tokens: 4096,
+      system,
+      messages: [{ role: "user", content: user }],
+    });
+    const block = res.content.find((b) => b.type === "text");
+    const text = block && "text" in block ? (block.text as string).trim() : "";
+    if (!text) throw new Error("Resposta vazia da IA.");
+    return text;
+  }
+  const openai = getOpenAI();
+  const res = await openai.chat.completions.create({
+    model: m,
+    messages: [
+      { role: "system", content: system },
+      { role: "user", content: user },
+    ],
+    max_tokens: 4096,
+  });
+  const text = res.choices[0]?.message?.content?.trim();
+  if (!text) throw new Error("Resposta vazia da IA.");
+  return text;
+}
+
 export type GerarCaptionOptions = {
   provider?: Provider | null;
   model?: string | null;
@@ -181,7 +217,7 @@ export async function gerarJornadaPorLink(
   options?: GerarCaptionOptions
 ): Promise<Array<{ post_number: number; estrategia: string; caption: string }>> {
   const user = `Dados extraídos do imóvel:\n\n""" ${descricao} """\n\nGere o ARRAY JSON estrito com as 3 legendas:`;
-  const resText = await complete(SYSTEM_JORNADA, user, options?.provider, options?.model);
+  const resText = await completeLong(SYSTEM_JORNADA, user, options?.provider, options?.model);
   
   try {
     const match = resText.match(/\[\s*\{[\s\S]*\}\s*\]/);

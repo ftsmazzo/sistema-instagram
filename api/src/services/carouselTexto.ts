@@ -3,111 +3,144 @@ import { uploadMedia, isStorageConfigured } from "./storage.js";
 import { toInstagramFeedImage } from "./instagramImage.js";
 
 const INSTAGRAM_MAX_SIDE = 1080;
-const FONT_FAMILY = "'Inter', 'Helvetica Neue', 'Arial', sans-serif";
 
 /**
- * Quebra o texto em linhas dinamicamente baseado no tamanho estimado dos caracteres
+ * Quebra o texto em linhas dinamicamente baseado no comprimento máximo estimado
  */
-function wrapText(text: string, width: number, fontSize: number): string[] {
+function wrapText(text: string, maxChars: number): string[] {
   const words = text.split(" ");
   const lines: string[] = [];
-  let currentLine = "";
-  
-  // Fator de largura médio de um caractere para fontes sans-serif
-  const avgCharWidth = fontSize * 0.55; 
-  const maxWidth = width * 0.85; // 85% da largura da imagem
-  const maxCharsPerLine = Math.floor(maxWidth / avgCharWidth);
-
+  let current = "";
   for (const word of words) {
-    if ((currentLine + word).length > maxCharsPerLine) {
-      if (currentLine) lines.push(currentLine.trim());
-      currentLine = word + " ";
+    if (current.length + word.length + 1 > maxChars) {
+      if (current) lines.push(current.trim());
+      current = word + " ";
     } else {
-      currentLine += word + " ";
+      current += word + " ";
     }
   }
-  if (currentLine) lines.push(currentLine.trim());
+  if (current.trim()) lines.push(current.trim());
   return lines;
 }
 
+function escapeXml(t: string): string {
+  return t
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+/**
+ * Template premium para overlay de texto em imagens de imóveis.
+ * Design ousado: faixa diagonal de cor sólida com logo accent + texto bold grande.
+ */
 async function addTextToImage(imageUrl: string, text: string): Promise<string> {
   if (!isStorageConfigured()) {
-    throw new Error("Configure um armazenamento (Cloudinary, local ou MinIO) para salvar as imagens com texto.");
+    throw new Error("Configure um armazenamento para salvar as imagens com texto.");
   }
+
   const res = await fetch(imageUrl);
   if (!res.ok) throw new Error(`Não foi possível baixar a imagem: ${res.status}`);
-  const arrayBuffer = await res.arrayBuffer();
-  const inputBuffer = Buffer.from(arrayBuffer);
+  const buf = Buffer.from(await res.arrayBuffer());
 
-  const baseResized = await toInstagramFeedImage(inputBuffer);
-  const actual = await sharp(baseResized).metadata();
-  const width = actual.width ?? INSTAGRAM_MAX_SIDE;
-  const height = actual.height ?? INSTAGRAM_MAX_SIDE;
+  const base = await toInstagramFeedImage(buf);
+  const meta = await sharp(base).metadata();
+  const W = meta.width ?? INSTAGRAM_MAX_SIDE;
+  const H = meta.height ?? INSTAGRAM_MAX_SIDE;
 
-  // Ajuste dinâmico de fonte baseado no comprimento do texto
-  let fontSize = 64;
-  if (text.length > 100) fontSize = 56;
-  if (text.length > 200) fontSize = 48;
+  // ─── Tipografia dinâmica ───────────────────────────────────────────────────
+  let fontSize = 72;
+  const maxChars = text.length > 60 ? 20 : text.length > 30 ? 22 : 25;
+  if (text.length > 50) fontSize = 62;
+  if (text.length > 80) fontSize = 52;
 
-  const lines = wrapText(text, width, fontSize);
-  
-  // Limite rígido para não extrapolar a tela (máximo 5 linhas)
-  const displayLines = lines.slice(0, 5);
-  if (lines.length > 5) {
-    displayLines[4] = displayLines[4].replace(/\s+\S*$/, "...");
-  }
+  const lines = wrapText(text, maxChars).slice(0, 4);
+  if (lines.length === 4 && wrapText(text, maxChars).length > 4)
+    lines[3] = lines[3].replace(/\s+\S*$/, "…");
 
-  const lineHeight = fontSize * 1.35;
-  const totalTextHeight = displayLines.length * lineHeight;
-  
-  // Calcula o painel de fundo (Glass/Gradient Box)
-  const paddingY = 80;
-  const panelHeight = totalTextHeight + paddingY * 2;
-  const panelY = height - panelHeight;
+  const lineH = fontSize * 1.25;
+  const textBlockH = lines.length * lineH;
 
-  let svgLines = "";
-  let startY = panelY + paddingY + (fontSize / 2);
-  
-  displayLines.forEach((line, index) => {
-    const safeLine = line.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-    const y = startY + (index * lineHeight);
-    svgLines += `<text x="${width / 2}" y="${y}" text-anchor="middle" dominant-baseline="central" style="font-family:${FONT_FAMILY};font-size:${fontSize}px;font-weight:700;fill:#ffffff;filter:drop-shadow(0px 4px 12px rgba(0,0,0,0.6)); letter-spacing:-0.5px;">${safeLine}</text>\n`;
-  });
+  // ─── Dimensões do painel de fundo ─────────────────────────────────────────
+  const panelH = textBlockH + 110;
+  const panelY = H - panelH;
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+  // Accent bar (linha colorida no topo do painel)
+  const accentH = 8;
+
+  // ─── Geração de linhas SVG ────────────────────────────────────────────────
+  const startY = panelY + 55 + fontSize * 0.5;
+  const svgLines = lines
+    .map((line, i) => {
+      const safe = escapeXml(line);
+      const y = startY + i * lineH;
+      return [
+        // Sombra do texto (duplica levemente deslocado)
+        `<text x="${W / 2 + 3}" y="${y + 3}" text-anchor="middle" dominant-baseline="central"
+          font-family="'Arial Black','Franklin Gothic Heavy','Impact',sans-serif"
+          font-size="${fontSize}" font-weight="900" fill="rgba(0,0,0,0.55)"
+          letter-spacing="-1">${safe}</text>`,
+        // Texto principal em branco
+        `<text x="${W / 2}" y="${y}" text-anchor="middle" dominant-baseline="central"
+          font-family="'Arial Black','Franklin Gothic Heavy','Impact',sans-serif"
+          font-size="${fontSize}" font-weight="900" fill="#FFFFFF"
+          letter-spacing="-1">${safe}</text>`,
+      ].join("\n");
+    })
+    .join("\n");
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
-    <linearGradient id="bottomGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="rgba(15,23,42,0)"/>
-      <stop offset="30%" stop-color="rgba(15,23,42,0.7)"/>
-      <stop offset="100%" stop-color="rgba(15,23,42,0.98)"/>
+    <!-- Gradiente do painel inferior: preto profundo com leve azul-violeta -->
+    <linearGradient id="panelGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%"   stop-color="#0a0a14" stop-opacity="0"/>
+      <stop offset="25%"  stop-color="#0d0d1f" stop-opacity="0.82"/>
+      <stop offset="100%" stop-color="#050510" stop-opacity="0.97"/>
     </linearGradient>
+    <!-- Brilho lateral esquerdo (accent) -->
+    <linearGradient id="accentGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%"   stop-color="#7c3aed"/>
+      <stop offset="50%"  stop-color="#4f46e5"/>
+      <stop offset="100%" stop-color="#0ea5e9"/>
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="6" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
   </defs>
-  
-  <!-- Gradiente inferior com blend mais profundo -->
-  <rect x="0" y="${height - panelHeight - 150}" width="${width}" height="${panelHeight + 150}" fill="url(#bottomGrad)"/>
-  
-  <!-- Linha de destaque/Decoração superior do bloco de texto -->
-  <rect x="${width / 2 - 60}" y="${panelY + 30}" width="120" height="6" fill="#4f46e5" rx="3" />
-  
+
+  <!-- Painel de fundo gradiente -->
+  <rect x="0" y="${panelY - 80}" width="${W}" height="${panelH + 80}" fill="url(#panelGrad)"/>
+
+  <!-- Linha accent vibrante (barra colorida) -->
+  <rect x="0" y="${panelY}" width="${W}" height="${accentH}" fill="url(#accentGrad)"/>
+
+  <!-- Ponto de brilho no lado esquerdo da barra -->
+  <circle cx="60" cy="${panelY + accentH / 2}" r="28" fill="rgba(124,58,237,0.35)" filter="url(#glow)"/>
+
+  <!-- Decoração: pequeno traço vertical colorido antes do texto -->
+  <rect x="${W / 2 - 130}" y="${startY - fontSize * 0.65}" width="5" height="${textBlockH}" fill="url(#accentGrad)" rx="2"/>
+
+  <!-- Bloco de texto -->
   ${svgLines}
 </svg>`;
 
-  const overlayBuffer = Buffer.from(svg);
-  const rasterized = await sharp(overlayBuffer)
-    .resize(width, height)
-    .toBuffer();
+  const overlay = Buffer.from(svg);
+  const rasterized = await sharp(overlay).resize(W, H).toBuffer();
 
-  const withOverlay = await sharp(baseResized)
+  const final = await sharp(base)
     .composite([{ input: rasterized, top: 0, left: 0 }])
     .jpeg({ quality: 95 })
     .toBuffer();
 
-  return uploadMedia(withOverlay, "image/jpeg", ".jpg");
+  return uploadMedia(final, "image/jpeg", ".jpg");
 }
 
 /**
- * Para cada URL de imagem, adiciona o texto correspondente usando template nativo premium.
- * Retorna array de novas URLs na mesma ordem.
+ * Para cada URL de imagem, adiciona o texto correspondente usando template premium.
+ * Imagens sem texto são retornadas sem modificação.
  */
 export async function adicionarTextoCarrossel(
   imageUrls: string[],
