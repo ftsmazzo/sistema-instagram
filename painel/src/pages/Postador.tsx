@@ -323,6 +323,23 @@ export function Postador() {
     }
   };
 
+  const handleGerarCTAParaImagem = async (index: number) => {
+    if (!caption) return;
+    setLoading(true);
+    try {
+      const res = await api.postador.gerarCTA(caption, provider, effectiveModel);
+      setTextosCarrossel(prev => {
+        const next = [...prev];
+        next[index] = res.cta;
+        return next;
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Falha ao gerar CTA.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleExcluirImagem = () => {
     setMediaUrl(null);
     setMediaUrls([]);
@@ -822,6 +839,21 @@ export function Postador() {
                           className="flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-sm"
                           disabled={loading}
                         />
+                        <button
+                          type="button"
+                          onClick={() => handleGerarCTAParaImagem(i)}
+                          disabled={loading || !caption}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 shadow-sm transition-colors"
+                          title="Gerar CTA criativo com IA"
+                        >
+                          {loading ? (
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-indigo-600 border-t-transparent" />
+                          ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                          )}
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -993,7 +1025,7 @@ function AgendadosList({
     if (!silent) setLoading(true);
     api.postador
       .getAgendados()
-      .then((r) => setList(r.agendados ?? []))
+      .then((r) => setList((r.agendados ?? []).filter(a => a.status !== 'published')))
       .catch(() => setList([]))
       .finally(() => { if (!silent) setLoading(false); });
   };
@@ -1009,16 +1041,15 @@ function AgendadosList({
     setContaIdParaPublicar((prev) => (prev && contas.some((c) => c.id === prev)) ? prev : defaultId);
   }, [contas, contaPadraoId]);
 
-  const handlePublicar = async () => {
-    if (!selectedId) return;
-    setPublishingId(selectedId);
+  const handlePublicar = async (id: string) => {
+    setPublishingId(id);
     try {
-      await api.postador.publicarAgendado(selectedId, contaIdParaPublicar);
-      setSelectedId(null);
+      await api.postador.publicarAgendado(id, contaIdParaPublicar);
+      if (selectedId === id) setSelectedId(null);
       load();
       onPublished?.();
-    } catch {
-      // erro já pode aparecer no contexto do postador
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Erro ao publicar");
     } finally {
       setPublishingId(null);
     }
@@ -1077,16 +1108,20 @@ function AgendadosList({
               </label>
               <button
                 type="button"
-                onClick={handlePublicar}
-                disabled={publishingId !== null || selectedId !== item.id}
-                className="btn-primary shrink-0 py-2 text-xs disabled:cursor-not-allowed"
+                onClick={() => handlePublicar(item.id)}
+                disabled={publishingId !== null}
+                className="btn-primary shrink-0 py-1.5 px-3 text-xs disabled:cursor-not-allowed"
               >
                 {publishingId === item.id ? "Publicando…" : "Publicar agora"}
               </button>
               <button
                 type="button"
-                onClick={() => api.postador.deleteAgendado(item.id).then(() => load())}
-                className="btn-ghost shrink-0 rounded-lg py-1.5 text-sm text-red-600 hover:bg-red-50"
+                onClick={() => {
+                  if (window.confirm("Excluir este agendamento?")) {
+                    api.postador.deleteAgendado(item.id).then(() => load());
+                  }
+                }}
+                className="btn-ghost shrink-0 rounded-lg py-1.5 px-3 text-xs text-red-600 hover:bg-red-50"
               >
                 Excluir
               </button>

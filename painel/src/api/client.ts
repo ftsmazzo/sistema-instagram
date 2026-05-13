@@ -277,6 +277,11 @@ export const api = {
         method: "POST",
         body: { image_urls, texts },
       }),
+    gerarCTA: (caption: string, provider?: string, model?: string) =>
+      fetchJson<{ cta: string }>("/api/postador/gerar-cta", {
+        method: "POST",
+        body: { caption, provider, model },
+      }),
     uploadMidia: (file: File) => {
       const form = new FormData();
       form.set("arquivo", file);

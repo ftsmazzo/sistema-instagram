@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyPluginAsync } from "fastify";
 import { createReadStream } from "fs";
 import { stat } from "fs/promises";
 import { join } from "path";
-import { gerarCaption as gerarCaptionIA, refazerCaption as refazerCaptionIA, gerarJornadaPorLink } from "../services/caption.js";
+import { gerarCaption as gerarCaptionIA, refazerCaption as refazerCaptionIA, gerarJornadaPorLink, gerarCTAImagem } from "../services/caption.js";
 import { uploadMedia, getUploadsDir, isStorageConfigured } from "../services/storage.js";
 import { rasparPaginaImovel, montarDescricaoParaCaption, baixarEEnviarParaCloudinary } from "../services/imovel.js";
 import { publishToInstagram, publishCarouselToInstagram } from "../services/instagram.js";
@@ -227,6 +227,18 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       const msg = err instanceof Error ? err.message : "Erro ao publicar.";
       fastify.log.error({ err }, "agendados publicar");
       return reply.status(500).send({ error: msg });
+    }
+  });
+
+  // POST /api/postador/gerar-cta — gera um CTA curto para imagem baseado no caption
+  fastify.post("/gerar-cta", async (request, reply) => {
+    const body = request.body as { caption: string; provider?: string; model?: string };
+    if (!body.caption) return reply.status(400).send({ error: "Caption é obrigatório." });
+    try {
+      const cta = await gerarCTAImagem(body.caption, { provider: body.provider as any, model: body.model });
+      return reply.send({ cta });
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "Erro ao gerar CTA." });
     }
   });
 

@@ -191,3 +191,18 @@ export async function gerarJornadaPorLink(
     throw new Error("A Inteligência Artificial não retornou o formato JSON corretamente.");
   }
 }
+
+/**
+ * Gera um CTA curto e criativo para ser usado em uma imagem, baseado no contexto da legenda.
+ */
+export async function gerarCTAImagem(
+  captionContext: string,
+  options?: GerarCaptionOptions
+): Promise<string> {
+  const system = `Você é um copywriter especialista em CTAs curtos e impactantes para serem escritos SOBRE imagens do Instagram (templates SVG).
+O usuário enviará a legenda completa do post.
+Sua tarefa é criar UMA FRASE CURTA (máximo 50 caracteres) que resuma o benefício ou gere curiosidade.
+Regras: Direto, sem aspas, sem hashtags, sem emojis. Retorne APENAS a frase curta e criativa.`;
+  const user = `Legenda do post:\n\n${captionContext}\n\nGere um CTA curto para a imagem:`;
+  return complete(system, user, options?.provider, options?.model);
+}
