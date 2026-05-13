@@ -11,7 +11,7 @@ import { adicionarTextoCarrossel } from "../services/carouselTexto.js";
 import { getContaParaPublicar } from "../store/config.js";
 import { resolveConfigStore, getOrgIdFromRequest } from "../context/workspaceConfig.js";
 import { upsertPostagemFromPostador } from "../store/crmPostagens.js";
-import { appendCronograma, listCronograma } from "../store/cronograma.js";
+import { appendCronograma, listCronograma, deleteCronograma } from "../store/cronograma.js";
 import { listAgendados, addAgendado, getAgendado, deleteAgendado } from "../store/agendados.js";
 
 function extFromMimetype(mimetype: string): string {
@@ -89,6 +89,13 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
   fastify.get("/cronograma", async (_request, reply) => {
     const list = await listCronograma();
     return reply.send({ cronograma: list, total: list.length });
+  });
+
+  // DELETE /api/postador/cronograma/:id — excluir item do histórico
+  fastify.delete<{ Params: { id: string } }>("/cronograma/:id", async (request, reply) => {
+    const { id } = request.params;
+    const ok = await deleteCronograma(id);
+    return reply.send({ ok });
   });
 
   // GET /api/postador/agendados — lista de posts salvos para agendar

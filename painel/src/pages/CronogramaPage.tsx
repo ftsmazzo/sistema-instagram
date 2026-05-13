@@ -105,6 +105,18 @@ export function CronogramaPage() {
                   <p className="text-sm text-slate-800 line-clamp-2 mt-1" title={item.caption}>
                     {item.caption}
                   </p>
+                  <div className="mt-2 flex justify-end pt-2 border-t border-slate-50">
+                    <button 
+                      onClick={() => {
+                        if(window.confirm('Remover esta publicação do histórico?')) {
+                          api.postador.deleteCronograma(item.id).then(() => load());
+                        }
+                      }}
+                      className="text-[10px] uppercase tracking-wider font-bold text-slate-400 hover:text-red-500 transition-colors"
+                    >
+                      Remover do histórico
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>

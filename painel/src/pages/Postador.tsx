@@ -72,6 +72,8 @@ export function Postador() {
   const [agendadoSuccess, setAgendadoSuccess] = useState<string | null>(null);
   const [dataAgendamento, setDataAgendamento] = useState("");
   const [promptImagemIA, setPromptImagemIA] = useState("");
+  const [jornadaQueue, setJornadaQueue] = useState<any[]>([]);
+  const [jornadaIndex, setJornadaIndex] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [contasInstagram, setContasInstagram] = useState<ContaInstagramRes[]>([]);
@@ -200,6 +202,35 @@ export function Postador() {
   const temMidiaParaPublicar = mediaUrl || mediaUrls.length > 0;
   const isCarousel = mediaType === "CAROUSEL" && mediaUrls.length > 1;
 
+  const avancarFilaJornada = () => {
+    if (jornadaQueue.length === 0) return false;
+    const proximoIndex = jornadaIndex;
+    if (proximoIndex < jornadaQueue.length) {
+      const next = jornadaQueue[proximoIndex];
+      setCaption(next.caption);
+      setMediaType(next.media_type);
+      if (next.media_type === "CAROUSEL" && next.media_urls) {
+        setMediaUrls(next.media_urls);
+        setMediaUrl(null);
+        setPreviewUrls(next.media_urls);
+        setTextosCarrossel(new Array(next.media_urls.length).fill(""));
+      } else {
+        setMediaUrl(next.media_url || null);
+        setMediaUrls(next.media_url ? [next.media_url] : []);
+        setPreviewUrls(next.media_url ? [next.media_url] : []);
+        setTextosCarrossel(next.media_url ? [""] : []);
+      }
+      setJornadaIndex(proximoIndex + 1);
+      setDataAgendamento(""); 
+      setFeedback("");
+      window.scrollTo(0, 0);
+      return true;
+    }
+    setJornadaQueue([]);
+    setJornadaIndex(0);
+    return false;
+  };
+
   const handlePublicar = async () => {
     if (!caption) return;
     if (!temMidiaParaPublicar) {
@@ -214,7 +245,11 @@ export function Postador() {
         : { caption, media_url: mediaUrl!, media_type: (mediaType ?? "IMAGE") as "IMAGE" | "REELS", conta_id: contaSelecionadaId };
       const res = await api.postador.publicar(payload);
       setLinkPost(res.link_post ?? null);
-      setStep("published");
+      if (!avancarFilaJornada()) {
+        setStep("published");
+      } else {
+        setAgendadoSuccess("Post publicado! Agora revise o próximo post da jornada.");
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao publicar.");
     } finally {
@@ -237,7 +272,13 @@ export function Postador() {
         ? { caption, media_urls: mediaUrls, media_type: "CAROUSEL" as const, data_agendamento: dateIso, conta_id: contaSelecionadaId }
         : { caption, media_url: mediaUrl!, media_type: (mediaType ?? "IMAGE") as "IMAGE" | "REELS", data_agendamento: dateIso, conta_id: contaSelecionadaId };
       await api.postador.saveAgendado(payload);
-      setAgendadoSuccess(dateIso ? "Post agendado com sucesso para a data informada." : "Post salvo. Você pode publicá-lo na seção «Posts agendados».");
+      if (!avancarFilaJornada()) {
+        setAgendadoSuccess(dateIso ? "Post agendado com sucesso para a data informada." : "Post salvo. Você pode publicá-lo na seção «Posts agendados».");
+        setStep("form");
+        setWizardStep(1);
+      } else {
+        setAgendadoSuccess(`Post ${jornadaIndex} salvo! Revisando agora o ${jornadaIndex + 1} de ${jornadaQueue.length}.`);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao salvar agendado.");
     } finally {
@@ -256,25 +297,24 @@ export function Postador() {
     try {
       const res = await api.postador.gerarPorUrl(urlImovel.trim(), provider, effectiveModel);
       if (res.jornada && res.jornada.length > 0) {
-        let successCount = 0;
-        for (let i = 0; i < res.jornada.length; i++) {
-           const post = res.jornada[i];
-           const payload = post.media_type === "CAROUSEL"
-             ? { caption: post.caption, media_urls: post.media_urls, media_type: "CAROUSEL" as const, conta_id: contaSelecionadaId }
-             : { caption: post.caption, media_url: post.media_url!, media_type: "IMAGE" as const, conta_id: contaSelecionadaId };
-           
-           // Agendamento sugerido espaçado de 2 em 2 dias a partir de hoje
-           const date = new Date();
-           date.setDate(date.getDate() + (i * 2));
-           const dateIso = date.toISOString();
-           
-           await api.postador.saveAgendado({ ...payload, data_agendamento: dateIso });
-           successCount++;
+        setJornadaQueue(res.jornada);
+        setJornadaIndex(1);
+        
+        const first = res.jornada[0];
+        setCaption(first.caption);
+        setMediaType(first.media_type);
+        if (first.media_type === "CAROUSEL" && first.media_urls) {
+          setMediaUrls(first.media_urls);
+          setMediaUrl(null);
+          setPreviewUrls(first.media_urls);
+          setTextosCarrossel(new Array(first.media_urls.length).fill(""));
+        } else {
+          setMediaUrl(first.media_url || null);
+          setMediaUrls(first.media_url ? [first.media_url] : []);
+          setPreviewUrls(first.media_url ? [first.media_url] : []);
+          setTextosCarrossel(first.media_url ? [""] : []);
         }
-        setAgendadoSuccess(`Jornada Automática concluída! ${successCount} posts gerados e agendados. Consulte seus 'Próximos Posts'.`);
-        setStep("form");
-        setWizardStep(1);
-        setUrlImovel("");
+        setStep("review");
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao gerar jornada a partir do link.");
@@ -715,6 +755,17 @@ export function Postador() {
 
       {step === "review" && caption && (
         <div className="space-y-4">
+          {jornadaQueue.length > 0 && (
+            <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 shadow-sm mb-6">
+              <p className="text-sm font-bold text-indigo-900 flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600 text-white text-[10px]">
+                  {jornadaIndex}
+                </span>
+                Revisão da Jornada: Post {jornadaIndex} de {jornadaQueue.length}
+              </p>
+              <p className="mt-1 text-xs text-indigo-700">Aplique os textos nas imagens e edite a legenda. Ao salvar, o próximo post será carregado.</p>
+            </div>
+          )}
           {contasInstagram.length > 0 && contaSelecionadaId && (
             <div className="flex flex-wrap items-center gap-2 text-sm text-gray-700 p-3 bg-gray-50 rounded-lg border border-gray-200">
               <span>
@@ -938,18 +989,18 @@ function AgendadosList({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [contaIdParaPublicar, setContaIdParaPublicar] = useState<string | null>(contaPadraoId ?? contas[0]?.id ?? null);
 
-  const load = () => {
-    setLoading(true);
+  const load = (silent = false) => {
+    if (!silent) setLoading(true);
     api.postador
       .getAgendados()
       .then((r) => setList(r.agendados ?? []))
       .catch(() => setList([]))
-      .finally(() => setLoading(false));
+      .finally(() => { if (!silent) setLoading(false); });
   };
 
   useEffect(() => {
     load();
-    const t = setInterval(load, 5000);
+    const t = setInterval(() => load(true), 5000);
     return () => clearInterval(t);
   }, []);
 

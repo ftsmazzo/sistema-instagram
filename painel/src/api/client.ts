@@ -244,6 +244,8 @@ export const api = {
       }),
     getCronograma: () =>
       fetchJson<{ cronograma: CronogramaItem[]; total: number }>("/api/postador/cronograma"),
+    deleteCronograma: (id: string) =>
+      fetchJson<{ ok: boolean }>(`/api/postador/cronograma/${id}`, { method: "DELETE" }),
     getAgendados: () =>
       fetchJson<{ agendados: AgendadoItem[]; total: number }>("/api/postador/agendados"),
     saveAgendado: (payload: {

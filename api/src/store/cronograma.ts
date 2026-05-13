@@ -109,3 +109,18 @@ export async function appendCronograma(item: Omit<CronogramaItem, "id" | "create
   if (isDbConfigured()) return appendToDb(item);
   return appendToFile(item);
 }
+
+export async function deleteCronograma(id: string): Promise<boolean> {
+  if (isDbConfigured()) {
+    await ensureTables();
+    const pool = getPool();
+    const res = await pool.query("DELETE FROM postador_cronograma WHERE id = $1", [id]);
+    return (res.rowCount ?? 0) > 0;
+  } else {
+    const list = await ensureCronogramaFile();
+    const filtered = list.filter((i) => i.id !== id);
+    if (list.length === filtered.length) return false;
+    await writeFile(CRONOGRAMA_PATH, JSON.stringify(filtered, null, 2), "utf-8");
+    return true;
+  }
+}
