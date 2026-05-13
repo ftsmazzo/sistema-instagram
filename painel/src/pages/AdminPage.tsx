@@ -147,6 +147,19 @@ export function AdminPage() {
       .finally(() => setSaving(false));
   };
 
+  const handleConectarMeta = () => {
+    setSaving(true);
+    setError(null);
+    api.getMetaOAuthUrl()
+      .then((res) => {
+        window.location.href = res.url;
+      })
+      .catch((e) => {
+        setSaving(false);
+        setError(e instanceof Error ? e.message : "Erro ao gerar URL OAuth");
+      });
+  };
+
   const handleSetDefault = (id: string) => {
     setSaving(true);
     setError(null);

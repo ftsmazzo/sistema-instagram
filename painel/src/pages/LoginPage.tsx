@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { api, clearAuthToken, getAuthToken, setAuthToken, type AuthStatus } from "../api/client";
 
 export function LoginPage() {
