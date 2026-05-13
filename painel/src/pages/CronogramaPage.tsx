@@ -71,7 +71,7 @@ export function CronogramaPage() {
                     <span className="text-xs font-medium text-slate-500">{item.media_type}</span>
                     <button onClick={() => {
                         if(window.confirm('Excluir este agendamento?')) {
-                          api.postador.deleteAgendado(item.id).then(load);
+                          api.postador.deleteAgendado(item.id).then(() => load());
                         }
                       }} className="text-xs text-red-600 font-semibold hover:text-red-700 bg-red-50 hover:bg-red-100 px-2.5 py-1 rounded-md transition-colors">Cancelar</button>
                   </div>
