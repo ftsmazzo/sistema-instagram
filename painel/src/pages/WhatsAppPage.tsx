@@ -131,7 +131,13 @@ export function WhatsAppPage() {
       const events = res.current?.events?.join(", ") ?? "MESSAGES_UPSERT, CONNECTION_UPDATE";
       setWebhookInfo(`Webhook OK → ${url} (eventos: ${events})`);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro ao sincronizar webhook.");
+      const msg =
+        e instanceof Error
+          ? e.message
+          : typeof e === "string"
+            ? e
+            : "Erro ao sincronizar webhook.";
+      setError(msg === "Failed to fetch" ? "Falha de rede ao chamar a API. Verifique se a API está no ar." : msg);
     } finally {
       setWebhookSyncing(false);
     }

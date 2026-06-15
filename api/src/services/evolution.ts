@@ -163,11 +163,13 @@ export async function setInstanceWebhook(
   }
 
   const payload = {
-    enabled: true,
-    url: webhookUrl,
-    webhookByEvents: false,
-    webhookBase64: false,
-    events: [...EVOLUTION_WEBHOOK_EVENTS],
+    webhook: {
+      enabled: true,
+      url: webhookUrl,
+      webhookByEvents: false,
+      webhookBase64: false,
+      events: [...EVOLUTION_WEBHOOK_EVENTS],
+    },
   };
 
   const json = await evolutionFetch<{ webhook?: { instanceName?: string; webhook?: unknown } }>(
