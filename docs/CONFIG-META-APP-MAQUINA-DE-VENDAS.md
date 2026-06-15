@@ -141,6 +141,7 @@ Detalhes do filtro no workflow: `docs/FILTRO-WEBHOOK-INSTAGRAM.md`.
 - [ ] Workflow `DT2i65lSjtCqay4g` **publicado/ativo**
 - [ ] Path do webhook: `instagram`
 - [ ] Nó **HTTP Config** com header `X-Internal-Secret` (valor = `INTERNAL_AGENT_API_SECRET` na API — **não commitar**)
+- [ ] **Resposta Direct Privado** usa `POST /{id_comentario}/private_replies` (não `/{ig_user_id}/messages`) — primeira DM após comentário; exige só `instagram_manage_comments`
 
 ---
 
@@ -235,6 +236,7 @@ Para **cada organização** no painel:
 | **Redirect URI mismatch** | URL no Meta **idêntica** a `META_OAUTH_REDIRECT_URI` (https, sem barra extra) |
 | Webhook não verifica | Workflow n8n ativo; URL pública acessível; verify token correto |
 | Cliente conectou mas webhook não chega | Inscrever IG nos campos em Webhooks; conta Business; app em modo dev só testadores |
+| `(#3) Application does not have the capability` no DM após comentário | Nó n8n deve usar `/{comment_id}/private_replies`, não `/{ig_user_id}/messages`; reconectar OAuth com `META_OAUTH_MODE=facebook` |
 | Token expira (~60 dias) | Cliente clica **Conectar Meta** de novo (renovação automática pode ser implementada depois) |
 
 ---
