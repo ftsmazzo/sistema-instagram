@@ -65,6 +65,8 @@ export function WhatsAppPage() {
   const [form, setForm] = useState(emptyForm);
   const [leads, setLeads] = useState<LeadListItemRes[]>([]);
   const [leadsTotal, setLeadsTotal] = useState(0);
+  const [webhookSyncing, setWebhookSyncing] = useState(false);
+  const [webhookInfo, setWebhookInfo] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -118,6 +120,23 @@ export function WhatsAppPage() {
     }
   };
 
+  const handleSyncWebhook = async () => {
+    setWebhookSyncing(true);
+    setError(null);
+    setWebhookInfo(null);
+    try {
+      const res = await api.agentes.syncWhatsappWebhook();
+      if (!res.ok) throw new Error(res.error ?? "Falha ao sincronizar webhook.");
+      const url = res.current?.url ?? res.webhook_url_expected ?? "—";
+      const events = res.current?.events?.join(", ") ?? "MESSAGES_UPSERT, CONNECTION_UPDATE";
+      setWebhookInfo(`Webhook OK → ${url} (eventos: ${events})`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao sincronizar webhook.");
+    } finally {
+      setWebhookSyncing(false);
+    }
+  };
+
   if (needLogin) {
     return (
       <PageShell title="WhatsApp" description="Configure o agente WhatsApp da Máquina de Vendas.">
@@ -154,7 +173,8 @@ export function WhatsAppPage() {
             <div>
               <h2 className="text-lg font-semibold text-gray-900">Instância Evolution</h2>
               <p className="mt-1 text-sm text-gray-600">
-                Mesmos dados usados no n8n para enviar mensagens. A API key fica na credencial Evolution do n8n.
+                Evolution central: a URL base pode vir de <code className="rounded bg-gray-100 px-1">EVOLUTION_BASE_URL</code> na API.
+                Use o botão abaixo para registrar o webhook no n8n automaticamente.
               </p>
             </div>
 
@@ -174,10 +194,29 @@ export function WhatsAppPage() {
                   className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
                   value={form.evolution_base_url}
                   onChange={(e) => setForm((f) => ({ ...f, evolution_base_url: e.target.value }))}
-                  placeholder="https://sua-evolution.easypanel.host"
+                  placeholder="https://infra-core-whatsapp-core.kxryyk.easypanel.host"
                 />
               </label>
             </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={handleSyncWebhook}
+                disabled={webhookSyncing || !form.instance_name.trim()}
+                className="rounded-lg border border-emerald-600 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
+              >
+                {webhookSyncing ? "Sincronizando webhook…" : "Sincronizar webhook na Evolution"}
+              </button>
+              <span className="text-xs text-gray-500">
+                Aponta para o n8n (<code className="rounded bg-gray-100 px-1">whatsapp-evolution</code>). Salve o nome da instância antes.
+              </span>
+            </div>
+            {webhookInfo && (
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                {webhookInfo}
+              </div>
+            )}
 
             <label className="flex items-center gap-2 text-sm">
               <input

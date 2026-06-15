@@ -1,5 +1,6 @@
 import { ensureTables, getPool, isDbConfigured } from "../db/index.js";
 import { AGENT_LOCALE, AGENT_TIMEZONE } from "../services/agentConfigDefaults.js";
+import { resolveEvolutionBaseUrl } from "../services/evolution.js";
 import {
   buildDefaultPromptWhatsapp,
   resolveWhatsappAgentDisplayName,
@@ -342,7 +343,7 @@ function assembleConfig(args: {
   }
 
   const objetivos = parseObjetivos(instance?.objetivos);
-  const baseUrl = (instance?.evolution_base_url ?? "").replace(/\/$/, "");
+  const baseUrl = resolveEvolutionBaseUrl(instance?.evolution_base_url);
   const instanceName = instance?.instance_name ?? "";
 
   const ready = Boolean(

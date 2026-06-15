@@ -370,5 +370,24 @@ export const api = {
         method: "PUT",
         body,
       }),
+    syncWhatsappWebhook: () =>
+      fetchJson<{
+        ok: boolean;
+        instance_name?: string;
+        evolution_base_url?: string;
+        webhook_url_expected?: string;
+        applied?: unknown;
+        current?: { enabled?: boolean; url?: string; events?: string[] } | null;
+        error?: string;
+      }>("/api/agentes/whatsapp/sync-webhook", { method: "POST", body: {} }),
+    getWhatsappWebhook: () =>
+      fetchJson<{
+        ok: boolean;
+        instance_name?: string;
+        evolution_base_url?: string;
+        webhook_url_expected?: string | null;
+        current?: { enabled?: boolean; url?: string; events?: string[] } | null;
+        error?: string;
+      }>("/api/agentes/whatsapp/webhook"),
   },
 };
