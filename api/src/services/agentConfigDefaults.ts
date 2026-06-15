@@ -1,7 +1,10 @@
 import type { EmpresaPerfil } from "../store/config.js";
 
 export const AGENT_GRAPH_API_VERSION = (process.env.AGENT_GRAPH_API_VERSION ?? "v24.0").replace(/^v?/, "v");
-export const AGENT_GRAPH_API_BASE = `https://graph.instagram.com/${AGENT_GRAPH_API_VERSION}`;
+/** Token de página (Facebook Login) usa graph.facebook.com — mesmo host do Postador. Override: AGENT_GRAPH_API_BASE */
+export const AGENT_GRAPH_API_BASE =
+  process.env.AGENT_GRAPH_API_BASE?.trim() ||
+  `https://graph.facebook.com/${AGENT_GRAPH_API_VERSION}`;
 export const AGENT_TIMEZONE = process.env.AGENT_TIMEZONE?.trim() || "America/Sao_Paulo";
 export const AGENT_LOCALE = "pt-BR";
 

@@ -129,30 +129,37 @@ function empresaFromRow(row: WorkspaceRow): EmpresaPerfil {
 function buildCredentials(agentTok: string, publishTok: string, issues: AgentConfigIssue[]): AgentConfigCredentials {
   const agent = agentTok.trim();
   const publish = publishTok.trim();
-  if (agent) {
-    if (!publish) {
+  // Token de página (OAuth Facebook) — o Postador usa access_token; priorizar o mesmo no agente n8n.
+  if (publish) {
+    if (!agent) {
       issues.push({
-        code: "PUBLISH_TOKEN_MISSING",
-        message: "Token de publicação ausente; apenas o token do agente será usado.",
+        code: "AGENT_TOKEN_MISSING",
+        message: "Token do agente vazio — usando token de publicação (mesmo do Postador).",
+        severity: "warning",
+      });
+    } else if (agent !== publish) {
+      issues.push({
+        code: "AGENT_TOKEN_DIFFERS_PUBLISH",
+        message: "Token do agente difere do de publicação — usando token de publicação para Graph API.",
         severity: "warning",
       });
     }
     return {
-      access_token: agent,
-      token_source: "agent",
+      access_token: publish,
+      token_source: "publish",
       graph_api_version: AGENT_GRAPH_API_VERSION,
       graph_api_base: AGENT_GRAPH_API_BASE,
     };
   }
-  if (publish) {
+  if (agent) {
     issues.push({
-      code: "AGENT_TOKEN_FALLBACK_PUBLISH",
-      message: "Token do agente vazio — usando token de publicação como fallback temporário.",
+      code: "PUBLISH_TOKEN_MISSING",
+      message: "Token de publicação ausente; usando token do agente como fallback.",
       severity: "warning",
     });
     return {
-      access_token: publish,
-      token_source: "publish",
+      access_token: agent,
+      token_source: "agent",
       graph_api_version: AGENT_GRAPH_API_VERSION,
       graph_api_base: AGENT_GRAPH_API_BASE,
     };
