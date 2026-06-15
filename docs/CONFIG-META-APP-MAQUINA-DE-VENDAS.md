@@ -161,8 +161,7 @@ Pedir no **App Review** do app **Máquina de Vendas**:
 | `instagram_basic` | Perfil e mídia |
 | `instagram_content_publish` | Postador |
 | `instagram_manage_comments` | Agente comentários |
-| `instagram_manage_messages` | Agente Direct (conversa contínua) |
-| `pages_messaging` | Private reply e Direct via `/{page_id}/messages` |
+| `instagram_manage_messages` | Agente Direct + private reply via `/{page_id}/messages` |
 | `pages_show_list` | Listar páginas no OAuth |
 | `pages_read_engagement` | Página vinculada ao IG |
 | `business_management` | Contas comerciais |
@@ -237,7 +236,8 @@ Para **cada organização** no painel:
 | **Redirect URI mismatch** | URL no Meta **idêntica** a `META_OAUTH_REDIRECT_URI` (https, sem barra extra) |
 | Webhook não verifica | Workflow n8n ativo; URL pública acessível; verify token correto |
 | Cliente conectou mas webhook não chega | Inscrever IG nos campos em Webhooks; conta Business; app em modo dev só testadores |
-| `(#3) Application does not have the capability` no DM após comentário | Usar `POST /{page_id}/messages` com `recipient.comment_id` (não `ig_user_id` nem `private_replies` no comentário); token de **Página** + `pages_messaging` |
+| `(#3) Application does not have the capability` no DM após comentário | Usar `POST /{page_id}/messages` com `recipient.comment_id`; token de **Página** + `instagram_manage_messages` (não pedir `pages_messaging` — scope inválido no OAuth) |
+| **Invalid Scopes: pages_messaging** no login | Remover `pages_messaging` do OAuth; usar só `instagram_manage_messages` + `pages_show_list` |
 | Token expira (~60 dias) | Cliente clica **Conectar Meta** de novo (renovação automática pode ser implementada depois) |
 
 ---
