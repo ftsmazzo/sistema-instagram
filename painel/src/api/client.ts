@@ -133,7 +133,35 @@ export type AgendadoItem = {
   created_at: string;
 };
 
+export type WhatsappObjetivo = "link_produto" | "agendar_visita" | "handoff_humano";
 
+export type WhatsappInstanceRes = {
+  id: string;
+  instance_name: string;
+  evolution_base_url: string;
+  agent_ativo: boolean;
+  agent_nome: string;
+  agent_prompt: string;
+  objetivos: WhatsappObjetivo[];
+  status: string;
+};
+
+export type LeadListItemRes = {
+  id: number;
+  nome: string | null;
+  whatsapp: string | null;
+  username_instagram: string | null;
+  objetivo: string | null;
+  status: string;
+  id_post_origem: string | null;
+  origem_interacao: string | null;
+  url_interesse: string | null;
+  handoff_at: string | null;
+  handoff_motivo: string | null;
+  whatsapp_boas_vindas_enviado: boolean;
+  created_at: string;
+  updated_at: string;
+};
 
 export type AuthStatus = {
   database: boolean;
@@ -313,5 +341,32 @@ export const api = {
         return res.json() as Promise<{ media_url: string }>;
       });
     },
+  },
+
+  agentes: {
+    getLeads: (params?: { limit?: number; with_whatsapp?: boolean; status?: string }) => {
+      const qs = new URLSearchParams();
+      if (params?.limit) qs.set("limit", String(params.limit));
+      if (params?.with_whatsapp) qs.set("with_whatsapp", "1");
+      if (params?.status) qs.set("status", params.status);
+      const q = qs.toString();
+      return fetchJson<{ leads: LeadListItemRes[]; total: number }>(
+        `/api/agentes/leads${q ? `?${q}` : ""}`
+      );
+    },
+    getWhatsapp: () => fetchJson<{ instance: WhatsappInstanceRes | null }>("/api/agentes/whatsapp"),
+    putWhatsapp: (body: {
+      instance_name: string;
+      evolution_base_url: string;
+      agent_ativo?: boolean;
+      agent_nome?: string;
+      agent_prompt?: string;
+      objetivos?: WhatsappObjetivo[];
+      status?: string;
+    }) =>
+      fetchJson<{ saved: boolean; instance: WhatsappInstanceRes }>("/api/agentes/whatsapp", {
+        method: "PUT",
+        body,
+      }),
   },
 };

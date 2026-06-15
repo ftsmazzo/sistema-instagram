@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyPluginOptions } from "fastify";
 import { isDbConfigured } from "../db/index.js";
 import { resolveAgentConfig } from "../store/agentConfig.js";
+import { resolveWhatsappAgentConfig } from "../store/whatsappAgentConfig.js";
 import { getInternalSecretConfigured, verifyInternalSecret } from "../util/internalAuth.js";
 import { AGENT_GRAPH_API_BASE, AGENT_GRAPH_API_VERSION, AGENT_TIMEZONE } from "../services/agentConfigDefaults.js";
 
@@ -78,6 +79,51 @@ export async function internalRoutes(app: FastifyInstance, _opts: FastifyPluginO
     });
 
     if (!result.ok && result.code === "ACCOUNT_NOT_FOUND") {
+      return reply.status(404).send(result);
+    }
+
+    if (!result.ok && result.code === "DATABASE_NOT_CONFIGURED") {
+      return reply.status(503).send(result);
+    }
+
+    return reply.send(result);
+  });
+
+  /**
+   * Resolve tenant, instância Evolution, lead e contexto para o agente WhatsApp (n8n).
+   *
+   * Query (informe ao menos um):
+   *   - instance — nome da instância Evolution (webhook)
+   *   - phone ou telefone — WhatsApp do lead (com ou sem 55)
+   *   - organization_id — id da organização (testes)
+   */
+  app.get("/whatsapp-agent-config", async (request, reply) => {
+    const q = request.query as {
+      instance?: string;
+      phone?: string;
+      telefone?: string;
+      organization_id?: string;
+    };
+    const instanceName = typeof q.instance === "string" ? q.instance.trim() : "";
+    const phone = (typeof q.phone === "string" ? q.phone : typeof q.telefone === "string" ? q.telefone : "").trim();
+    const organizationId = typeof q.organization_id === "string" ? q.organization_id.trim() : "";
+
+    if (!instanceName && !phone && !organizationId) {
+      return reply.status(400).send({
+        ok: false,
+        code: "MISSING_LOOKUP",
+        error: "Informe instance, phone/telefone ou organization_id.",
+        example: "/api/internal/whatsapp-agent-config?instance=maquina-vendas&phone=5516999998888",
+      });
+    }
+
+    const result = await resolveWhatsappAgentConfig({
+      instanceName: instanceName || null,
+      phone: phone || null,
+      organizationId: organizationId || null,
+    });
+
+    if (!result.ok && result.code === "TENANT_NOT_FOUND") {
       return reply.status(404).send(result);
     }
 
