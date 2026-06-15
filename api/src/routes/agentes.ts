@@ -125,7 +125,12 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
 
     try {
       const applied = await setInstanceWebhook(instance.instance_name, { baseUrl });
-      const current = await findInstanceWebhook(instance.instance_name, baseUrl);
+      let current = null;
+      try {
+        current = await findInstanceWebhook(instance.instance_name, baseUrl);
+      } catch (findErr) {
+        request.log.warn({ err: findErr }, "Webhook aplicado; falha ao ler webhook/find (ignorado).");
+      }
       return reply.send({
         ok: true,
         instance_name: instance.instance_name,
@@ -136,6 +141,10 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Falha ao configurar webhook na Evolution.";
+      request.log.warn(
+        { err, instance_name: instance.instance_name, evolution_base_url: baseUrl },
+        "sync-webhook Evolution falhou"
+      );
       return reply.status(502).send({ ok: false, error: message });
     }
   });
