@@ -60,6 +60,7 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
       agent_prompt?: string;
       objetivos?: WhatsappObjetivo[];
       status?: string;
+      delay_primeira_msg_minutos?: number;
     };
 
     const instanceName = (body.instance_name ?? "").trim();
@@ -79,6 +80,7 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
       agent_prompt: body.agent_prompt,
       objetivos: body.objetivos,
       status: body.status,
+      delay_primeira_msg_minutos: body.delay_primeira_msg_minutos,
     });
 
     return reply.send({ saved: true, instance });

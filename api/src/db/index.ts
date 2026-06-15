@@ -210,6 +210,7 @@ CREATE TABLE IF NOT EXISTS whatsapp_instances (
   agent_prompt        TEXT NOT NULL DEFAULT '',
   objetivos           JSONB NOT NULL DEFAULT '["link_produto","agendar_visita","handoff_humano"]'::jsonb,
   status              VARCHAR(32) NOT NULL DEFAULT 'pending',
+  delay_primeira_msg_minutos INTEGER NOT NULL DEFAULT 20,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT whatsapp_instances_org_instance_key UNIQUE (organization_id, instance_name)
@@ -256,6 +257,12 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS whatsapp_boas_vindas_enviado BOOLEAN 
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS whatsapp_digits VARCHAR(32);
 CREATE INDEX IF NOT EXISTS idx_leads_whatsapp_digits ON leads (organization_id, whatsapp_digits);
 CREATE INDEX IF NOT EXISTS idx_leads_status ON leads (organization_id, status);
+
+ALTER TABLE whatsapp_instances ADD COLUMN IF NOT EXISTS delay_primeira_msg_minutos INTEGER NOT NULL DEFAULT 20;
+`;
+
+const MIGRATE_WHATSAPP_DELAY = `
+ALTER TABLE whatsapp_instances ADD COLUMN IF NOT EXISTS delay_primeira_msg_minutos INTEGER NOT NULL DEFAULT 20;
 `;
 
 let initDone = false;
@@ -270,5 +277,6 @@ export async function ensureTables(): Promise<void> {
   await p.query(MIGRATE_AGENDAMENTO_COLS);
   await p.query(MIGRATE_LEADS_POST_ORIGEM);
   await p.query(WHATSAPP_AGENT_SQL);
+  await p.query(MIGRATE_WHATSAPP_DELAY);
   initDone = true;
 }

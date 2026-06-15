@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS whatsapp_instances (
   agent_prompt        TEXT NOT NULL DEFAULT '',
   objetivos           JSONB NOT NULL DEFAULT '["link_produto","agendar_visita","handoff_humano"]'::jsonb,
   status              VARCHAR(32) NOT NULL DEFAULT 'pending',
+  delay_primeira_msg_minutos INTEGER NOT NULL DEFAULT 20,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT whatsapp_instances_org_instance_key UNIQUE (organization_id, instance_name)

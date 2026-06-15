@@ -144,6 +144,7 @@ export type WhatsappInstanceRes = {
   agent_prompt: string;
   objetivos: WhatsappObjetivo[];
   status: string;
+  delay_primeira_msg_minutos: number;
 };
 
 export type LeadListItemRes = {
@@ -363,6 +364,7 @@ export const api = {
       agent_prompt?: string;
       objetivos?: WhatsappObjetivo[];
       status?: string;
+      delay_primeira_msg_minutos?: number;
     }) =>
       fetchJson<{ saved: boolean; instance: WhatsappInstanceRes }>("/api/agentes/whatsapp", {
         method: "PUT",

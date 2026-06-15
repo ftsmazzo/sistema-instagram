@@ -24,6 +24,7 @@ function emptyForm() {
     agent_prompt: "",
     objetivos: ["link_produto", "agendar_visita", "handoff_humano"] as WhatsappObjetivo[],
     status: "pending",
+    delay_primeira_msg_minutos: 20,
   };
 }
 
@@ -39,6 +40,7 @@ function instanceToForm(instance: WhatsappInstanceRes | null) {
       ? instance.objetivos
       : (["link_produto", "agendar_visita", "handoff_humano"] as WhatsappObjetivo[]),
     status: instance.status,
+    delay_primeira_msg_minutos: instance.delay_primeira_msg_minutos ?? 20,
   };
 }
 
@@ -184,6 +186,26 @@ export function WhatsAppPage() {
                 onChange={(e) => setForm((f) => ({ ...f, agent_ativo: e.target.checked }))}
               />
               <span className="font-medium text-gray-800">Agente WhatsApp ativo</span>
+            </label>
+
+            <label className="block text-sm md:max-w-xs">
+              <span className="font-medium text-gray-700">Delay da 1ª mensagem da IA (minutos)</span>
+              <input
+                type="number"
+                min={0}
+                max={1440}
+                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                value={form.delay_primeira_msg_minutos}
+                onChange={(e) =>
+                  setForm((f) => ({
+                    ...f,
+                    delay_primeira_msg_minutos: Math.min(1440, Math.max(0, Number(e.target.value) || 0)),
+                  }))
+                }
+              />
+              <span className="mt-1 block text-xs text-gray-500">
+                Após a boas-vindas no Zap. Se o lead responder antes, a IA entra na hora (Fase 2). 0 = imediato.
+              </span>
             </label>
 
             <label className="block text-sm">

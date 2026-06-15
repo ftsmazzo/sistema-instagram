@@ -7,6 +7,7 @@ import {
   type WhatsappObjetivo,
 } from "../services/whatsappAgentDefaults.js";
 import { normalizePhoneDigits } from "../util/phone.js";
+import { clampDelayPrimeiraMsg } from "./whatsappInstance.js";
 
 export type WhatsappAgentIssue = {
   code: string;
@@ -38,6 +39,7 @@ export type WhatsappAgentInstance = {
   evolution_base_url: string;
   agent_ativo: boolean;
   status: string;
+  delay_primeira_msg_minutos: number;
 };
 
 export type WhatsappAgentPrompts = {
@@ -82,6 +84,7 @@ export type WhatsappAgentRuntime = {
   redis_key_prefix: string;
   timezone: string;
   locale: string;
+  delay_primeira_msg_minutos: number;
 };
 
 export type WhatsappAgentConfigResult = {
@@ -123,6 +126,7 @@ type InstanceRow = {
   agent_prompt: string;
   objetivos: unknown;
   status: string;
+  delay_primeira_msg_minutos: number;
 };
 
 type LeadRow = {
@@ -201,7 +205,8 @@ async function fetchInstanceByName(instanceName: string): Promise<InstanceRow | 
   const r = await pool.query<InstanceRow>(
     `SELECT id, organization_id, instance_name, evolution_base_url,
             agent_ativo, COALESCE(agent_nome, '') AS agent_nome,
-            COALESCE(agent_prompt, '') AS agent_prompt, objetivos, status
+            COALESCE(agent_prompt, '') AS agent_prompt, objetivos, status,
+            COALESCE(delay_primeira_msg_minutos, 20) AS delay_primeira_msg_minutos
      FROM whatsapp_instances WHERE instance_name = $1 LIMIT 1`,
     [instanceName]
   );
@@ -214,7 +219,8 @@ async function fetchInstanceByOrg(orgId: string): Promise<InstanceRow | null> {
   const r = await pool.query<InstanceRow>(
     `SELECT id, organization_id, instance_name, evolution_base_url,
             agent_ativo, COALESCE(agent_nome, '') AS agent_nome,
-            COALESCE(agent_prompt, '') AS agent_prompt, objetivos, status
+            COALESCE(agent_prompt, '') AS agent_prompt, objetivos, status,
+            COALESCE(delay_primeira_msg_minutos, 20) AS delay_primeira_msg_minutos
      FROM whatsapp_instances WHERE organization_id = $1::uuid
      ORDER BY updated_at DESC LIMIT 1`,
     [orgId]
@@ -365,6 +371,7 @@ function assembleConfig(args: {
           evolution_base_url: instance.evolution_base_url,
           agent_ativo: instance.agent_ativo,
           status: instance.status,
+          delay_primeira_msg_minutos: clampDelayPrimeiraMsg(instance.delay_primeira_msg_minutos),
         }
       : null,
     evolution: instance && baseUrl
@@ -401,6 +408,7 @@ function assembleConfig(args: {
       redis_key_prefix: `wa:${args.org.organization_id}:${args.phoneDigits ?? "unknown"}:`,
       timezone: AGENT_TIMEZONE,
       locale: AGENT_LOCALE,
+      delay_primeira_msg_minutos: clampDelayPrimeiraMsg(instance?.delay_primeira_msg_minutos),
     },
   };
 }

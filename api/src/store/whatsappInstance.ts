@@ -12,6 +12,7 @@ export type WhatsappInstanceRecord = {
   agent_prompt: string;
   objetivos: WhatsappObjetivo[];
   status: string;
+  delay_primeira_msg_minutos: number;
   created_at: string;
   updated_at: string;
 };
@@ -24,7 +25,14 @@ export type UpsertWhatsappInstanceInput = {
   agent_prompt?: string;
   objetivos?: WhatsappObjetivo[];
   status?: string;
+  delay_primeira_msg_minutos?: number;
 };
+
+export function clampDelayPrimeiraMsg(minutes: number | undefined | null): number {
+  const n = Number(minutes);
+  if (!Number.isFinite(n)) return 20;
+  return Math.min(Math.max(Math.round(n), 0), 1440);
+}
 
 function rowToRecord(row: {
   id: string;
@@ -36,6 +44,7 @@ function rowToRecord(row: {
   agent_prompt: string;
   objetivos: unknown;
   status: string;
+  delay_primeira_msg_minutos: number;
   created_at: Date;
   updated_at: Date;
 }): WhatsappInstanceRecord {
@@ -52,6 +61,7 @@ function rowToRecord(row: {
     agent_prompt: row.agent_prompt ?? "",
     objetivos,
     status: row.status,
+    delay_primeira_msg_minutos: clampDelayPrimeiraMsg(row.delay_primeira_msg_minutos),
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
   };
@@ -63,7 +73,8 @@ export async function getWhatsappInstanceForOrg(orgId: string): Promise<Whatsapp
   const r = await pool.query(
     `SELECT id, organization_id, instance_name, evolution_base_url, agent_ativo,
             COALESCE(agent_nome, '') AS agent_nome, COALESCE(agent_prompt, '') AS agent_prompt,
-            objetivos, status, created_at, updated_at
+            objetivos, status, COALESCE(delay_primeira_msg_minutos, 20) AS delay_primeira_msg_minutos,
+            created_at, updated_at
      FROM whatsapp_instances WHERE organization_id = $1::uuid
      ORDER BY updated_at DESC LIMIT 1`,
     [orgId]
@@ -81,14 +92,16 @@ export async function upsertWhatsappInstance(
   const instanceName = input.instance_name.trim();
   if (!instanceName) throw new Error("instance_name obrigatório");
 
+  const delay = clampDelayPrimeiraMsg(input.delay_primeira_msg_minutos);
+
   const r = await pool.query(
     `INSERT INTO whatsapp_instances (
        organization_id, instance_name, evolution_base_url, agent_ativo,
-       agent_nome, agent_prompt, objetivos, status, updated_at
+       agent_nome, agent_prompt, objetivos, status, delay_primeira_msg_minutos, updated_at
      ) VALUES (
        $1::uuid, $2, $3, COALESCE($4, false), COALESCE($5, ''), COALESCE($6, ''),
        COALESCE($7::jsonb, '["link_produto","agendar_visita","handoff_humano"]'::jsonb),
-       COALESCE($8, 'pending'), NOW()
+       COALESCE($8, 'pending'), $9, NOW()
      )
      ON CONFLICT (organization_id, instance_name) DO UPDATE SET
        evolution_base_url = EXCLUDED.evolution_base_url,
@@ -97,9 +110,11 @@ export async function upsertWhatsappInstance(
        agent_prompt = COALESCE($6, whatsapp_instances.agent_prompt),
        objetivos = COALESCE($7::jsonb, whatsapp_instances.objetivos),
        status = COALESCE($8, whatsapp_instances.status),
+       delay_primeira_msg_minutos = $9,
        updated_at = NOW()
      RETURNING id, organization_id, instance_name, evolution_base_url, agent_ativo,
-               agent_nome, agent_prompt, objetivos, status, created_at, updated_at`,
+               agent_nome, agent_prompt, objetivos, status, delay_primeira_msg_minutos,
+               created_at, updated_at`,
     [
       orgId,
       instanceName,
@@ -109,6 +124,7 @@ export async function upsertWhatsappInstance(
       input.agent_prompt ?? "",
       input.objetivos ? JSON.stringify(input.objetivos) : null,
       input.status ?? null,
+      delay,
     ]
   );
   return rowToRecord(r.rows[0]);
