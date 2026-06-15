@@ -61,3 +61,5 @@ A API sobe em `http://localhost:3000`. Endpoints: `GET /health`, `GET/PUT /api/c
 2. No EasyPanel: novo app → Deploy from GitHub → selecionar repo e branch.
 3. Build: Dockerfile na raiz (ou caminho configurado).
 4. Variáveis de ambiente no painel do EasyPanel.
+
+**App Meta (OAuth + webhooks):** checklist completo em [`docs/CONFIG-META-APP-MAQUINA-DE-VENDAS.md`](docs/CONFIG-META-APP-MAQUINA-DE-VENDAS.md).
