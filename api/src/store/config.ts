@@ -10,6 +10,8 @@ export type ContaInstagram = {
   nome: string;
   access_token: string;
   ig_user_id: string;
+  /** Página Facebook vinculada (POST /{page_id}/messages). */
+  facebook_page_id?: string;
   /** Token para agente (Direct/comentários); separado do token de publicação. */
   agent_access_token?: string;
   agent_ativo?: boolean;
@@ -151,6 +153,7 @@ export type ContaInstagramInput = {
   id?: string;
   nome: string;
   ig_user_id: string;
+  facebook_page_id?: string;
   access_token?: string; // se vazio, mantém o existente
   agent_access_token?: string;
   agent_ativo?: boolean;
@@ -179,6 +182,7 @@ export async function saveConfig(
         id: c.id ?? genContaId(),
         nome: (c.nome ?? existing?.nome ?? "").trim() || "Conta",
         ig_user_id: (c.ig_user_id ?? existing?.ig_user_id ?? "").trim(),
+        facebook_page_id: (c.facebook_page_id?.trim() || existing?.facebook_page_id) ?? "",
         access_token: token,
         agent_access_token: agentTok,
         agent_ativo: c.agent_ativo ?? existing?.agent_ativo ?? false,

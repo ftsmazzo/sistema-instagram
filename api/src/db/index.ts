@@ -87,6 +87,7 @@ ALTER TABLE instagram_accounts ADD COLUMN IF NOT EXISTS agent_ativo boolean NOT 
 ALTER TABLE instagram_accounts ADD COLUMN IF NOT EXISTS agent_nome text NOT NULL DEFAULT '';
 ALTER TABLE instagram_accounts ADD COLUMN IF NOT EXISTS agent_prompt_comentarios text NOT NULL DEFAULT '';
 ALTER TABLE instagram_accounts ADD COLUMN IF NOT EXISTS agent_prompt_direct text NOT NULL DEFAULT '';
+ALTER TABLE instagram_accounts ADD COLUMN IF NOT EXISTS facebook_page_id text NOT NULL DEFAULT '';
 `;
 
 const ORG_PROFILE_COLS = `

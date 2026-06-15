@@ -22,6 +22,7 @@ export async function mergeInstagramPagesIntoWorkspace(orgId: string, pages: Pag
       id: c.id,
       nome,
       ig_user_id: c.ig_user_id,
+      facebook_page_id: match.id,
       access_token: tok,
       agent_access_token: tok,
       agent_ativo: c.agent_ativo ?? false,
@@ -41,6 +42,7 @@ export async function mergeInstagramPagesIntoWorkspace(orgId: string, pages: Pag
     inputs.push({
       nome,
       ig_user_id: igId,
+      facebook_page_id: p.id,
       access_token: tok,
       agent_access_token: tok,
       agent_ativo: false,

@@ -76,12 +76,14 @@ export async function loadWorkspaceConfigStore(orgId: string): Promise<ConfigSto
     ig_user_id: string;
     access_token: string;
     agent_access_token: string;
+    facebook_page_id: string;
     agent_ativo: boolean;
     agent_nome: string;
     agent_prompt_comentarios: string;
     agent_prompt_direct: string;
   }>(
     `SELECT id, nome, ig_user_id, access_token,
+            COALESCE(facebook_page_id, '') AS facebook_page_id,
             COALESCE(agent_access_token, '') AS agent_access_token,
             COALESCE(agent_ativo, false) AS agent_ativo,
             COALESCE(agent_nome, '') AS agent_nome,
@@ -94,6 +96,7 @@ export async function loadWorkspaceConfigStore(orgId: string): Promise<ConfigSto
     id: r.id,
     nome: r.nome,
     ig_user_id: r.ig_user_id,
+    facebook_page_id: r.facebook_page_id ?? "",
     access_token: r.access_token ?? "",
     agent_access_token: r.agent_access_token ?? "",
     agent_ativo: r.agent_ativo ?? false,
@@ -164,12 +167,14 @@ export async function saveWorkspaceConfig(
       id: string;
       access_token: string;
       agent_access_token: string;
+      facebook_page_id: string;
       agent_ativo: boolean;
       agent_nome: string;
       agent_prompt_comentarios: string;
       agent_prompt_direct: string;
     }>(
       `SELECT id, access_token,
+              COALESCE(facebook_page_id, '') AS facebook_page_id,
               COALESCE(agent_access_token, '') AS agent_access_token,
               COALESCE(agent_ativo, false) AS agent_ativo,
               COALESCE(agent_nome, '') AS agent_nome,
@@ -181,6 +186,7 @@ export async function saveWorkspaceConfig(
     type ExistingAcc = {
       access_token: string;
       agent_access_token: string;
+      facebook_page_id: string;
       agent_ativo: boolean;
       agent_nome: string;
       agent_prompt_comentarios: string;
@@ -192,6 +198,7 @@ export async function saveWorkspaceConfig(
         {
           access_token: r.access_token,
           agent_access_token: r.agent_access_token,
+          facebook_page_id: r.facebook_page_id,
           agent_ativo: r.agent_ativo,
           agent_nome: r.agent_nome,
           agent_prompt_comentarios: r.agent_prompt_comentarios,
@@ -220,6 +227,7 @@ export async function saveWorkspaceConfig(
         const agentTok = (c.agent_access_token?.trim() || existing?.agent_access_token) ?? "";
         const nome = (c.nome ?? "").trim() || "Conta";
         const igUser = (c.ig_user_id ?? "").trim();
+        const pageId = (c.facebook_page_id?.trim() || existing?.facebook_page_id) ?? "";
         const isUpdate = existing !== undefined;
         const agentAtivo = isUpdate
           ? c.agent_ativo !== undefined
@@ -248,20 +256,21 @@ export async function saveWorkspaceConfig(
                nome = $3, ig_user_id = $4,
                access_token = CASE WHEN $5 <> '' THEN $5 ELSE access_token END,
                agent_access_token = CASE WHEN $6 <> '' THEN $6 ELSE agent_access_token END,
-               agent_ativo = $7,
-               agent_nome = $8,
-               agent_prompt_comentarios = $9,
-               agent_prompt_direct = $10
+               facebook_page_id = CASE WHEN $7 <> '' THEN $7 ELSE facebook_page_id END,
+               agent_ativo = $8,
+               agent_nome = $9,
+               agent_prompt_comentarios = $10,
+               agent_prompt_direct = $11
              WHERE id = $1 AND organization_id = $2`,
-            [id, orgId, nome, igUser, token, agentTok, agentAtivo, agentNome, pCom, pDir]
+            [id, orgId, nome, igUser, token, agentTok, pageId, agentAtivo, agentNome, pCom, pDir]
           );
         } else {
           await client.query(
             `INSERT INTO instagram_accounts (
                id, organization_id, nome, ig_user_id, access_token,
-               agent_access_token, agent_ativo, agent_nome, agent_prompt_comentarios, agent_prompt_direct
-             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-            [id, orgId, nome, igUser, token, agentTok, agentAtivo, agentNome, pCom, pDir]
+               agent_access_token, facebook_page_id, agent_ativo, agent_nome, agent_prompt_comentarios, agent_prompt_direct
+             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+            [id, orgId, nome, igUser, token, agentTok, pageId, agentAtivo, agentNome, pCom, pDir]
           );
         }
       }

@@ -25,6 +25,8 @@ export type AgentConfigLookup = {
 
 export type AgentConfigCredentials = {
   access_token: string | null;
+  /** ID da Página Facebook (POST /{page_id}/messages). */
+  page_id: string | null;
   token_source: "agent" | "publish" | "none";
   graph_api_version: string;
   graph_api_base: string;
@@ -88,6 +90,7 @@ type WorkspaceRow = {
   instagram_account_id: string;
   conta_nome: string;
   ig_user_id: string;
+  facebook_page_id: string;
   access_token: string;
   agent_access_token: string;
   agent_ativo: boolean;
@@ -146,6 +149,7 @@ function buildCredentials(agentTok: string, publishTok: string, issues: AgentCon
     }
     return {
       access_token: publish,
+      page_id: null,
       token_source: "publish",
       graph_api_version: AGENT_GRAPH_API_VERSION,
       graph_api_base: AGENT_GRAPH_API_BASE,
@@ -159,6 +163,7 @@ function buildCredentials(agentTok: string, publishTok: string, issues: AgentCon
     });
     return {
       access_token: agent,
+      page_id: null,
       token_source: "agent",
       graph_api_version: AGENT_GRAPH_API_VERSION,
       graph_api_base: AGENT_GRAPH_API_BASE,
@@ -171,9 +176,54 @@ function buildCredentials(agentTok: string, publishTok: string, issues: AgentCon
   });
   return {
     access_token: null,
+    page_id: null,
     token_source: "none",
     graph_api_version: AGENT_GRAPH_API_VERSION,
     graph_api_base: AGENT_GRAPH_API_BASE,
+  };
+}
+
+/** Com token de página, GET /me retorna o ID da Página Facebook. */
+async function fetchPageIdFromToken(accessToken: string, graphBase: string): Promise<string | null> {
+  const token = accessToken.trim();
+  if (!token) return null;
+  try {
+    const base = graphBase.replace(/\/$/, "");
+    const u = new URL(`${base}/me`);
+    u.searchParams.set("fields", "id");
+    u.searchParams.set("access_token", token);
+    const res = await fetch(u.toString());
+    const json = (await res.json()) as { id?: string; error?: { message?: string } };
+    if (!res.ok || json.error || !json.id?.trim()) return null;
+    return json.id.trim();
+  } catch {
+    return null;
+  }
+}
+
+async function enrichCredentialsWithPageId(
+  result: AgentConfigResult,
+  facebookPageId: string
+): Promise<AgentConfigResult> {
+  if (!result.credentials.access_token) return result;
+  const stored = facebookPageId.trim();
+  let pageId = stored || null;
+  const issues = [...result.issues];
+  if (!pageId) {
+    pageId = await fetchPageIdFromToken(result.credentials.access_token, result.credentials.graph_api_base);
+    if (!pageId) {
+      issues.push({
+        code: "PAGE_ID_MISSING",
+        message:
+          "ID da Página Facebook não encontrado — reconecte a conta Meta no painel (OAuth grava facebook_page_id).",
+        severity: "warning",
+      });
+    }
+  }
+  return {
+    ...result,
+    issues,
+    credentials: { ...result.credentials, page_id: pageId },
   };
 }
 
@@ -287,6 +337,7 @@ async function fetchWorkspaceRow(params: ResolveAgentConfigParams): Promise<Work
          ia.id AS instagram_account_id,
          ia.nome AS conta_nome,
          ia.ig_user_id,
+         COALESCE(ia.facebook_page_id, '') AS facebook_page_id,
          COALESCE(ia.access_token, '') AS access_token,
          COALESCE(ia.agent_access_token, '') AS agent_access_token,
          COALESCE(ia.agent_ativo, false) AS agent_ativo,
@@ -317,6 +368,7 @@ async function fetchWorkspaceRow(params: ResolveAgentConfigParams): Promise<Work
        ia.id AS instagram_account_id,
        ia.nome AS conta_nome,
        ia.ig_user_id,
+       COALESCE(ia.facebook_page_id, '') AS facebook_page_id,
        COALESCE(ia.access_token, '') AS access_token,
        COALESCE(ia.agent_access_token, '') AS agent_access_token,
        COALESCE(ia.agent_ativo, false) AS agent_ativo,
@@ -363,6 +415,7 @@ async function resolveFromLegacyAppConfig(igUserId: string): Promise<AgentConfig
       instagram_account_id: conta.id,
       conta_nome: conta.nome,
       ig_user_id: conta.ig_user_id,
+      facebook_page_id: conta.facebook_page_id ?? "",
       access_token: conta.access_token ?? "",
       agent_access_token: conta.agent_access_token ?? "",
       agent_ativo: agentAtivo,
@@ -457,6 +510,7 @@ export function notFoundAgentConfig(params: ResolveAgentConfigParams): AgentConf
     whatsapp: null,
     credentials: {
       access_token: null,
+      page_id: null,
       token_source: "none",
       graph_api_version: AGENT_GRAPH_API_VERSION,
       graph_api_base: AGENT_GRAPH_API_BASE,
@@ -490,6 +544,7 @@ export async function resolveAgentConfig(params: ResolveAgentConfigParams): Prom
       whatsapp: null,
       credentials: {
         access_token: null,
+        page_id: null,
         token_source: "none",
         graph_api_version: AGENT_GRAPH_API_VERSION,
         graph_api_base: AGENT_GRAPH_API_BASE,
@@ -521,6 +576,7 @@ export async function resolveAgentConfig(params: ResolveAgentConfigParams): Prom
       whatsapp: null,
       credentials: {
         access_token: null,
+        page_id: null,
         token_source: "none",
         graph_api_version: AGENT_GRAPH_API_VERSION,
         graph_api_base: AGENT_GRAPH_API_BASE,
@@ -537,15 +593,18 @@ export async function resolveAgentConfig(params: ResolveAgentConfigParams): Prom
       instagram_account_id: row.instagram_account_id,
       source: "workspace",
     });
-    return attachWhatsappConfig(base, row.organization_id);
+    const withPage = await enrichCredentialsWithPageId(base, row.facebook_page_id);
+    return attachWhatsappConfig(withPage, row.organization_id);
   }
 
   if (igUserId) {
     const legacy = await resolveFromLegacyAppConfig(igUserId);
     if (legacy) {
-      const orgId = legacy.organization?.id;
-      if (orgId && orgId !== "legacy") return attachWhatsappConfig(legacy, orgId);
-      return legacy;
+      const conta = (await loadConfig()).contas_instagram.find((c) => c.ig_user_id?.trim() === igUserId);
+      const withPage = await enrichCredentialsWithPageId(legacy, conta?.facebook_page_id ?? "");
+      const orgId = withPage.organization?.id;
+      if (orgId && orgId !== "legacy") return attachWhatsappConfig(withPage, orgId);
+      return withPage;
     }
   }
 
