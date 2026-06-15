@@ -32,6 +32,11 @@ function emptyContaForm() {
     nome: "",
     ig_user_id: "",
     access_token: "",
+    agent_access_token: "",
+    agent_ativo: false,
+    agent_nome: "",
+    agent_prompt_comentarios: "",
+    agent_prompt_direct: "",
   };
 }
 
@@ -184,11 +189,24 @@ export function AdminPage() {
     const list: ContaInstagramInput[] =
       editId === "new"
         ? [
-            ...contas.map((c) => ({ id: c.id, nome: c.nome, ig_user_id: c.ig_user_id })),
+            ...contas.map((c) => ({
+              id: c.id,
+              nome: c.nome,
+              ig_user_id: c.ig_user_id,
+              agent_ativo: c.agent_ativo,
+              agent_nome: c.agent_nome,
+              agent_prompt_comentarios: c.agent_prompt_comentarios,
+              agent_prompt_direct: c.agent_prompt_direct,
+            })),
             {
               nome: form.nome.trim(),
               ig_user_id: form.ig_user_id.trim(),
               access_token: form.access_token.trim() || undefined,
+              agent_access_token: form.agent_access_token.trim() || undefined,
+              agent_ativo: form.agent_ativo,
+              agent_nome: form.agent_nome.trim(),
+              agent_prompt_comentarios: form.agent_prompt_comentarios.trim(),
+              agent_prompt_direct: form.agent_prompt_direct.trim(),
             },
           ]
         : contas.map((c) =>
@@ -198,8 +216,21 @@ export function AdminPage() {
                   nome: form.nome.trim(),
                   ig_user_id: form.ig_user_id.trim(),
                   access_token: form.access_token.trim() || undefined,
+                  agent_access_token: form.agent_access_token.trim() || undefined,
+                  agent_ativo: form.agent_ativo,
+                  agent_nome: form.agent_nome.trim(),
+                  agent_prompt_comentarios: form.agent_prompt_comentarios.trim(),
+                  agent_prompt_direct: form.agent_prompt_direct.trim(),
                 }
-              : { id: c.id, nome: c.nome, ig_user_id: c.ig_user_id }
+              : {
+                  id: c.id,
+                  nome: c.nome,
+                  ig_user_id: c.ig_user_id,
+                  agent_ativo: c.agent_ativo,
+                  agent_nome: c.agent_nome,
+                  agent_prompt_comentarios: c.agent_prompt_comentarios,
+                  agent_prompt_direct: c.agent_prompt_direct,
+                }
           );
     const p =
       useWorkspace && getAuthToken()
@@ -216,7 +247,17 @@ export function AdminPage() {
 
   const handleRemoveConta = (id: string) => {
     if (!confirm("Remover esta conta? O token será perdido.")) return;
-    const list = contas.filter((c) => c.id !== id).map((c) => ({ id: c.id, nome: c.nome, ig_user_id: c.ig_user_id }));
+    const list = contas
+      .filter((c) => c.id !== id)
+      .map((c) => ({
+        id: c.id,
+        nome: c.nome,
+        ig_user_id: c.ig_user_id,
+        agent_ativo: c.agent_ativo,
+        agent_nome: c.agent_nome,
+        agent_prompt_comentarios: c.agent_prompt_comentarios,
+        agent_prompt_direct: c.agent_prompt_direct,
+      }));
     setSaving(true);
     setError(null);
     const body = {
@@ -239,6 +280,11 @@ export function AdminPage() {
       nome: conta.nome,
       ig_user_id: conta.ig_user_id,
       access_token: "",
+      agent_access_token: "",
+      agent_ativo: Boolean(conta.agent_ativo),
+      agent_nome: conta.agent_nome ?? "",
+      agent_prompt_comentarios: conta.agent_prompt_comentarios ?? "",
+      agent_prompt_direct: conta.agent_prompt_direct ?? "",
     });
   };
 
@@ -341,8 +387,12 @@ export function AdminPage() {
         </div>
 
         <div>
-          <h2 className="font-display text-xl font-semibold text-slate-900">Contas Instagram para postar</h2>
-          <p className="mt-2 text-sm text-slate-600">Adicione várias contas e escolha qual usar ao publicar no Postador.</p>
+          <h2 className="font-display text-xl font-semibold text-slate-900">Contas Instagram</h2>
+          <p className="mt-2 text-sm text-slate-600">
+            Postador e agente de comentários/Direct usam estas contas. O segredo{" "}
+            <code className="rounded bg-slate-100 px-1 text-xs">INTERNAL_AGENT_API_SECRET</code> fica só na API e no n8n —{" "}
+            <strong>não</strong> no painel.
+          </p>
 
           {useWorkspace && metaOAuth && (
             <div className="card mt-4 space-y-3 border-indigo-200/80 bg-indigo-50/40">
@@ -384,7 +434,12 @@ export function AdminPage() {
                 <span className="font-semibold text-slate-800">{c.nome || "Sem nome"}</span>
                 <span className="text-sm text-slate-500">({c.ig_user_id})</span>
                 {c.has_token && <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Token postagem</span>}
-
+                {c.has_agent_token && (
+                  <span className="rounded-md bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">Token agente</span>
+                )}
+                {c.agent_ativo && (
+                  <span className="rounded-md bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800">Agente ativo</span>
+                )}
                 {defaultId === c.id && (
                   <span className="rounded-md bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800">Padrão</span>
                 )}
@@ -429,6 +484,53 @@ export function AdminPage() {
                 className="input-field font-mono text-sm"
                 placeholder={editId === "new" ? "Token de publicação Graph API (obrigatório)" : "Token postagem (vazio = manter)"}
               />
+
+              <div className="rounded-xl border border-violet-200/90 bg-violet-50/50 p-4 space-y-3">
+                <h4 className="font-semibold text-slate-900">Agente Instagram (comentários + Direct)</h4>
+                <p className="text-xs text-slate-600">
+                  Marque <strong>Agente ativo</strong> para o n8n processar webhooks desta conta. Prompts vazios usam template automático
+                  com os dados da empresa acima.
+                </p>
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-800">
+                  <input
+                    type="checkbox"
+                    checked={form.agent_ativo}
+                    onChange={(e) => setForm((f) => ({ ...f, agent_ativo: e.target.checked }))}
+                    className="rounded border-slate-300"
+                  />
+                  Agente ativo nesta conta
+                </label>
+                <label className="label-field">Nome do assistente (ex.: Bella, Ana)</label>
+                <input
+                  type="text"
+                  value={form.agent_nome}
+                  onChange={(e) => setForm((f) => ({ ...f, agent_nome: e.target.value }))}
+                  className="input-field"
+                  placeholder="Opcional — senão usa nome fantasia da empresa"
+                />
+                <label className="label-field">Token do agente (Graph API)</label>
+                <input
+                  type="password"
+                  value={form.agent_access_token}
+                  onChange={(e) => setForm((f) => ({ ...f, agent_access_token: e.target.value }))}
+                  className="input-field font-mono text-sm"
+                  placeholder="Vazio = mantém atual; se vazio no banco, usa token de postagem"
+                />
+                <label className="label-field">Prompt — comentários (opcional)</label>
+                <textarea
+                  value={form.agent_prompt_comentarios}
+                  onChange={(e) => setForm((f) => ({ ...f, agent_prompt_comentarios: e.target.value }))}
+                  className="textarea-field min-h-[80px] font-mono text-xs"
+                  placeholder="Deixe vazio para template automático"
+                />
+                <label className="label-field">Prompt — Direct (opcional)</label>
+                <textarea
+                  value={form.agent_prompt_direct}
+                  onChange={(e) => setForm((f) => ({ ...f, agent_prompt_direct: e.target.value }))}
+                  className="textarea-field min-h-[80px] font-mono text-xs"
+                  placeholder="Deixe vazio para template automático"
+                />
+              </div>
 
               <div className="flex flex-wrap gap-2">
                 <button

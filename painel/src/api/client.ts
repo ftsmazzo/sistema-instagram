@@ -73,6 +73,11 @@ export type ContaInstagramRes = {
   nome: string;
   ig_user_id: string;
   has_token: boolean;
+  has_agent_token?: boolean;
+  agent_ativo?: boolean;
+  agent_nome?: string;
+  agent_prompt_comentarios?: string;
+  agent_prompt_direct?: string;
 };
 
 /** Perfil da empresa (workspace + automações). */
@@ -98,6 +103,11 @@ export type ContaInstagramInput = {
   nome: string;
   ig_user_id: string;
   access_token?: string;
+  agent_access_token?: string;
+  agent_ativo?: boolean;
+  agent_nome?: string;
+  agent_prompt_comentarios?: string;
+  agent_prompt_direct?: string;
 };
 
 export type CronogramaItem = {
