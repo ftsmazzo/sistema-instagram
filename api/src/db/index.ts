@@ -265,6 +265,13 @@ const MIGRATE_WHATSAPP_DELAY = `
 ALTER TABLE whatsapp_instances ADD COLUMN IF NOT EXISTS delay_primeira_msg_minutos INTEGER NOT NULL DEFAULT 20;
 `;
 
+const MIGRATE_WHATSAPP_IA_AGENDA = `
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS whatsapp_ia_agendada_em TIMESTAMPTZ;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS whatsapp_primeira_ia_enviada BOOLEAN NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS idx_leads_wa_agenda ON leads (organization_id, whatsapp_ia_agendada_em)
+  WHERE whatsapp_primeira_ia_enviada = false AND whatsapp_boas_vindas_enviado = true;
+`;
+
 let initDone = false;
 
 export async function ensureTables(): Promise<void> {
@@ -278,5 +285,6 @@ export async function ensureTables(): Promise<void> {
   await p.query(MIGRATE_LEADS_POST_ORIGEM);
   await p.query(WHATSAPP_AGENT_SQL);
   await p.query(MIGRATE_WHATSAPP_DELAY);
+  await p.query(MIGRATE_WHATSAPP_IA_AGENDA);
   initDone = true;
 }

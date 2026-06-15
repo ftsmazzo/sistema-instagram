@@ -9,6 +9,7 @@ import {
   buildDefaultPromptDirect,
   resolveAgentDisplayName,
 } from "../services/agentConfigDefaults.js";
+import { getWhatsappInstanceForOrg, clampDelayPrimeiraMsg } from "./whatsappInstance.js";
 
 export type AgentConfigIssue = {
   code: string;
@@ -61,6 +62,13 @@ export type AgentConfigInstagramAccount = {
   agent_ativo: boolean;
 };
 
+export type AgentConfigWhatsapp = {
+  instance_name: string;
+  evolution_base_url: string;
+  delay_primeira_msg_minutos: number;
+  agent_ativo: boolean;
+};
+
 export type AgentConfigResult = {
   ok: boolean;
   ready: boolean;
@@ -70,6 +78,7 @@ export type AgentConfigResult = {
   lookup: AgentConfigLookup;
   organization: AgentConfigOrganization | null;
   instagram_account: AgentConfigInstagramAccount | null;
+  whatsapp: AgentConfigWhatsapp | null;
   credentials: AgentConfigCredentials;
   prompts: AgentConfigPrompts | null;
   runtime: AgentConfigRuntime | null;
@@ -194,6 +203,20 @@ function buildPrompts(
   };
 }
 
+async function attachWhatsappConfig(result: AgentConfigResult, organizationId: string): Promise<AgentConfigResult> {
+  const wa = await getWhatsappInstanceForOrg(organizationId);
+  if (!wa) return { ...result, whatsapp: null };
+  return {
+    ...result,
+    whatsapp: {
+      instance_name: wa.instance_name,
+      evolution_base_url: wa.evolution_base_url,
+      delay_primeira_msg_minutos: clampDelayPrimeiraMsg(wa.delay_primeira_msg_minutos),
+      agent_ativo: wa.agent_ativo,
+    },
+  };
+}
+
 function assembleFromWorkspaceRow(row: WorkspaceRow, lookup: AgentConfigLookup): AgentConfigResult {
   const issues: AgentConfigIssue[] = [];
   const empresa = empresaFromRow(row);
@@ -234,6 +257,7 @@ function assembleFromWorkspaceRow(row: WorkspaceRow, lookup: AgentConfigLookup):
       ig_user_id: row.ig_user_id,
       agent_ativo: row.agent_ativo,
     },
+    whatsapp: null,
     credentials,
     prompts,
     runtime: {
@@ -388,6 +412,7 @@ async function resolveFromLegacyAppConfig(igUserId: string): Promise<AgentConfig
       ig_user_id: conta.ig_user_id,
       agent_ativo: agentAtivo,
     },
+    whatsapp: null,
     credentials,
     prompts,
     runtime: {
@@ -422,6 +447,7 @@ export function notFoundAgentConfig(params: ResolveAgentConfigParams): AgentConf
     },
     organization: null,
     instagram_account: null,
+    whatsapp: null,
     credentials: {
       access_token: null,
       token_source: "none",
@@ -454,6 +480,7 @@ export async function resolveAgentConfig(params: ResolveAgentConfigParams): Prom
       },
       organization: null,
       instagram_account: null,
+      whatsapp: null,
       credentials: {
         access_token: null,
         token_source: "none",
@@ -484,6 +511,7 @@ export async function resolveAgentConfig(params: ResolveAgentConfigParams): Prom
       lookup: { ig_user_id: null, instagram_account_id: null, source: "none" },
       organization: null,
       instagram_account: null,
+      whatsapp: null,
       credentials: {
         access_token: null,
         token_source: "none",
@@ -497,16 +525,21 @@ export async function resolveAgentConfig(params: ResolveAgentConfigParams): Prom
 
   const row = await fetchWorkspaceRow({ igUserId, instagramAccountId: accountId });
   if (row) {
-    return assembleFromWorkspaceRow(row, {
+    const base = assembleFromWorkspaceRow(row, {
       ig_user_id: row.ig_user_id,
       instagram_account_id: row.instagram_account_id,
       source: "workspace",
     });
+    return attachWhatsappConfig(base, row.organization_id);
   }
 
   if (igUserId) {
     const legacy = await resolveFromLegacyAppConfig(igUserId);
-    if (legacy) return legacy;
+    if (legacy) {
+      const orgId = legacy.organization?.id;
+      if (orgId && orgId !== "legacy") return attachWhatsappConfig(legacy, orgId);
+      return legacy;
+    }
   }
 
   return notFoundAgentConfig({ igUserId, instagramAccountId: accountId });
