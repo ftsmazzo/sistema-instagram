@@ -82,8 +82,9 @@ async function evolutionFetch<T>(
   apiKey: string,
   method: "GET" | "POST",
   path: string,
-  body?: Record<string, unknown>
-): Promise<T> {
+  body?: Record<string, unknown>,
+  opts?: { notFoundOk?: boolean }
+): Promise<T | null> {
   const url = `${baseUrl.replace(/\/$/, "")}/${path.replace(/^\//, "")}`;
   let res: Response;
   try {
@@ -115,7 +116,11 @@ async function evolutionFetch<T>(
   }
 
   if (!res.ok) {
-    throw new Error(parseEvolutionError(json, res.status));
+    const errMsg = parseEvolutionError(json, res.status);
+    if (opts?.notFoundOk && (res.status === 404 || /not found/i.test(errMsg))) {
+      return null;
+    }
+    throw new Error(errMsg);
   }
   return json;
 }
@@ -225,15 +230,18 @@ export async function evolutionInstanceExists(instanceName: string, baseUrl?: st
   const name = instanceName.trim();
   if (!name) return false;
 
-  const json = await evolutionFetch<unknown[] | { instance?: unknown }>(
+  const json = await evolutionFetch<unknown[] | Record<string, unknown>>(
     baseUrl?.trim() || env.baseUrl,
     env.apiKey,
     "GET",
-    `/instance/fetchInstances?instanceName=${encodeURIComponent(name)}`
+    `/instance/fetchInstances?instanceName=${encodeURIComponent(name)}`,
+    undefined,
+    { notFoundOk: true }
   );
 
+  if (!json) return false;
   if (Array.isArray(json)) return json.length > 0;
-  if (json && typeof json === "object" && "instance" in json) return true;
+  if (typeof json === "object" && ("instance" in json || "instanceName" in json || "name" in json)) return true;
   return false;
 }
 
@@ -252,12 +260,7 @@ export async function setInstanceWebhook(
   const name = instanceName.trim();
   if (!name) throw new Error("instance_name obrigatório.");
 
-  const exists = await evolutionInstanceExists(name, baseUrl);
-  if (!exists) {
-    throw new Error(
-      `Instância "${name}" não existe na Evolution (${baseUrl}). Crie no manager ou corrija o nome no painel.`
-    );
-  }
+  await ensureEvolutionInstance(name, baseUrl);
 
   const payload = {
     webhook: {
@@ -276,6 +279,7 @@ export async function setInstanceWebhook(
     `/webhook/set/${encodeURIComponent(name)}`,
     payload
   );
+  if (!json) throw new Error(`Falha ao configurar webhook da instância "${name}".`);
 
   const nested = normalizeWebhookConfig(json.webhook?.webhook ?? json.webhook);
   return {
@@ -285,10 +289,7 @@ export async function setInstanceWebhook(
 }
 
 /** Cria instância Baileys na Evolution (idempotente se já existir). */
-export async function createEvolutionInstance(
-  instanceName: string,
-  baseUrl?: string
-): Promise<void> {
+export async function ensureEvolutionInstance(instanceName: string, baseUrl?: string): Promise<void> {
   const env = getEvolutionEnv();
   if (!env) {
     throw new Error(
@@ -299,14 +300,30 @@ export async function createEvolutionInstance(
   if (!name) throw new Error("instance_name obrigatório.");
   const url = baseUrl?.trim() || env.baseUrl;
 
-  const exists = await evolutionInstanceExists(name, url);
-  if (exists) return;
+  if (await evolutionInstanceExists(name, url)) return;
 
-  await evolutionFetch<{ instance?: { instanceName?: string } }>(url, env.apiKey, "POST", "/instance/create", {
-    instanceName: name,
-    qrcode: false,
-    integration: "WHATSAPP-BAILEYS",
-  });
+  try {
+    await evolutionFetch<{ instance?: { instanceName?: string } }>(
+      url,
+      env.apiKey,
+      "POST",
+      "/instance/create",
+      {
+        instanceName: name,
+        qrcode: false,
+        integration: "WHATSAPP-BAILEYS",
+      }
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "";
+    if (/already exists|já existe|duplicate|is already/i.test(msg)) return;
+    throw err;
+  }
+}
+
+/** @deprecated use ensureEvolutionInstance */
+export async function createEvolutionInstance(instanceName: string, baseUrl?: string): Promise<void> {
+  return ensureEvolutionInstance(instanceName, baseUrl);
 }
 
 /** Gera QR / pairing code para conectar WhatsApp. */
@@ -324,7 +341,13 @@ export async function getEvolutionConnectQr(
   if (!name) throw new Error("instance_name obrigatório.");
   const url = baseUrl?.trim() || env.baseUrl;
 
-  const json = await evolutionFetch<unknown>(url, env.apiKey, "GET", `/instance/connect/${encodeURIComponent(name)}`);
+  const json = await evolutionFetch<unknown>(
+    url,
+    env.apiKey,
+    "GET",
+    `/instance/connect/${encodeURIComponent(name)}`
+  );
+  if (!json) throw new Error(`Não foi possível gerar QR para a instância "${name}".`);
   return normalizeQrPayload(json);
 }
 
@@ -344,15 +367,22 @@ export async function getEvolutionInstanceStatus(
   const url = baseUrl?.trim() || env.baseUrl;
 
   const [stateJson, listJson] = await Promise.all([
-    evolutionFetch<unknown>(url, env.apiKey, "GET", `/instance/connectionState/${encodeURIComponent(name)}`).catch(
-      () => null
+    evolutionFetch<unknown>(
+      url,
+      env.apiKey,
+      "GET",
+      `/instance/connectionState/${encodeURIComponent(name)}`,
+      undefined,
+      { notFoundOk: true }
     ),
     evolutionFetch<unknown>(
       url,
       env.apiKey,
       "GET",
-      `/instance/fetchInstances?instanceName=${encodeURIComponent(name)}`
-    ).catch(() => null),
+      `/instance/fetchInstances?instanceName=${encodeURIComponent(name)}`,
+      undefined,
+      { notFoundOk: true }
+    ),
   ]);
 
   const fromState = normalizeInstanceProfile(stateJson ?? {}, name);
@@ -387,7 +417,9 @@ export async function findInstanceWebhook(
       baseUrl?.trim() || env.baseUrl,
       env.apiKey,
       "GET",
-      `/webhook/find/${encodeURIComponent(name)}`
+      `/webhook/find/${encodeURIComponent(name)}`,
+      undefined,
+      { notFoundOk: true }
     );
     return normalizeWebhookConfig(json);
   } catch {

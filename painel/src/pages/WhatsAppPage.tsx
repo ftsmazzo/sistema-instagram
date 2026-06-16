@@ -202,7 +202,8 @@ export function WhatsAppPage() {
       if (!res.ok) throw new Error(res.error ?? "Falha ao conectar.");
       applyConnection(res);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro ao conectar WhatsApp.");
+      const msg = e instanceof Error ? e.message : "Erro ao conectar WhatsApp.";
+      setError(msg === "Failed to fetch" ? "Falha de rede ao chamar a API. Tente de novo em alguns segundos." : msg);
     } finally {
       setConnecting(false);
     }
