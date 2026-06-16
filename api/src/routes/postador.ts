@@ -13,6 +13,7 @@ import { adicionarTextoCarrossel } from "../services/carouselTexto.js";
 import { gerarCarrosselCompleto } from "../services/postadorCarousel.js";
 import { parsePostadorBrandKit } from "../services/postadorBrand.js";
 import { compositarProdutoNoFundo } from "../services/postadorComposite.js";
+import { checarQualidadePost } from "../services/postadorQuality.js";
 import type { PostadorSlideTemplate } from "../services/carouselTemplates.js";
 import {
   listNichesForApi,
@@ -584,6 +585,23 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       fastify.log.error({ err }, "compositar-produto");
       return reply.status(500).send({ error: msg });
     }
+  });
+
+  // POST /api/postador/checar-qualidade — score pré-publicação (legenda + mídia)
+  fastify.post("/checar-qualidade", async (request, reply) => {
+    const body = request.body as {
+      caption?: string;
+      media_type?: string;
+      media_url?: string;
+      media_urls?: string[];
+    };
+    const report = checarQualidadePost({
+      caption: body?.caption,
+      media_type: body?.media_type,
+      media_url: body?.media_url,
+      media_urls: body?.media_urls,
+    });
+    return reply.send(report);
   });
 
   // POST /api/postador/carousel-adicionar-texto — overlay de texto em cada imagem usando template SVG

@@ -75,6 +75,7 @@ export function AdminPage() {
   const [config, setConfig] = useState<Config | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [empresa, setEmpresa] = useState<EmpresaPerfilRes>(emptyEmpresa);
   const [editId, setEditId] = useState<string | "new" | null>(null);
@@ -180,6 +181,33 @@ export function AdminPage() {
     )
       .catch((e) => setError(e instanceof Error ? e.message : "Erro ao salvar"))
       .finally(() => setSaving(false));
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("Envie PNG ou JPG com fundo transparente.");
+      return;
+    }
+    setLogoUploading(true);
+    setError(null);
+    try {
+      const up = await api.postador.uploadMidia(file);
+      setEmpresa((x) => ({
+        ...x,
+        postador_brand: {
+          ...x.postador_brand!,
+          logo_url: up.media_url,
+          usar_logo_em_posts: true,
+        },
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao enviar logo.");
+    } finally {
+      setLogoUploading(false);
+      e.target.value = "";
+    }
   };
 
   const handleConectarMeta = () => {
@@ -433,18 +461,37 @@ export function AdminPage() {
               </div>
             </div>
             <label className="label-field">URL do logo (PNG transparente)</label>
-            <input
-              type="url"
-              value={empresa.postador_brand?.logo_url ?? ""}
-              onChange={(e) =>
-                setEmpresa((x) => ({
-                  ...x,
-                  postador_brand: { ...x.postador_brand!, logo_url: e.target.value },
-                }))
-              }
-              className="input-field"
-              placeholder="https://.../logo.png (use upload no Postador e cole a URL)"
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="url"
+                value={empresa.postador_brand?.logo_url ?? ""}
+                onChange={(e) =>
+                  setEmpresa((x) => ({
+                    ...x,
+                    postador_brand: { ...x.postador_brand!, logo_url: e.target.value },
+                  }))
+                }
+                className="input-field flex-1 min-w-[200px]"
+                placeholder="https://.../logo.png"
+              />
+              <label className="inline-flex cursor-pointer items-center rounded-md border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100">
+                {logoUploading ? "Enviando..." : "Enviar arquivo"}
+                <input
+                  type="file"
+                  accept="image/png,image/webp,image/jpeg"
+                  className="sr-only"
+                  onChange={handleLogoUpload}
+                  disabled={logoUploading || saving}
+                />
+              </label>
+            </div>
+            {empresa.postador_brand?.logo_url?.trim() && (
+              <img
+                src={empresa.postador_brand.logo_url}
+                alt="Preview logo"
+                className="mt-2 h-12 w-auto rounded border border-gray-200 bg-white p-1"
+              />
+            )}
             <label className="inline-flex items-center gap-2 text-sm text-gray-700">
               <input
                 type="checkbox"

@@ -9,6 +9,7 @@ const execFileAsync = promisify(execFile);
 
 const REELS_W = 1080;
 const REELS_H = 1920;
+const FADE_SEC = 0.45;
 
 async function assertFfmpeg(): Promise<void> {
   try {
@@ -28,8 +29,24 @@ async function downloadImageBuffer(url: string): Promise<Buffer> {
   return Buffer.from(await res.arrayBuffer());
 }
 
+function scaleCropFilter(index: number, fps: number): string {
+  return `[${index}:v]scale=${REELS_W}:${REELS_H}:force_original_aspect_ratio=increase,crop=${REELS_W}:${REELS_H},setsar=1,fps=${fps},format=yuv420p[v${index}]`;
+}
+
+function fadeFilter(label: string, duration: number, fadeSec: number, isFirst: boolean, isLast: boolean): string {
+  const parts: string[] = [];
+  if (!isFirst) {
+    parts.push(`fade=t=in:st=0:d=${fadeSec}`);
+  }
+  if (!isLast) {
+    parts.push(`fade=t=out:st=${Math.max(0, duration - fadeSec)}:d=${fadeSec}`);
+  }
+  if (!parts.length) return `[${label}]copy[${label}f]`;
+  return `[${label}]${parts.join(",")}[${label}f]`;
+}
+
 /**
- * Monta MP4 vertical (9:16) a partir de 1–10 imagens — Ken Burns leve ou troca de slides.
+ * Monta MP4 vertical (9:16) a partir de 1–10 imagens — Ken Burns, crossfade suave e faixa de áudio silenciosa.
  */
 export async function gerarSlideshowReels(
   imageUrls: string[],
@@ -58,12 +75,13 @@ export async function gerarSlideshowReels(
 
     const n = paths.length;
     const secPerSlide = durationSeconds / n;
+    const fps = 30;
 
     if (n === 1) {
       const vf = [
         `scale=${REELS_W}:${REELS_H}:force_original_aspect_ratio=increase`,
         `crop=${REELS_W}:${REELS_H}`,
-        `zoompan=z='min(zoom+0.0012,1.25)':d=${durationSeconds * 30}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${REELS_W}x${REELS_H}:fps=30`,
+        `zoompan=z='min(zoom+0.0012,1.25)':d=${durationSeconds * fps}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${REELS_W}x${REELS_H}:fps=${fps}`,
       ].join(",");
       await execFileAsync("ffmpeg", [
         "-y",
@@ -71,6 +89,10 @@ export async function gerarSlideshowReels(
         "1",
         "-i",
         paths[0],
+        "-f",
+        "lavfi",
+        "-i",
+        "anullsrc=channel_layout=stereo:sample_rate=44100",
         "-vf",
         vf,
         "-t",
@@ -79,34 +101,63 @@ export async function gerarSlideshowReels(
         "libx264",
         "-pix_fmt",
         "yuv420p",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        "-shortest",
         "-r",
-        "30",
+        String(fps),
         outPath,
       ]);
     } else {
-      const fps = 30;
-      const inputs = paths.flatMap((p) => ["-loop", "1", "-framerate", String(fps), "-t", String(secPerSlide), "-i", p]);
+      const inputs = paths.flatMap((p) => [
+        "-loop",
+        "1",
+        "-framerate",
+        String(fps),
+        "-t",
+        String(secPerSlide),
+        "-i",
+        p,
+      ]);
+
       const filterParts: string[] = [];
       for (let i = 0; i < n; i++) {
+        filterParts.push(scaleCropFilter(i, fps));
+      }
+      for (let i = 0; i < n; i++) {
         filterParts.push(
-          `[${i}:v]scale=${REELS_W}:${REELS_H}:force_original_aspect_ratio=increase,crop=${REELS_W}:${REELS_H},setsar=1,fps=${fps},format=yuv420p[v${i}]`
+          fadeFilter(`v${i}`, secPerSlide, FADE_SEC, i === 0, i === n - 1)
         );
       }
-      const concatIn = paths.map((_, i) => `[v${i}]`).join("");
-      const filter = `${filterParts.join(";")};${concatIn}concat=n=${n}:v=1:a=0[outv]`;
+      const concatIn = paths.map((_, i) => `[v${i}f]`).join("");
+      filterParts.push(`${concatIn}concat=n=${n}:v=1:a=0[outv]`);
+
       await execFileAsync("ffmpeg", [
         "-y",
         ...inputs,
+        "-f",
+        "lavfi",
+        "-i",
+        "anullsrc=channel_layout=stereo:sample_rate=44100",
         "-filter_complex",
-        filter,
+        filterParts.join(";"),
         "-map",
         "[outv]",
+        "-map",
+        `${n}:a`,
         "-t",
         String(durationSeconds),
         "-c:v",
         "libx264",
         "-pix_fmt",
         "yuv420p",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        "-shortest",
         outPath,
       ]);
     }

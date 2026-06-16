@@ -451,6 +451,20 @@ export const api = {
         method: "POST",
         body,
       }),
+    checarQualidade: (body: {
+      caption?: string | null;
+      media_type?: string;
+      media_url?: string | null;
+      media_urls?: string[];
+    }) =>
+      fetchJson<{
+        score: number;
+        pronto: boolean;
+        issues: Array<{ nivel: "ok" | "aviso" | "erro"; codigo: string; mensagem: string }>;
+      }>("/api/postador/checar-qualidade", {
+        method: "POST",
+        body,
+      }),
     getVideoProviders: () =>
       fetchJson<{
         providers: Array<{

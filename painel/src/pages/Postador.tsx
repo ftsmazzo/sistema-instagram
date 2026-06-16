@@ -48,6 +48,12 @@ type Step = "form" | "review" | "published";
 type WizardStep = 1 | 2 | 3 | 4;
 type ContentMode = "descricao" | "link";
 
+type QualityReport = {
+  score: number;
+  pronto: boolean;
+  issues: Array<{ nivel: "ok" | "aviso" | "erro"; codigo: string; mensagem: string }>;
+};
+
 export function Postador() {
   const [descricao, setDescricao] = useState("");
   const [urlImovel, setUrlImovel] = useState("");
@@ -97,6 +103,7 @@ export function Postador() {
   const [brandKitAtivo, setBrandKitAtivo] = useState(false);
   const [arquivoProduto, setArquivoProduto] = useState<File | null>(null);
   const productFileRef = useRef<HTMLInputElement>(null);
+  const [qualityReport, setQualityReport] = useState<QualityReport | null>(null);
 
   const modelsList = provider === "claude" ? MODELS_CLAUDE : MODELS_OPENAI;
   const currentModelInList = modelsList.some((m) => m.id === model);
@@ -133,6 +140,30 @@ export function Postador() {
       });
     }
   }, [previewUrls.length]);
+
+  useEffect(() => {
+    if (step !== "review" || !caption) {
+      setQualityReport(null);
+      return;
+    }
+    let cancelled = false;
+    void api.postador
+      .checarQualidade({
+        caption,
+        media_type: mediaType,
+        media_url: mediaUrl,
+        media_urls: mediaUrls.length ? mediaUrls : undefined,
+      })
+      .then((report) => {
+        if (!cancelled) setQualityReport(report);
+      })
+      .catch(() => {
+        if (!cancelled) setQualityReport(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [step, caption, mediaType, mediaUrl, mediaUrls]);
 
   useEffect(() => {
     const applyConfig = (c: Config) => {
@@ -493,6 +524,36 @@ export function Postador() {
       setPreviewUrls([newUrl]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao aplicar moldura.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCarrosselParaReels = async () => {
+    const urls = mediaUrls.length >= 2 ? mediaUrls : previewUrls;
+    if (urls.length < 2) {
+      setError("Carrossel precisa de pelo menos 2 imagens para virar Reels.");
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      const res = await api.postador.gerarVideo({
+        prompt: (caption ?? descricao).slice(0, 200),
+        provider: "slideshow",
+        image_urls: urls,
+        duration_seconds: 8,
+        auto_imagem_slideshow: false,
+        ...nicheParams(),
+      });
+      setMediaUrl(res.media_url);
+      setMediaUrls([]);
+      setMediaType("REELS");
+      setPreviewUrls([res.media_url]);
+      setUltimoCustoVideo(res.custo_estimado_usd);
+      setUltimoCustoPost(null);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Falha ao gerar Reels a partir do carrossel.");
     } finally {
       setLoading(false);
     }
@@ -1242,6 +1303,17 @@ export function Postador() {
                   >
                     {loading ? "Aplicando..." : "Aplicar texto nas imagens"}
                   </button>
+                  <button
+                    type="button"
+                    onClick={handleCarrosselParaReels}
+                    disabled={loading || previewUrls.length < 2}
+                    className="ml-2 px-3 py-1.5 text-sm font-medium rounded-md text-violet-800 bg-violet-50 hover:bg-violet-100 border border-violet-200 disabled:opacity-50"
+                  >
+                    {loading ? "Gerando..." : "Gerar Reels 8s (slideshow)"}
+                  </button>
+                  <p className="mt-2 text-xs text-gray-500">
+                    Transforma os slides em vídeo vertical 9:16 com transições suaves (~US$ 0,02).
+                  </p>
                 </div>
               </>
             )}
@@ -1288,7 +1360,7 @@ export function Postador() {
                   </button>
                 </div>
                 <div className="mt-3 p-3 bg-amber-50 rounded-lg border border-amber-200 space-y-3">
-                  <p className="text-sm font-medium text-amber-900">Compositar produto real (Fase 3)</p>
+                  <p className="text-sm font-medium text-amber-900">Compositar produto real</p>
                   <p className="text-xs text-amber-800">
                     Use o fundo criativo acima + foto real do produto (recortada ou fundo branco). A API sobrepõe o produto com sombra e logo do brand kit.
                   </p>
@@ -1379,6 +1451,49 @@ export function Postador() {
                   <option key={c.id} value={c.id}>{c.nome || c.ig_user_id}</option>
                 ))}
               </select>
+            </div>
+          )}
+          {qualityReport && (
+            <div
+              className={`rounded-lg border p-4 ${
+                qualityReport.pronto
+                  ? "border-emerald-200 bg-emerald-50"
+                  : qualityReport.issues.some((i) => i.nivel === "erro")
+                    ? "border-red-200 bg-red-50"
+                    : "border-amber-200 bg-amber-50"
+              }`}
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <p className="text-sm font-semibold text-gray-800">Checklist pré-publicação</p>
+                <span
+                  className={`text-sm font-bold ${
+                    qualityReport.score >= 80
+                      ? "text-emerald-700"
+                      : qualityReport.score >= 60
+                        ? "text-amber-700"
+                        : "text-red-700"
+                  }`}
+                >
+                  {qualityReport.score}/100
+                </span>
+              </div>
+              <ul className="space-y-1 text-xs">
+                {qualityReport.issues
+                  .filter((i) => i.nivel !== "ok")
+                  .map((i) => (
+                    <li
+                      key={i.codigo}
+                      className={
+                        i.nivel === "erro" ? "text-red-800" : "text-amber-900"
+                      }
+                    >
+                      {i.nivel === "erro" ? "✕" : "⚠"} {i.mensagem}
+                    </li>
+                  ))}
+                {qualityReport.pronto && (
+                  <li className="text-emerald-800">✓ Post pronto para publicar.</li>
+                )}
+              </ul>
             </div>
           )}
           <div className="flex flex-wrap gap-3 items-center">
