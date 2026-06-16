@@ -111,6 +111,7 @@ type WorkspaceRow = {
   link_produto_servico: string;
   agenda_config: unknown;
   criterios_qualificacao: string;
+  agenda_local: string;
 };
 
 export type ResolveAgentConfigParams = {
@@ -136,6 +137,7 @@ function empresaFromRow(row: WorkspaceRow): EmpresaPerfil {
     link_produto_servico: row.link_produto_servico ?? "",
     agenda_config: parseAgendaConfig(row.agenda_config),
     criterios_qualificacao: row.criterios_qualificacao ?? "",
+    agenda_local: row.agenda_local ?? "",
   };
 }
 
@@ -365,7 +367,8 @@ async function fetchWorkspaceRow(params: ResolveAgentConfigParams): Promise<Work
          COALESCE(o.handoff_whatsapp, '') AS handoff_whatsapp,
          COALESCE(o.link_produto_servico, '') AS link_produto_servico,
          COALESCE(o.agenda_config, '{"dias_semana":[1,2,3,4,5],"horario_inicio":"09:00","horario_fim":"18:00","duracao_minutos":60}'::jsonb) AS agenda_config,
-         COALESCE(o.criterios_qualificacao, '') AS criterios_qualificacao
+         COALESCE(o.criterios_qualificacao, '') AS criterios_qualificacao,
+         COALESCE(o.agenda_local, '') AS agenda_local
        FROM instagram_accounts ia
        INNER JOIN organizations o ON o.id = ia.organization_id
        WHERE ia.id = $1
@@ -400,7 +403,8 @@ async function fetchWorkspaceRow(params: ResolveAgentConfigParams): Promise<Work
        COALESCE(o.handoff_whatsapp, '') AS handoff_whatsapp,
        COALESCE(o.link_produto_servico, '') AS link_produto_servico,
        COALESCE(o.agenda_config, '{"dias_semana":[1,2,3,4,5],"horario_inicio":"09:00","horario_fim":"18:00","duracao_minutos":60}'::jsonb) AS agenda_config,
-       COALESCE(o.criterios_qualificacao, '') AS criterios_qualificacao
+       COALESCE(o.criterios_qualificacao, '') AS criterios_qualificacao,
+       COALESCE(o.agenda_local, '') AS agenda_local
      FROM instagram_accounts ia
      INNER JOIN organizations o ON o.id = ia.organization_id
      WHERE ia.ig_user_id = $1
@@ -452,6 +456,7 @@ async function resolveFromLegacyAppConfig(igUserId: string): Promise<AgentConfig
       link_produto_servico: empresa.link_produto_servico ?? "",
       agenda_config: empresa.agenda_config,
       criterios_qualificacao: empresa.criterios_qualificacao ?? "",
+      agenda_local: empresa.agenda_local ?? "",
     },
     empresa,
     issues
