@@ -7,6 +7,7 @@ import {
   AGENT_TIMEZONE,
   buildDefaultPromptComentarios,
   buildDefaultPromptDirect,
+  mergePromptWithRefinements,
   resolveAgentDisplayName,
 } from "../services/agentConfigDefaults.js";
 import { getWhatsappInstanceForOrg, clampDelayPrimeiraMsg } from "./whatsappInstance.js";
@@ -253,8 +254,8 @@ function buildPrompts(
   }
   return {
     agent_nome: agentNome,
-    comentarios: rawCom || buildDefaultPromptComentarios(empresa, agentNome),
-    direct: rawDir || buildDefaultPromptDirect(empresa, agentNome),
+    comentarios: mergePromptWithRefinements(buildDefaultPromptComentarios(empresa, agentNome), rawCom),
+    direct: mergePromptWithRefinements(buildDefaultPromptDirect(empresa, agentNome), rawDir),
     comentarios_used_default,
     direct_used_default,
   };

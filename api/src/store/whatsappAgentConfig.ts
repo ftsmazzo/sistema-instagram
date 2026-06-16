@@ -1,5 +1,5 @@
 import { ensureTables, getPool, isDbConfigured } from "../db/index.js";
-import { AGENT_LOCALE, AGENT_TIMEZONE } from "../services/agentConfigDefaults.js";
+import { AGENT_LOCALE, AGENT_TIMEZONE, mergePromptWithRefinements } from "../services/agentConfigDefaults.js";
 import { resolveEvolutionBaseUrl } from "../services/evolution.js";
 import {
   buildDefaultPromptWhatsapp,
@@ -466,7 +466,7 @@ function assembleConfig(args: {
       : null,
     prompts: {
       agent_nome: agentNome,
-      whatsapp: rawPrompt || buildDefaultPromptWhatsapp(empresa, agentNome),
+      whatsapp: mergePromptWithRefinements(buildDefaultPromptWhatsapp(empresa, agentNome), rawPrompt),
       whatsapp_used_default,
     },
     objetivos,

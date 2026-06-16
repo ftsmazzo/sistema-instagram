@@ -488,8 +488,8 @@ export function AdminPage() {
               <div className="rounded-xl border border-violet-200/90 bg-violet-50/50 p-4 space-y-3">
                 <h4 className="font-semibold text-slate-900">Agente Instagram (comentários + Direct)</h4>
                 <p className="text-xs text-slate-600">
-                  Marque <strong>Agente ativo</strong> para o n8n processar webhooks desta conta. Prompts vazios usam template automático
-                  com os dados da empresa acima.
+                  Marque <strong>Agente ativo</strong> para o n8n processar webhooks desta conta. Os campos abaixo são
+                  refinamentos opcionais: o sistema mantém um prompt-base profissional e usa seu texto apenas como complemento.
                 </p>
                 <label className="flex items-center gap-2 text-sm font-medium text-slate-800">
                   <input
@@ -516,19 +516,19 @@ export function AdminPage() {
                   className="input-field font-mono text-sm"
                   placeholder="Vazio = mantém atual; se vazio no banco, usa token de postagem"
                 />
-                <label className="label-field">Prompt — comentários (opcional)</label>
+                <label className="label-field">Refinamentos — comentários (opcional)</label>
                 <textarea
                   value={form.agent_prompt_comentarios}
                   onChange={(e) => setForm((f) => ({ ...f, agent_prompt_comentarios: e.target.value }))}
                   className="textarea-field min-h-[80px] font-mono text-xs"
-                  placeholder="Deixe vazio para template automático"
+                  placeholder="Tom, regras extras e estilo. Vazio = apenas prompt-base interno."
                 />
-                <label className="label-field">Prompt — Direct (opcional)</label>
+                <label className="label-field">Refinamentos — Direct (opcional)</label>
                 <textarea
                   value={form.agent_prompt_direct}
                   onChange={(e) => setForm((f) => ({ ...f, agent_prompt_direct: e.target.value }))}
                   className="textarea-field min-h-[80px] font-mono text-xs"
-                  placeholder="Deixe vazio para template automático"
+                  placeholder="Complementos de abordagem e normas. Vazio = apenas prompt-base interno."
                 />
               </div>
 
