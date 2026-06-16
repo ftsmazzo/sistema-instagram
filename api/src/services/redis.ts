@@ -1,4 +1,4 @@
-import Redis from "ioredis";
+import { Redis } from "ioredis";
 
 let client: Redis | null = null;
 let connectAttempted = false;
@@ -29,7 +29,7 @@ export function getRedis(): Redis | null {
       lazyConnect: true,
       enableOfflineQueue: false,
     });
-    client.on("error", (err) => {
+    client.on("error", (err: Error) => {
       console.warn("[redis]", err.message);
     });
   }

@@ -27,8 +27,8 @@ export type WhatsappEnqueueResult = {
   redis_debounce?: boolean;
 };
 
-export type WhatsappQueueStatusResult = {
-  ok: boolean;
+export type WhatsappQueueStatusOk = {
+  ok: true;
   batch_key: string;
   instance_name: string;
   telefone: string;
@@ -45,6 +45,14 @@ export type WhatsappQueueStatusResult = {
     debounce_until: string;
   }>;
 };
+
+export type WhatsappQueueStatusError = {
+  ok: false;
+  code: string;
+  message: string;
+};
+
+export type WhatsappQueueStatusResult = WhatsappQueueStatusOk | WhatsappQueueStatusError;
 
 type InstanceRow = { organization_id: string; instance_name: string };
 
@@ -168,7 +176,7 @@ export async function enqueueWhatsappInbound(input: WhatsappEnqueueInput): Promi
 export async function getWhatsappQueueStatus(args: {
   instanceName: string;
   phone: string;
-}): Promise<WhatsappQueueStatusResult | { ok: false; code: string; message: string }> {
+}): Promise<WhatsappQueueStatusResult> {
   if (!isDbConfigured()) {
     return { ok: false, code: "DATABASE_NOT_CONFIGURED", message: "DATABASE_URL não configurada." };
   }
