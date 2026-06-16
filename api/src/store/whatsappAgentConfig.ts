@@ -7,6 +7,7 @@ import {
   WHATSAPP_DEFAULT_OBJETIVOS,
   type WhatsappObjetivo,
 } from "../services/whatsappAgentDefaults.js";
+import { parseAgendaConfig, type AgendaConfig } from "../services/empresaConfigHelpers.js";
 import { normalizePhoneDigits } from "../util/phone.js";
 import { clampDelayPrimeiraMsg } from "./whatsappInstance.js";
 
@@ -33,6 +34,9 @@ export type WhatsappAgentOrganization = {
   sobre: string;
   objetivo_qualificacao: string;
   handoff_whatsapp: string | null;
+  link_produto_servico: string | null;
+  agenda_config: AgendaConfig;
+  criterios_qualificacao: string;
 };
 
 export type WhatsappAgentInstance = {
@@ -122,6 +126,9 @@ type OrgRow = {
   sobre: string;
   objetivo_qualificacao: string;
   handoff_whatsapp: string | null;
+  link_produto_servico: string | null;
+  agenda_config: unknown;
+  criterios_qualificacao: string;
 };
 
 type InstanceRow = {
@@ -176,6 +183,9 @@ function orgFromRow(row: OrgRow): WhatsappAgentOrganization {
     sobre: row.sobre ?? "",
     objetivo_qualificacao: row.objetivo_qualificacao ?? "",
     handoff_whatsapp: row.handoff_whatsapp?.trim() || null,
+    link_produto_servico: row.link_produto_servico?.trim() || null,
+    agenda_config: parseAgendaConfig(row.agenda_config),
+    criterios_qualificacao: row.criterios_qualificacao ?? "",
   };
 }
 
@@ -189,6 +199,9 @@ function empresaFromOrg(org: WhatsappAgentOrganization) {
     sobre: org.sobre,
     objetivo_qualificacao: org.objetivo_qualificacao,
     handoff_whatsapp: org.handoff_whatsapp ?? "",
+    link_produto_servico: org.link_produto_servico ?? "",
+    agenda_config: org.agenda_config,
+    criterios_qualificacao: org.criterios_qualificacao,
   };
 }
 
@@ -203,7 +216,10 @@ async function fetchOrg(orgId: string): Promise<OrgRow | null> {
             COALESCE(o.tom_voz, '') AS tom_voz,
             COALESCE(o.sobre, '') AS sobre,
             COALESCE(o.objetivo_qualificacao, '') AS objetivo_qualificacao,
-            COALESCE(o.handoff_whatsapp, '') AS handoff_whatsapp
+            COALESCE(o.handoff_whatsapp, '') AS handoff_whatsapp,
+            COALESCE(o.link_produto_servico, '') AS link_produto_servico,
+            COALESCE(o.agenda_config, '{"dias_semana":[1,2,3,4,5],"horario_inicio":"09:00","horario_fim":"18:00","duracao_minutos":60}'::jsonb) AS agenda_config,
+            COALESCE(o.criterios_qualificacao, '') AS criterios_qualificacao
      FROM organizations o WHERE o.id = $1::uuid LIMIT 1`,
     [orgId]
   );
@@ -435,6 +451,14 @@ function assembleConfig(args: {
       code: "HANDOFF_WHATSAPP_MISSING",
       message:
         "Objetivo de qualificar e acionar consultor ativo, mas nenhum WhatsApp de consultor está configurado no painel.",
+      severity: "warning",
+    });
+  }
+  if (objetivos.includes("link_produto") && !organization.link_produto_servico?.trim()) {
+    issues.push({
+      code: "LINK_PRODUTO_MISSING",
+      message:
+        "Objetivo de enviar link ativo, mas nenhum link padrão de produto/serviço está configurado no painel.",
       severity: "warning",
     });
   }

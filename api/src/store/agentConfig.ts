@@ -10,6 +10,7 @@ import {
   mergePromptWithRefinements,
   resolveAgentDisplayName,
 } from "../services/agentConfigDefaults.js";
+import { parseAgendaConfig } from "../services/empresaConfigHelpers.js";
 import { getWhatsappInstanceForOrg, clampDelayPrimeiraMsg } from "./whatsappInstance.js";
 
 export type AgentConfigIssue = {
@@ -107,6 +108,9 @@ type WorkspaceRow = {
   sobre: string;
   objetivo_qualificacao: string;
   handoff_whatsapp: string;
+  link_produto_servico: string;
+  agenda_config: unknown;
+  criterios_qualificacao: string;
 };
 
 export type ResolveAgentConfigParams = {
@@ -129,6 +133,9 @@ function empresaFromRow(row: WorkspaceRow): EmpresaPerfil {
     sobre: row.sobre ?? "",
     objetivo_qualificacao: row.objetivo_qualificacao ?? "",
     handoff_whatsapp: row.handoff_whatsapp ?? "",
+    link_produto_servico: row.link_produto_servico ?? "",
+    agenda_config: parseAgendaConfig(row.agenda_config),
+    criterios_qualificacao: row.criterios_qualificacao ?? "",
   };
 }
 
@@ -355,7 +362,10 @@ async function fetchWorkspaceRow(params: ResolveAgentConfigParams): Promise<Work
          COALESCE(o.tom_voz, '') AS tom_voz,
          COALESCE(o.sobre, '') AS sobre,
          COALESCE(o.objetivo_qualificacao, '') AS objetivo_qualificacao,
-         COALESCE(o.handoff_whatsapp, '') AS handoff_whatsapp
+         COALESCE(o.handoff_whatsapp, '') AS handoff_whatsapp,
+         COALESCE(o.link_produto_servico, '') AS link_produto_servico,
+         COALESCE(o.agenda_config, '{"dias_semana":[1,2,3,4,5],"horario_inicio":"09:00","horario_fim":"18:00","duracao_minutos":60}'::jsonb) AS agenda_config,
+         COALESCE(o.criterios_qualificacao, '') AS criterios_qualificacao
        FROM instagram_accounts ia
        INNER JOIN organizations o ON o.id = ia.organization_id
        WHERE ia.id = $1
@@ -387,7 +397,10 @@ async function fetchWorkspaceRow(params: ResolveAgentConfigParams): Promise<Work
        COALESCE(o.tom_voz, '') AS tom_voz,
        COALESCE(o.sobre, '') AS sobre,
        COALESCE(o.objetivo_qualificacao, '') AS objetivo_qualificacao,
-       COALESCE(o.handoff_whatsapp, '') AS handoff_whatsapp
+       COALESCE(o.handoff_whatsapp, '') AS handoff_whatsapp,
+       COALESCE(o.link_produto_servico, '') AS link_produto_servico,
+       COALESCE(o.agenda_config, '{"dias_semana":[1,2,3,4,5],"horario_inicio":"09:00","horario_fim":"18:00","duracao_minutos":60}'::jsonb) AS agenda_config,
+       COALESCE(o.criterios_qualificacao, '') AS criterios_qualificacao
      FROM instagram_accounts ia
      INNER JOIN organizations o ON o.id = ia.organization_id
      WHERE ia.ig_user_id = $1
@@ -436,6 +449,9 @@ async function resolveFromLegacyAppConfig(igUserId: string): Promise<AgentConfig
       sobre: empresa.sobre ?? "",
       objetivo_qualificacao: empresa.objetivo_qualificacao ?? "",
       handoff_whatsapp: empresa.handoff_whatsapp ?? "",
+      link_produto_servico: empresa.link_produto_servico ?? "",
+      agenda_config: empresa.agenda_config,
+      criterios_qualificacao: empresa.criterios_qualificacao ?? "",
     },
     empresa,
     issues

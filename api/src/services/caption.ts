@@ -172,14 +172,14 @@ export async function refazerCaption(
   return complete(SYSTEM_REFAZER, user, options?.provider, options?.model);
 }
 
-const SYSTEM_JORNADA = `Você é um estrategista de conteúdo para Instagram focado no setor imobiliário.
-O usuário enviará os dados extraídos da página de um imóvel.
-Sua tarefa é criar uma JORNADA DE CONTEÚDO com EXATAMENTE 3 posts distintos e sequenciais sobre esse mesmo imóvel para serem postados ao longo de uma semana.
+const SYSTEM_JORNADA = `Você é um estrategista de conteúdo para Instagram.
+O usuário enviará dados extraídos de uma página de produto, serviço ou oferta.
+Sua tarefa é criar uma JORNADA DE CONTEÚDO com EXATAMENTE 3 posts distintos e sequenciais sobre o mesmo assunto para serem postados ao longo de uma semana.
 
 <workflow>
-1. Post 1: Teaser/Atenção - Focar na dor do cliente ou no maior diferencial do imóvel.
-2. Post 2: Detalhes/Desejo - Explorar os ambientes, a qualidade de vida e a planta.
-3. Post 3: Urgência/Call to Action - Convite para visita, preço (se houver) e gatilho de escassez.
+1. Post 1: Teaser/Atenção - Focar na dor do cliente ou no maior diferencial da oferta.
+2. Post 2: Detalhes/Desejo - Explorar benefícios, características e valor percebido.
+3. Post 3: Urgência/Call to Action - Convite para próximo passo, condições (se houver) e gatilho de escassez.
 </workflow>
 
 <regras>
@@ -210,13 +210,13 @@ Sua tarefa é criar uma JORNADA DE CONTEÚDO com EXATAMENTE 3 posts distintos e 
 </formato_json>`;
 
 /**
- * Gera 3 captions em sequência (Jornada) para um imóvel a partir da URL.
+ * Gera 3 captions em sequência (Jornada) a partir de dados de uma página de produto/serviço.
  */
 export async function gerarJornadaPorLink(
   descricao: string,
   options?: GerarCaptionOptions
 ): Promise<Array<{ post_number: number; estrategia: string; caption: string }>> {
-  const user = `Dados extraídos do imóvel:\n\n""" ${descricao} """\n\nGere o ARRAY JSON estrito com as 3 legendas:`;
+  const user = `Dados extraídos da página:\n\n""" ${descricao} """\n\nGere o ARRAY JSON estrito com as 3 legendas:`;
   const resText = await completeLong(SYSTEM_JORNADA, user, options?.provider, options?.model);
   
   try {
@@ -252,8 +252,8 @@ export async function gerarCTAImagem(
   ];
   const exemploStr = exemplos.map((e, i) => `${i + 1}. "${e}"`).join("\n");
 
-  const system = `Você é um copywriter especialista em marketing imobiliário premium para Instagram.
-Crie UMA frase curta (4 a 7 palavras, máximo 45 caracteres) para ser escrita em destaque SOBRE a foto do imóvel.
+  const system = `Você é um copywriter especialista em marketing digital para Instagram.
+Crie UMA frase curta (4 a 7 palavras, máximo 45 caracteres) para ser escrita em destaque SOBRE a foto do post.
 
 REGRAS OBRIGATÓRIAS:
 - Frase única, não genérica

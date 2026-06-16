@@ -288,7 +288,7 @@ export function Postador() {
 
   const handleGerarPorUrl = async () => {
     if (!urlImovel.trim()) {
-      setError("Cole o link da página do imóvel.");
+      setError("Cole o link da página de produto ou serviço.");
       return;
     }
     setError(null);
@@ -626,7 +626,7 @@ export function Postador() {
                       : "border-gray-200 hover:border-gray-300 bg-gray-50/50"
                   }`}
                 >
-                  <span className="block font-semibold text-gray-900">Link do imóvel</span>
+                  <span className="block font-semibold text-gray-900">Link de produto/serviço</span>
                   <span className="mt-1 block text-sm text-gray-600">Cole a URL da página; o sistema raspa dados e imagem.</span>
                 </button>
               </div>
@@ -728,11 +728,11 @@ export function Postador() {
               {contentMode === "link" && (
                 <div className="space-y-4 pt-2 border-t border-gray-100">
                   <div>
-                    <label htmlFor="url-imovel" className="block text-sm font-medium text-gray-700 mb-1">
-                      URL da página do imóvel
+                    <label htmlFor="url-produto" className="block text-sm font-medium text-gray-700 mb-1">
+                      URL da página de detalhes
                     </label>
                     <input
-                      id="url-imovel"
+                      id="url-produto"
                       type="url"
                       value={urlImovel}
                       onChange={(e) => setUrlImovel(e.target.value)}

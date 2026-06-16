@@ -258,7 +258,7 @@ const agendarVisita = tool({
     position: [1520, 620],
     parameters: {
       descriptionType: 'manual',
-      toolDescription: 'Agenda visita do lead. Params: data_visita ISO, observacoes opcional.',
+      toolDescription: 'Agenda compromisso do lead (visita, reunião ou demonstração). Params: data_visita ISO, observacoes opcional.',
       operation: 'executeQuery',
       query: `=INSERT INTO visitas (organization_id, lead_id, telefone, id_post_origem, data_visita, observacoes, status)
 VALUES ('{{ $('Prep Agente WA').item.json.organization_id }}'::uuid, NULLIF('{{ $('Prep Agente WA').item.json.lead_id }}','')::int, '{{ $('Prep Agente WA').item.json.telefone }}', '{{ $('Prep Agente WA').item.json.config.lead?.id_post_origem || '' }}', '{{ $fromAI('data_visita', 'Data/hora da visita ISO8601', 'string') }}'::timestamptz, '{{ $fromAI('observacoes', 'Observacoes', 'string') }}', 'agendada');
@@ -307,14 +307,14 @@ const enviarLink = tool({
     position: [1840, 620],
     parameters: {
       descriptionType: 'manual',
-      toolDescription: 'Envia mensagem WhatsApp com link do produto/imóvel. Param url obrigatorio, texto opcional.',
+      toolDescription: 'Envia mensagem WhatsApp com link de produto/serviço. Param url obrigatorio, texto opcional.',
       method: 'POST',
       url: expr("={{ $('Prep Agente WA').item.json.send_text_path }}"),
       authentication: 'genericCredentialType',
       genericAuthType: 'httpHeaderAuth',
       sendBody: true,
       specifyBody: 'json',
-      jsonBody: expr('={\n  "number": {{ JSON.stringify($(\'Prep Agente WA\').item.json.telefone) }},\n  "text": {{ JSON.stringify($fromAI(\'texto\', \'Mensagem curta com o link\', \'string\') + \' \' + $fromAI(\'url\', \'URL do produto/imóvel\', \'string\')) }}\n}'),
+      jsonBody: expr('={\n  "number": {{ JSON.stringify($(\'Prep Agente WA\').item.json.telefone) }},\n  "text": {{ JSON.stringify($fromAI(\'texto\', \'Mensagem curta com o link\', \'string\') + \' \' + $fromAI(\'url\', \'URL do produto ou serviço\', \'string\')) }}\n}'),
       optimizeResponse: true,
       options: { response: { response: { neverError: true } } },
     },

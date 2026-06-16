@@ -5,11 +5,22 @@ import {
   api,
   getAuthToken,
   clearAuthToken,
+  DEFAULT_AGENDA_CONFIG,
   type Config,
   type ContaInstagramRes,
   type ContaInstagramInput,
   type EmpresaPerfilRes,
 } from "../api/client";
+
+const AGENDA_DIAS: { id: number; label: string }[] = [
+  { id: 1, label: "Seg" },
+  { id: 2, label: "Ter" },
+  { id: 3, label: "Qua" },
+  { id: 4, label: "Qui" },
+  { id: 5, label: "Sex" },
+  { id: 6, label: "Sáb" },
+  { id: 0, label: "Dom" },
+];
 
 function emptyEmpresa(): EmpresaPerfilRes {
   return {
@@ -21,11 +32,20 @@ function emptyEmpresa(): EmpresaPerfilRes {
     sobre: "",
     objetivo_qualificacao: "",
     handoff_whatsapp: "",
+    link_produto_servico: "",
+    agenda_config: { ...DEFAULT_AGENDA_CONFIG },
+    criterios_qualificacao: "",
   };
 }
 
 function mergeEmpresa(e?: Partial<EmpresaPerfilRes>): EmpresaPerfilRes {
-  return { ...emptyEmpresa(), ...e };
+  const base = emptyEmpresa();
+  if (!e) return base;
+  return {
+    ...base,
+    ...e,
+    agenda_config: { ...DEFAULT_AGENDA_CONFIG, ...e.agenda_config },
+  };
 }
 
 function emptyContaForm() {
@@ -351,7 +371,7 @@ export function AdminPage() {
             value={empresa.segmento}
             onChange={(e) => setEmpresa((x) => ({ ...x, segmento: e.target.value }))}
             className="input-field"
-            placeholder="Ex.: imobiliária, clínica, e-commerce"
+            placeholder="Ex.: clínica, e-commerce, consultoria, serviços"
           />
           <label className="label-field">Cidade / região de atuação</label>
           <input
@@ -380,8 +400,103 @@ export function AdminPage() {
             value={empresa.objetivo_qualificacao}
             onChange={(e) => setEmpresa((x) => ({ ...x, objetivo_qualificacao: e.target.value }))}
             className="textarea-field min-h-[88px]"
-            placeholder="O que o agente deve descobrir no lead (ex.: interesse em compra, agendar visita, orçamento)."
+            placeholder="O que o agente deve descobrir no lead (ex.: interesse em compra, agendar reunião, orçamento)."
           />
+          <label className="label-field">Link padrão de produto/serviço</label>
+          <input
+            type="url"
+            value={empresa.link_produto_servico ?? ""}
+            onChange={(e) => setEmpresa((x) => ({ ...x, link_produto_servico: e.target.value }))}
+            className="input-field text-sm"
+            placeholder="https://… — página de detalhes que o agente pode enviar ao lead"
+          />
+          <label className="label-field">Critérios de qualificação (um por linha)</label>
+          <textarea
+            value={empresa.criterios_qualificacao ?? ""}
+            onChange={(e) => setEmpresa((x) => ({ ...x, criterios_qualificacao: e.target.value }))}
+            className="textarea-field min-h-[88px] font-mono text-sm"
+            placeholder={"Nome do lead\nInteresse / necessidade\nPrazo ou urgência\nOrçamento ou perfil"}
+          />
+          <fieldset className="space-y-2 rounded-lg border border-gray-200 bg-gray-50/50 p-3">
+            <legend className="px-1 text-sm font-medium text-gray-800">Agenda de compromissos</legend>
+            <p className="text-xs text-gray-600">Usado pelo agente WhatsApp ao agendar visita, reunião ou demonstração.</p>
+            <div className="flex flex-wrap gap-2">
+              {AGENDA_DIAS.map((d) => {
+                const on = empresa.agenda_config.dias_semana.includes(d.id);
+                return (
+                  <button
+                    key={d.id}
+                    type="button"
+                    onClick={() =>
+                      setEmpresa((x) => {
+                        const cur = x.agenda_config.dias_semana;
+                        const next = on ? cur.filter((n) => n !== d.id) : [...cur, d.id].sort((a, b) => a - b);
+                        return {
+                          ...x,
+                          agenda_config: { ...x.agenda_config, dias_semana: next.length ? next : cur },
+                        };
+                      })
+                    }
+                    className={`rounded-md px-2.5 py-1 text-xs font-medium ring-1 ${
+                      on ? "bg-violet-100 text-violet-900 ring-violet-300" : "bg-white text-gray-600 ring-gray-300"
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <label className="block text-sm">
+                <span className="text-gray-700">Início</span>
+                <input
+                  type="time"
+                  value={empresa.agenda_config.horario_inicio}
+                  onChange={(e) =>
+                    setEmpresa((x) => ({
+                      ...x,
+                      agenda_config: { ...x.agenda_config, horario_inicio: e.target.value },
+                    }))
+                  }
+                  className="input-field mt-1"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="text-gray-700">Fim</span>
+                <input
+                  type="time"
+                  value={empresa.agenda_config.horario_fim}
+                  onChange={(e) =>
+                    setEmpresa((x) => ({
+                      ...x,
+                      agenda_config: { ...x.agenda_config, horario_fim: e.target.value },
+                    }))
+                  }
+                  className="input-field mt-1"
+                />
+              </label>
+              <label className="block text-sm">
+                <span className="text-gray-700">Duração (min)</span>
+                <input
+                  type="number"
+                  min={15}
+                  max={480}
+                  step={15}
+                  value={empresa.agenda_config.duracao_minutos}
+                  onChange={(e) =>
+                    setEmpresa((x) => ({
+                      ...x,
+                      agenda_config: {
+                        ...x.agenda_config,
+                        duracao_minutos: Math.min(480, Math.max(15, Number(e.target.value) || 60)),
+                      },
+                    }))
+                  }
+                  className="input-field mt-1"
+                />
+              </label>
+            </div>
+          </fieldset>
           <label className="label-field">WhatsApp do consultor humano (fechamento)</label>
           <input
             type="text"

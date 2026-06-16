@@ -1,4 +1,5 @@
 import { getPool, isDbConfigured, ensureTables } from "../db/index.js";
+import { parseAgendaConfig } from "../services/empresaConfigHelpers.js";
 import type { ConfigStore, ContaInstagram, ContaInstagramInput, EmpresaPerfil } from "./config.js";
 
 function genAccountId(): string {
@@ -48,6 +49,9 @@ export async function loadWorkspaceConfigStore(orgId: string): Promise<ConfigSto
     sobre: string;
     objetivo_qualificacao: string;
     handoff_whatsapp: string;
+    link_produto_servico: string;
+    agenda_config: unknown;
+    criterios_qualificacao: string;
   }>(
     `SELECT name, default_instagram_account_id,
             COALESCE(nome_fantasia, '') AS nome_fantasia,
@@ -56,7 +60,10 @@ export async function loadWorkspaceConfigStore(orgId: string): Promise<ConfigSto
             COALESCE(tom_voz, '') AS tom_voz,
             COALESCE(sobre, '') AS sobre,
             COALESCE(objetivo_qualificacao, '') AS objetivo_qualificacao,
-            COALESCE(handoff_whatsapp, '') AS handoff_whatsapp
+            COALESCE(handoff_whatsapp, '') AS handoff_whatsapp,
+            COALESCE(link_produto_servico, '') AS link_produto_servico,
+            COALESCE(agenda_config, '{"dias_semana":[1,2,3,4,5],"horario_inicio":"09:00","horario_fim":"18:00","duracao_minutos":60}'::jsonb) AS agenda_config,
+            COALESCE(criterios_qualificacao, '') AS criterios_qualificacao
      FROM organizations WHERE id = $1`,
     [orgId]
   );
@@ -70,6 +77,9 @@ export async function loadWorkspaceConfigStore(orgId: string): Promise<ConfigSto
       sobre: "",
       objetivo_qualificacao: "",
       handoff_whatsapp: "",
+      link_produto_servico: "",
+      agenda_config: parseAgendaConfig(null),
+      criterios_qualificacao: "",
     };
     return { empresa: empty, contas_instagram: [], instagram_default_id: null };
   }
@@ -120,6 +130,9 @@ export async function loadWorkspaceConfigStore(orgId: string): Promise<ConfigSto
     sobre: r.sobre ?? "",
     objetivo_qualificacao: r.objetivo_qualificacao ?? "",
     handoff_whatsapp: r.handoff_whatsapp ?? "",
+    link_produto_servico: r.link_produto_servico ?? "",
+    agenda_config: parseAgendaConfig(r.agenda_config),
+    criterios_qualificacao: r.criterios_qualificacao ?? "",
   };
   return {
     empresa,
@@ -149,7 +162,7 @@ export async function saveWorkspaceConfig(
 
     if (partial.empresa) {
       const e = partial.empresa;
-      const sets: { col: string; val: string }[] = [];
+      const sets: { col: string; val: string | ReturnType<typeof parseAgendaConfig> }[] = [];
       if (e.nome !== undefined) sets.push({ col: "name", val: e.nome.trim() || "Empresa" });
       if (e.nome_fantasia !== undefined) sets.push({ col: "nome_fantasia", val: (e.nome_fantasia ?? "").trim() });
       if (e.segmento !== undefined) sets.push({ col: "segmento", val: (e.segmento ?? "").trim() });
@@ -160,6 +173,12 @@ export async function saveWorkspaceConfig(
         sets.push({ col: "objetivo_qualificacao", val: (e.objetivo_qualificacao ?? "").trim() });
       if (e.handoff_whatsapp !== undefined)
         sets.push({ col: "handoff_whatsapp", val: (e.handoff_whatsapp ?? "").trim() });
+      if (e.link_produto_servico !== undefined)
+        sets.push({ col: "link_produto_servico", val: (e.link_produto_servico ?? "").trim() });
+      if (e.agenda_config !== undefined)
+        sets.push({ col: "agenda_config", val: parseAgendaConfig(e.agenda_config) });
+      if (e.criterios_qualificacao !== undefined)
+        sets.push({ col: "criterios_qualificacao", val: (e.criterios_qualificacao ?? "").trim() });
       if (sets.length > 0) {
         const placeholders = sets.map((s, idx) => `${s.col} = $${idx + 1}`).join(", ");
         await client.query(`UPDATE organizations SET ${placeholders} WHERE id = $${sets.length + 1}`, [

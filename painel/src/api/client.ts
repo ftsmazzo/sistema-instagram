@@ -80,6 +80,20 @@ export type ContaInstagramRes = {
   agent_prompt_direct?: string;
 };
 
+export type AgendaConfigRes = {
+  dias_semana: number[];
+  horario_inicio: string;
+  horario_fim: string;
+  duracao_minutos: number;
+};
+
+export const DEFAULT_AGENDA_CONFIG: AgendaConfigRes = {
+  dias_semana: [1, 2, 3, 4, 5],
+  horario_inicio: "09:00",
+  horario_fim: "18:00",
+  duracao_minutos: 60,
+};
+
 /** Perfil da empresa (workspace + automações). */
 export type EmpresaPerfilRes = {
   nome: string;
@@ -90,6 +104,9 @@ export type EmpresaPerfilRes = {
   sobre: string;
   objetivo_qualificacao: string;
   handoff_whatsapp: string;
+  link_produto_servico: string;
+  agenda_config: AgendaConfigRes;
+  criterios_qualificacao: string;
 };
 
 export type Config = {
@@ -156,6 +173,9 @@ export type WhatsappConnectionRes = {
 export type WhatsappGetRes = {
   instance: WhatsappInstanceRes | null;
   handoff_whatsapp?: string;
+  link_produto_servico?: string;
+  agenda_config?: AgendaConfigRes;
+  criterios_qualificacao?: string;
   evolution_configured: boolean;
   connection: {
     state: WhatsappConnectionState;
@@ -395,6 +415,9 @@ export const api = {
       objetivos?: WhatsappObjetivo[];
       delay_primeira_msg_minutos?: number;
       handoff_whatsapp?: string;
+      link_produto_servico?: string;
+      agenda_config?: AgendaConfigRes;
+      criterios_qualificacao?: string;
     }) =>
       fetchJson<{ saved: boolean; instance: WhatsappInstanceRes }>("/api/agentes/whatsapp", {
         method: "PUT",

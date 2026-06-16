@@ -327,12 +327,12 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // POST /api/postador/por-url — JSON { url, provider?, model? }. Raspa página do imóvel, baixa imagem → Cloudinary, gera caption.
+  // POST /api/postador/por-url — JSON { url, provider?, model? }. Raspa página de produto/serviço, baixa imagem → storage, gera caption.
   fastify.post("/por-url", async (request, reply) => {
     const body = request.body as { url?: string; provider?: string; model?: string };
     const url = body?.url?.trim();
     if (!url) {
-      return reply.status(400).send({ error: "Campo 'url' é obrigatório (link da página de detalhes do imóvel)." });
+      return reply.status(400).send({ error: "Campo 'url' é obrigatório (link da página de detalhes do produto ou serviço)." });
     }
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       return reply.status(400).send({ error: "URL inválida." });
@@ -345,7 +345,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       const dados = await rasparPaginaImovel(url);
       const descricao = montarDescricaoParaCaption(dados);
       if (!descricao.trim()) {
-        return reply.status(400).send({ error: "Não foi possível extrair dados da página. Verifique se a URL é de um imóvel." });
+        return reply.status(400).send({ error: "Não foi possível extrair dados da página. Verifique se a URL é de uma página de produto/serviço compatível." });
       }
 
       const urlsOriginais =
@@ -392,7 +392,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
 
       return reply.send({ jornada: responsePosts });
     } catch (err) {
-      const msg = err instanceof Error ? err.message : "Erro ao processar URL do imóvel";
+      const msg = err instanceof Error ? err.message : "Erro ao processar URL da página";
       if (msg.includes("OPENAI_API_KEY") || msg.includes("ANTHROPIC_API_KEY")) {
         return reply.status(503).send({ error: msg });
       }

@@ -8,11 +8,13 @@ import {
   type WhatsappConnectionRes,
   type WhatsappConnectionState,
   type WhatsappObjetivo,
+  DEFAULT_AGENDA_CONFIG,
+  type AgendaConfigRes,
 } from "../api/client";
 
 const OBJETIVOS: { id: WhatsappObjetivo; label: string }[] = [
-  { id: "link_produto", label: "Enviar link de produto/imóvel" },
-  { id: "agendar_visita", label: "Agendar visita" },
+  { id: "link_produto", label: "Enviar link de produto/serviço" },
+  { id: "agendar_visita", label: "Agendar compromisso" },
   { id: "handoff_humano", label: "Qualificar e acionar consultor" },
 ];
 
@@ -25,6 +27,9 @@ type AgentForm = {
   objetivos: WhatsappObjetivo[];
   delay_primeira_msg_minutos: number;
   handoff_whatsapp: string;
+  link_produto_servico: string;
+  agenda_config: AgendaConfigRes;
+  criterios_qualificacao: string;
 };
 
 function emptyAgentForm(): AgentForm {
@@ -35,6 +40,9 @@ function emptyAgentForm(): AgentForm {
     objetivos: [...DEFAULT_OBJETIVOS],
     delay_primeira_msg_minutos: 20,
     handoff_whatsapp: "",
+    link_produto_servico: "",
+    agenda_config: { ...DEFAULT_AGENDA_CONFIG },
+    criterios_qualificacao: "",
   };
 }
 
@@ -142,6 +150,9 @@ export function WhatsAppPage() {
       objetivos: wa.instance?.objetivos?.length ? wa.instance.objetivos : [...DEFAULT_OBJETIVOS],
       delay_primeira_msg_minutos: wa.instance?.delay_primeira_msg_minutos ?? 20,
       handoff_whatsapp: wa.handoff_whatsapp ?? "",
+      link_produto_servico: wa.link_produto_servico ?? "",
+      agenda_config: { ...DEFAULT_AGENDA_CONFIG, ...wa.agenda_config },
+      criterios_qualificacao: wa.criterios_qualificacao ?? "",
     };
     setAgentForm(loadedAgent);
     setSavedAgent(loadedAgent);
@@ -304,6 +315,9 @@ export function WhatsAppPage() {
       await api.agentes.putWhatsapp({
         instance_name: instanceName.trim() || undefined,
         handoff_whatsapp: agentForm.handoff_whatsapp.trim() || undefined,
+        link_produto_servico: agentForm.link_produto_servico.trim() || undefined,
+        agenda_config: agentForm.agenda_config,
+        criterios_qualificacao: agentForm.criterios_qualificacao.trim() || undefined,
         agent_ativo: agentForm.agent_ativo,
         agent_nome: agentForm.agent_nome,
         agent_prompt: agentForm.agent_prompt,
@@ -613,6 +627,14 @@ export function WhatsAppPage() {
                   <p className="text-sm text-gray-600">
                     Refinamentos: <span className="text-gray-800">{promptSummary(savedAgent.agent_prompt)}</span>
                   </p>
+                  {savedAgent.objetivos.includes("link_produto") && (
+                    <p className="text-sm text-gray-600">
+                      Link produto/serviço:{" "}
+                      <span className="break-all text-gray-800">
+                        {savedAgent.link_produto_servico.trim() || "não configurado"}
+                      </span>
+                    </p>
+                  )}
                   {savedAgent.objetivos.includes("handoff_humano") && (
                     <p className="text-sm text-gray-600">
                       Consultor humano:{" "}
@@ -696,6 +718,19 @@ export function WhatsAppPage() {
                     placeholder="Complementa o prompt profissional interno — não substitui. Vazio = só o template da empresa."
                   />
                 </label>
+
+                {agentForm.objetivos.includes("link_produto") && (
+                  <label className="block text-sm">
+                    <span className="font-medium text-gray-700">Link padrão de produto/serviço</span>
+                    <input
+                      type="url"
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                      value={agentForm.link_produto_servico}
+                      onChange={(e) => setAgentForm((f) => ({ ...f, link_produto_servico: e.target.value }))}
+                      placeholder="https://… — página que o agente envia quando o lead pedir detalhes"
+                    />
+                  </label>
+                )}
 
                 {agentForm.objetivos.includes("handoff_humano") && (
                   <label className="block text-sm md:max-w-sm">

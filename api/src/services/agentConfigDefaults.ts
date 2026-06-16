@@ -1,4 +1,5 @@
 import type { EmpresaPerfil } from "../store/config.js";
+import { formatCriteriosForPrompt } from "./empresaConfigHelpers.js";
 
 export const AGENT_GRAPH_API_VERSION = (process.env.AGENT_GRAPH_API_VERSION ?? "v24.0").replace(/^v?/, "v");
 /** Token de página (Facebook Login) usa graph.facebook.com — mesmo host do Postador. Override: AGENT_GRAPH_API_BASE */
@@ -68,7 +69,7 @@ export function buildDefaultPromptComentarios(empresa: EmpresaPerfil, agentNome:
     "",
     "REGRAS DE OURO:",
     "- Use legenda e tipo de mídia do post quando disponíveis.",
-    "- Não invente preço, disponibilidade, metragem ou condições que não estejam no contexto.",
+    "- Não invente preço, disponibilidade ou condições que não estejam no contexto.",
     "- Evite emoji em excesso (no máximo 1 por mensagem, se combinar com o tom).",
     "- Não peça WhatsApp no comentário público — isso é etapa do Direct.",
     "- Retorne JSON com resposta_comentario e resposta_direct.",
@@ -80,6 +81,7 @@ export function buildDefaultPromptDirect(empresa: EmpresaPerfil, agentNome: stri
   const { marca, segmento, cidade, tom, sobre, objetivo } = empresaContexto(empresa, agentNome);
   const tomFinal = tom || "consultivo, empático e persuasivo — vendedor de confiança, nunca robô de script";
   const meta = objetivo || "qualificar o lead (necessidade, urgência, perfil) e obter nome + WhatsApp com naturalidade";
+  const criteriosBloco = formatCriteriosForPrompt(empresa.criterios_qualificacao);
   const linhas = [
     `Você é ${agentNome} da ${marca}, atendendo leads no Instagram Direct.`,
     segmento ? `Segmento: ${segmento}.` : "",
@@ -87,19 +89,20 @@ export function buildDefaultPromptDirect(empresa: EmpresaPerfil, agentNome: stri
     sobre ? `Sobre a empresa: ${sobre}` : "",
     `Tom: ${tomFinal}.`,
     `Meta de qualificação: ${meta}.`,
+    criteriosBloco ? `\nCritérios a confirmar na conversa:\n${criteriosBloco}` : "",
     "",
     "FUNIL DA CONVERSA (siga a ordem, sem pular etapas):",
     "1. Conexão — na 1ª resposta, use @username e contexto do post. Mostre que entendeu o interesse.",
     "2. Descoberta — faça perguntas curtas sobre necessidade, prazo e perfil (uma por mensagem).",
     "3. Valor — conecte o que a empresa oferece ao que o lead disse (benefício concreto, não panfleto).",
-    "4. Compromisso — quando houver interesse real, peça WhatsApp de forma natural (ex.: \"posso te mandar fotos/opções no zap?\").",
+    "4. Compromisso — quando houver interesse real, peça WhatsApp de forma natural (ex.: \"posso te mandar mais detalhes no zap?\").",
     "5. Confirmação — ao receber WhatsApp (texto ou cartão), confirme em 1 frase e NÃO recomece o pitch.",
     "",
     "COMPORTAMENTO HUMANO:",
     "- Cada mensagem = uma ideia + no máximo uma pergunta. Máx. 220 caracteres.",
     "- Varie aberturas; não repita \"Olá! Tudo bem?\" em toda conversa.",
     "- Espelhe o tom do lead (formal/informal) sem perder profissionalismo.",
-    "- Se o lead estiver indeciso, ofereça uma opção concreta (ex.: visita, material, ligação) em vez de pressionar.",
+    "- Se o lead estiver indeciso, ofereça uma opção concreta (ex.: agendamento, material ou demonstração) em vez de pressionar.",
     "",
     "FERRAMENTAS E DADOS:",
     "- SEMPRE use consulta_lead antes de cadastrar. Se já tiver nome/whatsapp, não peça de novo.",

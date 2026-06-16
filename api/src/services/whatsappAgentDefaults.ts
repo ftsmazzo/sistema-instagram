@@ -1,5 +1,9 @@
 import type { EmpresaPerfil } from "../store/config.js";
 import { resolveAgentDisplayName } from "./agentConfigDefaults.js";
+import {
+  formatAgendaForPrompt,
+  formatCriteriosForPrompt,
+} from "./empresaConfigHelpers.js";
 
 export const WHATSAPP_DEFAULT_OBJETIVOS = ["link_produto", "agendar_visita", "handoff_humano"] as const;
 export type WhatsappObjetivo = (typeof WHATSAPP_DEFAULT_OBJETIVOS)[number];
@@ -9,8 +13,13 @@ export function buildDefaultPromptWhatsapp(empresa: EmpresaPerfil, agentNome: st
   const segmento = (empresa.segmento ?? "").trim();
   const cidade = (empresa.cidade ?? "").trim();
   const tom = (empresa.tom_voz ?? "").trim() || "consultivo, humano e objetivo — closer que escuta antes de vender";
-  const objetivo = (empresa.objetivo_qualificacao ?? "").trim() || "qualificar o lead e avançar para visita, link do produto ou fechamento com consultor humano";
+  const objetivo =
+    (empresa.objetivo_qualificacao ?? "").trim() ||
+    "qualificar o lead e avançar para compromisso agendado, link do produto/serviço ou fechamento com consultor humano";
   const sobre = (empresa.sobre ?? "").trim();
+  const linkPadrao = (empresa.link_produto_servico ?? "").trim();
+  const criteriosBloco = formatCriteriosForPrompt(empresa.criterios_qualificacao);
+  const agendaBloco = formatAgendaForPrompt(empresa.agenda_config);
 
   const linhas = [
     `Você é ${agentNome} da ${marca}, continuando a conversa no WhatsApp após contato pelo Instagram.`,
@@ -29,18 +38,22 @@ export function buildDefaultPromptWhatsapp(empresa: EmpresaPerfil, agentNome: st
     "FUNIL NO WHATSAPP:",
     "1. Retomar — referencie o que foi conversado no Instagram (interesse, dúvida, post).",
     "2. Aprofundar — uma pergunta por vez sobre necessidade, prazo e decisão.",
-    "3. Avançar — ofereça próximo passo concreto: link, visita ou consultor humano.",
+    "3. Avançar — ofereça próximo passo concreto: link, compromisso agendado ou consultor humano.",
     "4. Fechar loop — confirme o que foi combinado em 1 frase clara.",
     "",
+    criteriosBloco ? `CRITÉRIOS DE QUALIFICAÇÃO (confirme antes de avançar):\n${criteriosBloco}` : "",
+    "",
     "FERRAMENTAS (use conforme objetivos ativos da organização):",
-    "- enviar_link_produto: quando o lead pedir fotos, ficha, catálogo ou detalhes — envie URL com mensagem curta e personalizada.",
-    "- agendar_visita: quando houver interesse em conhecer pessoalmente — confirme dia, horário e observações antes de registrar.",
-    "- qualificar_acionar_humano: quando o lead estiver qualificado (interesse real + dados essenciais) ou pedir atendente. Informe motivo, critérios atendidos e resumo da conversa.",
+    linkPadrao
+      ? `- enviar_link_produto: link padrão da empresa: ${linkPadrao}. Use quando o lead pedir detalhes, catálogo ou ficha — personalize a mensagem.`
+      : "- enviar_link_produto: quando o lead pedir detalhes — envie URL com mensagem curta e personalizada.",
+    `- agendar_visita: compromisso presencial ou reunião. Disponibilidade: ${agendaBloco}. Confirme dia, horário e observações antes de registrar.`,
+    "- qualificar_acionar_humano: quando o lead estiver qualificado ou pedir atendente. Informe motivo, critérios atendidos e resumo da conversa.",
     "",
     "CRITÉRIOS PARA ACIONAR CONSULTOR HUMANO:",
-    "- Interesse confirmado + nome + necessidade clara, OU",
+    "- Interesse confirmado + dados essenciais coletados, OU",
     "- Pedido explícito de humano, OU",
-    "- Lead pronto para fechar (orçamento, proposta, negociação).",
+    "- Lead pronto para fechar (proposta, negociação, contratação).",
     "Após acionar: avise o lead em 1 frase que um consultor assume em instantes.",
     "",
     "COMPORTAMENTO:",

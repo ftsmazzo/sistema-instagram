@@ -21,6 +21,7 @@ import {
   WhatsappInstanceNameTakenError,
 } from "../store/whatsappInstance.js";
 import type { WhatsappObjetivo } from "../services/whatsappAgentDefaults.js";
+import type { EmpresaPerfil } from "../store/config.js";
 import { loadWorkspaceConfigStore, saveWorkspaceConfig } from "../store/workspace.js";
 
 export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOptions) {
@@ -79,9 +80,13 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
       }
     }
 
+    const empresaCfg = (await loadWorkspaceConfigStore(u.orgId)).empresa;
     return reply.send({
       instance,
-      handoff_whatsapp: (await loadWorkspaceConfigStore(u.orgId)).empresa.handoff_whatsapp ?? "",
+      handoff_whatsapp: empresaCfg.handoff_whatsapp ?? "",
+      link_produto_servico: empresaCfg.link_produto_servico ?? "",
+      agenda_config: empresaCfg.agenda_config,
+      criterios_qualificacao: empresaCfg.criterios_qualificacao ?? "",
       evolution_configured: evolutionConfigured,
       connection: connection
         ? {
@@ -107,6 +112,14 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
       status?: string;
       delay_primeira_msg_minutos?: number;
       handoff_whatsapp?: string;
+      link_produto_servico?: string;
+      agenda_config?: {
+        dias_semana?: number[];
+        horario_inicio?: string;
+        horario_fim?: string;
+        duracao_minutos?: number;
+      };
+      criterios_qualificacao?: string;
     };
 
     const existing = await getWhatsappInstanceForOrg(u.orgId);
@@ -141,6 +154,13 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
         await saveWorkspaceConfig(u.orgId, {
           empresa: { handoff_whatsapp: body.handoff_whatsapp },
         });
+      }
+      const empresaPatch: Partial<EmpresaPerfil> = {};
+      if (body.link_produto_servico !== undefined) empresaPatch.link_produto_servico = body.link_produto_servico;
+      if (body.agenda_config !== undefined) empresaPatch.agenda_config = body.agenda_config;
+      if (body.criterios_qualificacao !== undefined) empresaPatch.criterios_qualificacao = body.criterios_qualificacao;
+      if (Object.keys(empresaPatch).length > 0) {
+        await saveWorkspaceConfig(u.orgId, { empresa: empresaPatch });
       }
 
       return reply.send({ saved: true, instance });

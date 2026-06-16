@@ -5,6 +5,9 @@ import { isDbConfigured, getPool, ensureTables } from "../db/index.js";
 const DATA_DIR = process.env.DATA_DIR || join(process.cwd(), "data");
 const CONFIG_PATH = join(DATA_DIR, "config.json");
 
+import type { AgendaConfig } from "../services/empresaConfigHelpers.js";
+import { DEFAULT_AGENDA_CONFIG, parseAgendaConfig } from "../services/empresaConfigHelpers.js";
+
 export type ContaInstagram = {
   id: string;
   nome: string;
@@ -33,6 +36,12 @@ export type EmpresaPerfil = {
   objetivo_qualificacao: string;
   /** WhatsApp do consultor humano para alerta quando o lead estiver qualificado. */
   handoff_whatsapp: string;
+  /** URL padrão de produto/serviço para o agente enviar quando o lead pedir detalhes. */
+  link_produto_servico: string;
+  /** Dias e horários disponíveis para agendar visita/reunião. */
+  agenda_config: AgendaConfig;
+  /** Critérios de qualificação (um por linha). */
+  criterios_qualificacao: string;
 };
 
 export type ConfigStore = {
@@ -54,6 +63,9 @@ export const emptyEmpresa = (): EmpresaPerfil => ({
   sobre: "",
   objetivo_qualificacao: "",
   handoff_whatsapp: "",
+  link_produto_servico: "",
+  agenda_config: { ...DEFAULT_AGENDA_CONFIG },
+  criterios_qualificacao: "",
 });
 
 const defaultConfig: ConfigStore = {
@@ -210,6 +222,9 @@ export async function saveConfig(
     if (e.sobre !== undefined) emp.sobre = (e.sobre ?? "").trim();
     if (e.objetivo_qualificacao !== undefined) emp.objetivo_qualificacao = (e.objetivo_qualificacao ?? "").trim();
     if (e.handoff_whatsapp !== undefined) emp.handoff_whatsapp = (e.handoff_whatsapp ?? "").trim();
+    if (e.link_produto_servico !== undefined) emp.link_produto_servico = (e.link_produto_servico ?? "").trim();
+    if (e.agenda_config !== undefined) emp.agenda_config = parseAgendaConfig(e.agenda_config);
+    if (e.criterios_qualificacao !== undefined) emp.criterios_qualificacao = (e.criterios_qualificacao ?? "").trim();
     current.empresa = emp;
   }
 
