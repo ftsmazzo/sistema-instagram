@@ -2,7 +2,12 @@ import type { FastifyInstance, FastifyPluginOptions } from "fastify";
 import { isDbConfigured } from "../db/index.js";
 import { resolveAgentConfig } from "../store/agentConfig.js";
 import { resolveWhatsappAgentConfig } from "../store/whatsappAgentConfig.js";
-import { enqueueWhatsappInbound, getWhatsappQueueStatus } from "../store/whatsappInboundQueue.js";
+import {
+  completeWhatsappBatch,
+  enqueueWhatsappInbound,
+  getWhatsappQueueStatus,
+  processReadyWhatsappBatches,
+} from "../store/whatsappInboundQueue.js";
 import { isRedisConfigured, pingRedis } from "../services/redis.js";
 import { getInternalSecretConfigured, verifyInternalSecret } from "../util/internalAuth.js";
 import { AGENT_GRAPH_API_BASE, AGENT_GRAPH_API_VERSION, AGENT_TIMEZONE } from "../services/agentConfigDefaults.js";
@@ -194,7 +199,37 @@ export async function internalRoutes(app: FastifyInstance, _opts: FastifyPluginO
   });
 
   /**
-   * Diagnóstico da fila por instância + telefone (validação do passo 1).
+   * Processa batches prontos (debounce expirado) — n8n cron chama e roda o agente 1x por batch.
+   */
+  app.post("/whatsapp/process-ready", async (request, reply) => {
+    const body = (request.body ?? {}) as { limit?: number };
+    const limit = typeof body.limit === "number" ? body.limit : undefined;
+    const result = await processReadyWhatsappBatches({ limit });
+    if (!result.ok) {
+      const status = result.code === "DATABASE_NOT_CONFIGURED" ? 503 : 400;
+      return reply.status(status).send(result);
+    }
+    return reply.send(result);
+  });
+
+  /**
+   * Marca batch como concluído após resposta enviada (libera lock Redis).
+   */
+  app.post("/whatsapp/queue-complete", async (request, reply) => {
+    const body = (request.body ?? {}) as { batch_key?: string; queue_ids?: number[] };
+    const result = await completeWhatsappBatch({
+      batchKey: body.batch_key,
+      queueIds: body.queue_ids,
+    });
+    if (!result.ok) {
+      const status = result.code === "DATABASE_NOT_CONFIGURED" ? 503 : 400;
+      return reply.status(status).send(result);
+    }
+    return reply.send(result);
+  });
+
+  /**
+   * Diagnóstico da fila por instância + telefone.
    */
   app.get("/whatsapp/queue-status", async (request, reply) => {
     const q = request.query as { instance?: string; phone?: string; telefone?: string };

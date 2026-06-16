@@ -1,8 +1,11 @@
 import { ensureTables, getPool, isDbConfigured } from "../db/index.js";
 import {
+  getDebounceMaxWaitSeconds,
   getDebounceSeconds,
   isRedisConfigured,
   pingRedis,
+  releaseBatchLock,
+  tryAcquireBatchLock,
   tryMarkMessageSeen,
   touchDebounce,
 } from "../services/redis.js";
@@ -53,6 +56,25 @@ export type WhatsappQueueStatusError = {
 };
 
 export type WhatsappQueueStatusResult = WhatsappQueueStatusOk | WhatsappQueueStatusError;
+
+export type WhatsappReadyBatch = {
+  batch_key: string;
+  instance_name: string;
+  telefone: string;
+  organization_id: string;
+  message_text: string;
+  message_count: number;
+  queue_ids: number[];
+  message_ids_ext: string[];
+};
+
+export type WhatsappProcessReadyResult =
+  | { ok: true; code: string; batches: WhatsappReadyBatch[]; debounce_seconds: number; max_wait_seconds: number }
+  | { ok: false; code: string; message: string };
+
+export type WhatsappQueueCompleteResult =
+  | { ok: true; code: string; updated: number; batch_key?: string }
+  | { ok: false; code: string; message: string };
 
 type InstanceRow = { organization_id: string; instance_name: string };
 
@@ -230,5 +252,170 @@ export async function getWhatsappQueueStatus(args: {
       received_at: row.received_at.toISOString(),
       debounce_until: row.debounce_until.toISOString(),
     })),
+  };
+}
+
+type ReadyBatchRow = {
+  batch_key: string;
+  instance_name: string;
+  telefone: string;
+  organization_id: string;
+};
+
+type QueueMessageRow = {
+  id: number;
+  message_id_ext: string | null;
+  message_text: string;
+};
+
+async function fetchReadyBatchCandidates(limit: number): Promise<ReadyBatchRow[]> {
+  await ensureTables();
+  const pool = getPool();
+  const maxWait = getDebounceMaxWaitSeconds();
+  const r = await pool.query<ReadyBatchRow>(
+    `SELECT batch_key, instance_name, telefone, organization_id::text AS organization_id
+     FROM whatsapp_inbound_queue
+     WHERE status = 'queued'
+     GROUP BY batch_key, instance_name, telefone, organization_id
+     HAVING MAX(debounce_until) <= NOW()
+         OR MIN(received_at) <= NOW() - ($1 || ' seconds')::interval
+     ORDER BY MIN(received_at) ASC
+     LIMIT $2`,
+    [String(maxWait), limit]
+  );
+  return r.rows;
+}
+
+async function claimReadyBatch(batchKey: string): Promise<WhatsappReadyBatch | null> {
+  const locked = await tryAcquireBatchLock(batchKey);
+  if (!locked) return null;
+
+  await ensureTables();
+  const pool = getPool();
+
+  try {
+    const pending = await pool.query<QueueMessageRow>(
+      `SELECT id, message_id_ext, message_text
+       FROM whatsapp_inbound_queue
+       WHERE batch_key = $1 AND status = 'queued'
+       ORDER BY received_at ASC`,
+      [batchKey]
+    );
+
+    if (pending.rowCount === 0) {
+      await releaseBatchLock(batchKey);
+      return null;
+    }
+
+    const meta = await pool.query<ReadyBatchRow>(
+      `SELECT batch_key, instance_name, telefone, organization_id::text AS organization_id
+       FROM whatsapp_inbound_queue
+       WHERE batch_key = $1
+       LIMIT 1`,
+      [batchKey]
+    );
+    const head = meta.rows[0];
+    if (!head) {
+      await releaseBatchLock(batchKey);
+      return null;
+    }
+
+    const ids = pending.rows.map((row) => row.id);
+    await pool.query(
+      `UPDATE whatsapp_inbound_queue
+       SET status = 'processing', processed_at = NOW()
+       WHERE id = ANY($1::int[]) AND status = 'queued'`,
+      [ids]
+    );
+
+    const texts = pending.rows.map((row) => row.message_text.trim()).filter(Boolean);
+    const messageIds = pending.rows
+      .map((row) => (row.message_id_ext ?? "").trim())
+      .filter(Boolean);
+
+    return {
+      batch_key: head.batch_key,
+      instance_name: head.instance_name,
+      telefone: head.telefone,
+      organization_id: head.organization_id,
+      message_text: texts.join("\n"),
+      message_count: texts.length,
+      queue_ids: ids,
+      message_ids_ext: messageIds,
+    };
+  } catch {
+    await releaseBatchLock(batchKey);
+    throw new Error("claimReadyBatch failed");
+  }
+}
+
+/** Agrupa batches prontos (debounce expirado ou max wait) e reserva com lock Redis. */
+export async function processReadyWhatsappBatches(args?: { limit?: number }): Promise<WhatsappProcessReadyResult> {
+  if (!isDbConfigured()) {
+    return { ok: false, code: "DATABASE_NOT_CONFIGURED", message: "DATABASE_URL não configurada." };
+  }
+
+  const limit = Math.min(Math.max(args?.limit ?? 5, 1), 20);
+  const candidates = await fetchReadyBatchCandidates(limit);
+  const batches: WhatsappReadyBatch[] = [];
+
+  for (const candidate of candidates) {
+    if (batches.length >= limit) break;
+    const claimed = await claimReadyBatch(candidate.batch_key);
+    if (claimed) batches.push(claimed);
+  }
+
+  return {
+    ok: true,
+    code: batches.length > 0 ? "BATCHES_READY" : "NO_BATCHES",
+    batches,
+    debounce_seconds: getDebounceSeconds(),
+    max_wait_seconds: getDebounceMaxWaitSeconds(),
+  };
+}
+
+/** Marca fila como concluída após resposta do agente (libera lock Redis). */
+export async function completeWhatsappBatch(args: {
+  batchKey?: string;
+  queueIds?: number[];
+}): Promise<WhatsappQueueCompleteResult> {
+  if (!isDbConfigured()) {
+    return { ok: false, code: "DATABASE_NOT_CONFIGURED", message: "DATABASE_URL não configurada." };
+  }
+
+  const batchKey = (args.batchKey ?? "").trim();
+  const queueIds = (args.queueIds ?? []).filter((id) => Number.isFinite(id) && id > 0);
+
+  if (!batchKey && queueIds.length === 0) {
+    return { ok: false, code: "MISSING_LOOKUP", message: "Informe batch_key ou queue_ids." };
+  }
+
+  await ensureTables();
+  const pool = getPool();
+
+  const r = batchKey
+    ? await pool.query<{ batch_key: string }>(
+        `UPDATE whatsapp_inbound_queue
+         SET status = 'done', processed_at = COALESCE(processed_at, NOW())
+         WHERE batch_key = $1 AND status = 'processing'
+         RETURNING batch_key`,
+        [batchKey]
+      )
+    : await pool.query<{ batch_key: string }>(
+        `UPDATE whatsapp_inbound_queue
+         SET status = 'done', processed_at = COALESCE(processed_at, NOW())
+         WHERE id = ANY($1::int[]) AND status = 'processing'
+         RETURNING batch_key`,
+        [queueIds]
+      );
+
+  const resolvedKey = r.rows[0]?.batch_key ?? batchKey;
+  if (resolvedKey) await releaseBatchLock(resolvedKey);
+
+  return {
+    ok: true,
+    code: r.rowCount && r.rowCount > 0 ? "COMPLETED" : "NOTHING_TO_COMPLETE",
+    updated: r.rowCount ?? 0,
+    batch_key: resolvedKey || undefined,
   };
 }
