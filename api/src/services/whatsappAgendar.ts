@@ -7,7 +7,7 @@ import {
   validateDataVisitaAgenda,
   type AgendaConfig,
 } from "./empresaConfigHelpers.js";
-import { isEvolutionConfigured, resolveEvolutionBaseUrl, sendEvolutionText } from "./evolution.js";
+import { canSendEvolutionAlert, resolveEvolutionBaseUrl, sendEvolutionText } from "./evolution.js";
 import { getWhatsappInstanceForOrg } from "../store/whatsappInstance.js";
 import { normalizePhoneDigits } from "../util/phone.js";
 
@@ -196,7 +196,7 @@ export async function agendarCompromisso(input: AgendarCompromissoInput): Promis
     };
   }
 
-  if (!isEvolutionConfigured()) {
+  if (!canSendEvolutionAlert(instance.evolution_base_url)) {
     return {
       ok: true,
       visita_id: visitaId,
@@ -207,7 +207,8 @@ export async function agendarCompromisso(input: AgendarCompromissoInput): Promis
       data_visita_formatada: dataVisitaFmt,
       confirmacao_sugerida: confirmacaoSugerida,
       local,
-      message: "Compromisso registrado, mas Evolution não está configurada para enviar o alerta.",
+      message:
+        "Compromisso registrado, mas Evolution não está configurada (EVOLUTION_BASE_URL + EVOLUTION_GLOBAL_API_KEY) para enviar o alerta.",
     };
   }
 

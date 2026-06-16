@@ -58,6 +58,13 @@ export function isEvolutionConfigured(): boolean {
   return getEvolutionEnv() !== null;
 }
 
+/** Permite enviar alerta se houver URL (env ou instância) + API key global. */
+export function canSendEvolutionAlert(baseUrl?: string | null): boolean {
+  const url = resolveEvolutionBaseUrl(baseUrl);
+  const apiKey = (process.env.EVOLUTION_GLOBAL_API_KEY ?? "").trim();
+  return Boolean(url && apiKey);
+}
+
 /** URL da Evolution: env central tem prioridade sobre valor salvo no workspace. */
 export function resolveEvolutionBaseUrl(storedUrl?: string | null): string {
   const fromEnv = (process.env.EVOLUTION_BASE_URL ?? "").trim().replace(/\/$/, "");

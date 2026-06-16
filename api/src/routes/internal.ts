@@ -10,6 +10,7 @@ import {
 } from "../store/whatsappInboundQueue.js";
 import { agendarCompromisso } from "../services/whatsappAgendar.js";
 import { qualificarEAcionarHumano } from "../services/whatsappHandoff.js";
+import { consultarProximaData } from "../services/empresaConfigHelpers.js";
 import { isRedisConfigured, pingRedis } from "../services/redis.js";
 import { getInternalSecretConfigured, verifyInternalSecret } from "../util/internalAuth.js";
 import { AGENT_GRAPH_API_BASE, AGENT_GRAPH_API_VERSION, AGENT_TIMEZONE } from "../services/agentConfigDefaults.js";
@@ -319,6 +320,22 @@ export async function internalRoutes(app: FastifyInstance, _opts: FastifyPluginO
       return reply.status(502).send(result);
     }
 
+    return reply.send(result);
+  });
+
+  /**
+   * Resolve a próxima data de um dia da semana (tool consultar_data_agenda do agente WA).
+   */
+  app.post("/whatsapp/consultar-data-agenda", async (request, reply) => {
+    const body = (request.body ?? {}) as { dia_semana?: string };
+    const diaSemana = String(body.dia_semana ?? "").trim();
+    if (!diaSemana) {
+      return reply.status(400).send({ ok: false, error: "Informe dia_semana (ex.: quinta)." });
+    }
+    const result = consultarProximaData(diaSemana, AGENT_TIMEZONE);
+    if (!result.ok) {
+      return reply.status(400).send(result);
+    }
     return reply.send(result);
   });
 

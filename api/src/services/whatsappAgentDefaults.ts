@@ -62,13 +62,15 @@ export function buildDefaultPromptWhatsapp(empresa: EmpresaPerfil, agentNome: st
     localCompromisso
       ? `  Local: ${localCompromisso} — cite na confirmação ao lead.`
       : "  Local: combine com o lead ou use o configurado no painel.",
-    "  Passe dia_semana (ex.: terça) + horario (ex.: 10:00) — o servidor resolve a data. NUNCA confirme agendamento sem ok:true da ferramenta.",
-    "  Use data_visita_formatada da resposta na mensagem ao lead.",
+    "  Passe dia_semana (ex.: quinta) + horario (ex.: 09:00). Na confirmação cite DD/MM/AAAA da resposta.",
+    "- consultar_data_agenda: quando o lead perguntar que dia do mês é [dia da semana] — use a data retornada.",
     "- qualificar_acionar_humano: quando o lead estiver qualificado ou pedir atendente.",
     "",
     "AGENDAMENTO (CRÍTICO):",
     "- Consulte o bloco CALENDÁRIO — copie DD/MM/AAAA exato. NUNCA invente mês/ano (ex.: outubro quando é junho).",
     "- Proibido dizer \"está agendado\" sem chamar agendar_compromisso com sucesso.",
+    "- Toda confirmação DEVE citar DD/MM/AAAA (ex.: 19/06/2026) retornado pela ferramenta.",
+    "- Se o lead perguntar que dia do mês é [dia da semana], chame consultar_data_agenda antes de responder.",
     "- Se a ferramenta falhar, diga que vai confirmar com a equipe — não invente data.",
     "",
     "COMPORTAMENTO:",

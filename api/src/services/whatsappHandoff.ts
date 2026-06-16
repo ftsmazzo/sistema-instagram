@@ -1,5 +1,5 @@
 import { ensureTables, getPool } from "../db/index.js";
-import { isEvolutionConfigured, resolveEvolutionBaseUrl, sendEvolutionText } from "./evolution.js";
+import { canSendEvolutionAlert, resolveEvolutionBaseUrl, sendEvolutionText } from "./evolution.js";
 import { getWhatsappInstanceForOrg } from "../store/whatsappInstance.js";
 import { normalizePhoneDigits } from "../util/phone.js";
 
@@ -125,16 +125,6 @@ export async function qualificarEAcionarHumano(
     };
   }
 
-  if (!isEvolutionConfigured()) {
-    return {
-      ok: true,
-      lead_updated: leadUpdated,
-      alert_sent: false,
-      handoff_whatsapp: handoffWhatsapp,
-      message: "Lead atualizado, mas Evolution não está configurada para enviar o alerta.",
-    };
-  }
-
   const instance = await getWhatsappInstanceForOrg(organizationId);
   if (!instance?.instance_name?.trim()) {
     return {
@@ -143,6 +133,17 @@ export async function qualificarEAcionarHumano(
       alert_sent: false,
       handoff_whatsapp: handoffWhatsapp,
       message: "Lead atualizado, mas não há instância WhatsApp configurada para enviar o alerta.",
+    };
+  }
+
+  if (!canSendEvolutionAlert(instance.evolution_base_url)) {
+    return {
+      ok: true,
+      lead_updated: leadUpdated,
+      alert_sent: false,
+      handoff_whatsapp: handoffWhatsapp,
+      message:
+        "Lead atualizado, mas Evolution não está configurada (EVOLUTION_BASE_URL + EVOLUTION_GLOBAL_API_KEY) para enviar o alerta.",
     };
   }
 

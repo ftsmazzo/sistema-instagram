@@ -105,6 +105,32 @@ export function resolveProximoDiaSemana(
   return null;
 }
 
+/** Retorna a próxima data de um dia da semana (sem horário) — para consultas do lead. */
+export function consultarProximaData(
+  diaSemana: string,
+  timezone: string
+): { ok: true; dia_semana: string; data: string; data_extenso: string; mensagem: string } | { ok: false; error: string } {
+  const tz = timezone.trim() || "America/Sao_Paulo";
+  const targetDow = parseDiaSemana(diaSemana);
+  if (targetDow === null) {
+    return { ok: false, error: "Dia da semana inválido — use segunda, terça, quarta, quinta, sexta, etc." };
+  }
+  const now = new Date();
+  for (let i = 1; i <= 21; i++) {
+    const candidate = new Date(now.getTime() + i * 86_400_000);
+    if (getWeekdayInTz(candidate, tz) !== targetDow) continue;
+    const f = formatDateInTz(candidate, tz);
+    return {
+      ok: true,
+      dia_semana: f.diaSemana,
+      data: f.data,
+      data_extenso: `${f.diaSemana}, ${f.data}`,
+      mensagem: `A próxima ${f.diaSemana} é ${f.data}.`,
+    };
+  }
+  return { ok: false, error: "Não foi possível resolver a data nos próximos 21 dias." };
+}
+
 export function resolveAgendamentoDateTime(args: {
   dataVisitaRaw?: string | null;
   diaSemana?: string | null;
@@ -131,6 +157,14 @@ export function resolveAgendamentoDateTime(args: {
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) {
     return { date: null, source: null, error: "data_visita inválida — use ISO8601 ou dia_semana + horario." };
+  }
+  const maxFuture = new Date(Date.now() + 21 * 86_400_000);
+  if (parsed > maxFuture) {
+    return {
+      date: null,
+      source: null,
+      error: "data_visita muito distante — use dia_semana + horario para o servidor calcular a próxima ocorrência.",
+    };
   }
   return { date: parsed, source: "iso" };
 }
@@ -260,7 +294,9 @@ export function buildWhatsappRuntimeRules(): string {
     "- LINK: NUNCA envie na 1ª mensagem nem em resposta a ok/perfeito/obrigado. Só após discovery + pedido explícito ou interesse confirmado no assunto do Instagram.",
     "- enviar_link_produto: a ferramenta JÁ envia o link — NÃO repita URL na resposta final.",
     "- AGENDAMENTO: NUNCA diga \"está agendado\" sem chamar agendar_compromisso e receber ok:true.",
-    "- Use dia_semana + horario na ferramenta (ex.: terça, 10:00) — o servidor calcula a data correta.",
+    "- Toda confirmação ao lead DEVE incluir data DD/MM/AAAA (ex.: 19/06/2026) copiada da ferramenta.",
+    "- Se o lead perguntar \"que dia é quinta/terça\", chame consultar_data_agenda ANTES de responder — NUNCA invente mês ou ano.",
+    "- Use dia_semana + horario em agendar_compromisso (ex.: quinta, 09:00) — o servidor calcula a data correta.",
     "- Na confirmação ao lead, use EXATAMENTE data_visita_formatada retornada pela ferramenta.",
     "- Se agendar_compromisso falhar, diga que vai confirmar com a equipe — não invente data.",
     "- qualificar_acionar_humano: quando lead qualificado ou pedir humano.",

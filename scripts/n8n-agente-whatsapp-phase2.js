@@ -251,6 +251,36 @@ const memoriaWa = memory({
   },
 });
 
+const consultarDataAgenda = tool({
+  type: 'n8n-nodes-base.httpRequestTool',
+  version: 4.4,
+  config: {
+    name: 'consultar_data_agenda',
+    position: [2000, 620],
+    parameters: {
+      descriptionType: 'manual',
+      toolDescription:
+        'Retorna a próxima data exata DD/MM/AAAA de um dia da semana. OBRIGATÓRIO quando o lead perguntar que dia do mês é quinta/terça/etc.',
+      method: 'POST',
+      url: 'https://plataforma-instagram-instagram-backend.kxryyk.easypanel.host/api/internal/whatsapp/consultar-data-agenda',
+      sendHeaders: true,
+      headerParameters: {
+        parameters: [
+          { name: 'Content-Type', value: 'application/json' },
+          { name: 'X-Internal-Secret', value: 'CONFIGURE_INTERNAL_SECRET' },
+        ],
+      },
+      sendBody: true,
+      specifyBody: 'json',
+      jsonBody: expr(
+        '={\n  "dia_semana": {{ JSON.stringify($fromAI(\'dia_semana\', \'Dia da semana em português (ex.: quinta)\', \'string\')) }}\n}'
+      ),
+      optimizeResponse: true,
+      options: { response: { response: { neverError: true } } },
+    },
+  },
+});
+
 const agendarCompromisso = tool({
   type: 'n8n-nodes-base.httpRequestTool',
   version: 4.4,
@@ -348,7 +378,7 @@ const agenteWa = node({
     subnodes: {
       model: openAiModel,
       memory: memoriaWa,
-      tools: [agendarCompromisso, qualificarAcionarHumano, enviarLink],
+      tools: [agendarCompromisso, qualificarAcionarHumano, enviarLink, consultarDataAgenda],
     },
   },
   output: [{ output: 'Resposta curta do agente' }],
@@ -365,7 +395,7 @@ const limpaTexto = node({
       includeOtherFields: false,
       assignments: {
         assignments: [
-          { id: 'l1', name: 'texto_resposta', value: expr("={{ ($json.output || $json.text || '').toString().replace(/[*_#`]/g,'').trim().slice(0,400) }}"), type: 'string' },
+          { id: 'l1', name: 'texto_resposta', value: expr("={{ (() => { let t = ($json.output || $json.text || '').toString().replace(/[*_#`]/g,'').trim(); const hasSlashDate = /\\d{1,2}\\/\\d{1,2}\\/\\d{4}/.test(t); const inventsWrittenDate = /\\b\\d{1,2}\\s+de\\s+[a-zàâãéêíóôõúç]/i.test(t); const claimsSchedule = /\\b(est[aá] agendad|confirmad|reuni[aã]o ser[aá]|nos vemos)\\b/i.test(t); if (inventsWrittenDate && !hasSlashDate) { t = 'Deixa eu confirmar a data exata na agenda e já te retorno com dia/mês/ano, combinado?'; } else if (claimsSchedule && !hasSlashDate) { t = 'Vou registrar na agenda e já te confirmo com a data certinha (dia/mês/ano) e horário.'; } return t.slice(0, 400); })() }}"), type: 'string' },
         ],
       },
     },
