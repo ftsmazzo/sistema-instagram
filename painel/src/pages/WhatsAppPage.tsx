@@ -75,6 +75,20 @@ function statusLabel(status: string): string {
   return map[status] ?? status;
 }
 
+function agentDisplayName(form: AgentForm): string {
+  return form.agent_nome.trim() || "Nome da empresa";
+}
+
+function objetivosLabels(ids: WhatsappObjetivo[]): string[] {
+  return ids.map((id) => OBJETIVOS.find((o) => o.id === id)?.label).filter((l): l is string => Boolean(l));
+}
+
+function promptSummary(prompt: string): string {
+  const t = prompt.trim();
+  if (!t) return "Template padrão da empresa";
+  return t.length > 120 ? `${t.slice(0, 120)}…` : t;
+}
+
 export function WhatsAppPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -89,6 +103,8 @@ export function WhatsAppPage() {
   const [connection, setConnection] = useState<WhatsappConnectionRes | null>(null);
   const [evolutionConfigured, setEvolutionConfigured] = useState(true);
   const [agentForm, setAgentForm] = useState<AgentForm>(emptyAgentForm);
+  const [savedAgent, setSavedAgent] = useState<AgentForm>(emptyAgentForm);
+  const [editingAgent, setEditingAgent] = useState(false);
   const [leads, setLeads] = useState<LeadListItemRes[]>([]);
   const [leadsTotal, setLeadsTotal] = useState(0);
 
@@ -117,13 +133,16 @@ export function WhatsAppPage() {
     setEvolutionConfigured(wa.evolution_configured);
     setInstanceName(wa.instance?.instance_name ?? "");
     setConnection(null);
-    setAgentForm({
+    const loadedAgent: AgentForm = {
       agent_ativo: wa.instance?.agent_ativo ?? false,
       agent_nome: wa.instance?.agent_nome ?? "",
       agent_prompt: wa.instance?.agent_prompt ?? "",
       objetivos: wa.instance?.objetivos?.length ? wa.instance.objetivos : [...DEFAULT_OBJETIVOS],
       delay_primeira_msg_minutos: wa.instance?.delay_primeira_msg_minutos ?? 20,
-    });
+    };
+    setAgentForm(loadedAgent);
+    setSavedAgent(loadedAgent);
+    setEditingAgent(!wa.instance?.instance_name);
     setLeads(leadsRes.leads);
     setLeadsTotal(leadsRes.total);
 
@@ -262,6 +281,18 @@ export function WhatsAppPage() {
     }
   };
 
+  const startEditAgent = () => {
+    setAgentForm({ ...savedAgent });
+    setEditingAgent(true);
+    setSaved(false);
+  };
+
+  const cancelEditAgent = () => {
+    setAgentForm({ ...savedAgent });
+    setEditingAgent(false);
+    setError(null);
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError(null);
@@ -271,6 +302,8 @@ export function WhatsAppPage() {
         instance_name: instanceName.trim() || undefined,
         ...agentForm,
       });
+      setSavedAgent({ ...agentForm });
+      setEditingAgent(false);
       setSaved(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao salvar.");
@@ -283,6 +316,7 @@ export function WhatsAppPage() {
   const isConnected = connectionState === "open";
   const isConnecting = connectionState === "connecting";
   const hasInstanceName = Boolean(instanceName.trim());
+  const showAgentCard = hasInstanceName && !editingAgent;
   const qrSrc = !isConnected ? qrImageSrc(connection) : null;
 
   if (needLogin) {
@@ -535,86 +569,159 @@ export function WhatsAppPage() {
           </section>
 
           <section className="card space-y-4">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">Agente WhatsApp</h2>
-              <p className="mt-1 text-sm text-gray-600">
-                Comportamento do assistente após a conexão. Salve quando quiser — não precisa reconectar.
-              </p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Agente WhatsApp</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  Comportamento do assistente após a conexão. Salve quando quiser — não precisa reconectar.
+                </p>
+              </div>
+              {showAgentCard && (
+                <span
+                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                    savedAgent.agent_ativo ? "bg-violet-100 text-violet-800" : "bg-gray-100 text-gray-700"
+                  }`}
+                >
+                  {savedAgent.agent_ativo ? "Ativo" : "Inativo"}
+                </span>
+              )}
             </div>
 
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={agentForm.agent_ativo}
-                onChange={(e) => setAgentForm((f) => ({ ...f, agent_ativo: e.target.checked }))}
-              />
-              <span className="font-medium text-gray-800">Agente WhatsApp ativo</span>
-            </label>
-
-            <label className="block text-sm md:max-w-xs">
-              <span className="font-medium text-gray-700">Delay da 1ª mensagem da IA (minutos)</span>
-              <input
-                type="number"
-                min={0}
-                max={1440}
-                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                value={agentForm.delay_primeira_msg_minutos}
-                onChange={(e) =>
-                  setAgentForm((f) => ({
-                    ...f,
-                    delay_primeira_msg_minutos: Math.min(1440, Math.max(0, Number(e.target.value) || 0)),
-                  }))
-                }
-              />
-              <span className="mt-1 block text-xs text-gray-500">
-                Após a boas-vindas no Zap. Se o lead responder antes, a IA entra na hora. 0 = imediato.
-              </span>
-            </label>
-
-            <label className="block text-sm">
-              <span className="font-medium text-gray-700">Nome do agente (opcional)</span>
-              <input
-                className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                value={agentForm.agent_nome}
-                onChange={(e) => setAgentForm((f) => ({ ...f, agent_nome: e.target.value }))}
-                placeholder="Usa nome da empresa se vazio"
-              />
-            </label>
-
-            <label className="block text-sm">
-              <span className="font-medium text-gray-700">Prompt do agente WhatsApp (opcional)</span>
-              <textarea
-                className="mt-1 min-h-[120px] w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                value={agentForm.agent_prompt}
-                onChange={(e) => setAgentForm((f) => ({ ...f, agent_prompt: e.target.value }))}
-                placeholder="Vazio = template padrão com tom da empresa (Administração)"
-              />
-            </label>
-
-            <fieldset>
-              <legend className="text-sm font-medium text-gray-700">Objetivos programáveis</legend>
-              <div className="mt-2 flex flex-wrap gap-3">
-                {OBJETIVOS.map((o) => (
-                  <label key={o.id} className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={agentForm.objetivos.includes(o.id)}
-                      onChange={() => toggleObjetivo(o.id)}
-                    />
-                    {o.label}
-                  </label>
-                ))}
+            {showAgentCard ? (
+              <div className="flex flex-wrap items-start gap-4 rounded-xl border border-violet-200 bg-violet-50/40 p-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-violet-200 bg-violet-100 text-xl font-bold text-violet-700">
+                  AI
+                </div>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <p className="font-semibold text-gray-900">{agentDisplayName(savedAgent)}</p>
+                  <p className="text-sm text-gray-600">
+                    Delay da 1ª mensagem:{" "}
+                    <span className="font-medium text-gray-800">
+                      {savedAgent.delay_primeira_msg_minutos === 0
+                        ? "imediato"
+                        : `${savedAgent.delay_primeira_msg_minutos} min`}
+                    </span>
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Refinamentos: <span className="text-gray-800">{promptSummary(savedAgent.agent_prompt)}</span>
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {objetivosLabels(savedAgent.objetivos).map((label) => (
+                      <span
+                        key={label}
+                        className="rounded-md bg-white/80 px-2 py-0.5 text-xs font-medium text-violet-800 ring-1 ring-violet-200"
+                      >
+                        {label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={startEditAgent}
+                  className="ml-auto rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                >
+                  Editar
+                </button>
               </div>
-            </fieldset>
+            ) : (
+              <div className="space-y-4 rounded-xl border border-gray-200 bg-gray-50/40 p-4">
+                {!hasInstanceName && (
+                  <p className="text-sm text-amber-800">
+                    Configure primeiro a instância WhatsApp acima para salvar o agente.
+                  </p>
+                )}
 
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving || !instanceName.trim()}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
-            >
-              {saving ? "Salvando…" : "Salvar configuração"}
-            </button>
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={agentForm.agent_ativo}
+                    onChange={(e) => setAgentForm((f) => ({ ...f, agent_ativo: e.target.checked }))}
+                  />
+                  <span className="font-medium text-gray-800">Agente WhatsApp ativo</span>
+                </label>
+
+                <label className="block text-sm md:max-w-xs">
+                  <span className="font-medium text-gray-700">Delay da 1ª mensagem da IA (minutos)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={1440}
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    value={agentForm.delay_primeira_msg_minutos}
+                    onChange={(e) =>
+                      setAgentForm((f) => ({
+                        ...f,
+                        delay_primeira_msg_minutos: Math.min(1440, Math.max(0, Number(e.target.value) || 0)),
+                      }))
+                    }
+                  />
+                  <span className="mt-1 block text-xs text-gray-500">
+                    Após a boas-vindas no Zap. Se o lead responder antes, a IA entra na hora. 0 = imediato.
+                  </span>
+                </label>
+
+                <label className="block text-sm">
+                  <span className="font-medium text-gray-700">Nome do agente (opcional)</span>
+                  <input
+                    className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    value={agentForm.agent_nome}
+                    onChange={(e) => setAgentForm((f) => ({ ...f, agent_nome: e.target.value }))}
+                    placeholder="Usa nome da empresa se vazio"
+                  />
+                </label>
+
+                <label className="block text-sm">
+                  <span className="font-medium text-gray-700">Refinamentos e regras (opcional)</span>
+                  <textarea
+                    className="mt-1 min-h-[120px] w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                    value={agentForm.agent_prompt}
+                    onChange={(e) => setAgentForm((f) => ({ ...f, agent_prompt: e.target.value }))}
+                    placeholder="Complementa o prompt profissional interno — não substitui. Vazio = só o template da empresa."
+                  />
+                </label>
+
+                <fieldset>
+                  <legend className="text-sm font-medium text-gray-700">Objetivos programáveis</legend>
+                  <div className="mt-2 flex flex-wrap gap-3">
+                    {OBJETIVOS.map((o) => (
+                      <label
+                        key={o.id}
+                        className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={agentForm.objetivos.includes(o.id)}
+                          onChange={() => toggleObjetivo(o.id)}
+                        />
+                        {o.label}
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+
+                <div className="flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleSave}
+                    disabled={saving || !instanceName.trim()}
+                    className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                  >
+                    {saving ? "Salvando…" : "Salvar configuração"}
+                  </button>
+                  {hasInstanceName && (
+                    <button
+                      type="button"
+                      onClick={cancelEditAgent}
+                      disabled={saving}
+                      className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-white disabled:opacity-60"
+                    >
+                      Cancelar
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </section>
 
           <section className="card">
