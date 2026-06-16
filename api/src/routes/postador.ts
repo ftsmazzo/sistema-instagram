@@ -3,7 +3,7 @@ import { createReadStream } from "fs";
 import { stat } from "fs/promises";
 import { join } from "path";
 import multipart from "@fastify/multipart";
-import { gerarCaption as gerarCaptionIA, refazerCaption as refazerCaptionIA, gerarJornadaPorLink, gerarCTAImagem } from "../services/caption.js";
+import { gerarCaption as gerarCaptionIA, refazerCaption as refazerCaptionIA, gerarJornadaPorLink, gerarCTAImagem, type GerarCaptionOptions } from "../services/caption.js";
 import { uploadMedia, getUploadsDir, isStorageConfigured } from "../services/storage.js";
 import { rasparPaginaImovel, montarDescricaoParaCaption, baixarEEnviarParaCloudinary } from "../services/imovel.js";
 import { publishToInstagram, publishCarouselToInstagram } from "../services/instagram.js";
@@ -44,9 +44,10 @@ type PostadorIaBody = {
   marca_nome?: string;
 };
 
-function captionOptionsFromBody(body: PostadorIaBody) {
+function captionOptionsFromBody(body: PostadorIaBody): GerarCaptionOptions {
   const provider = body.provider?.trim();
-  const providerNorm = provider === "claude" ? "claude" : provider === "openai" ? "openai" : undefined;
+  const providerNorm: GerarCaptionOptions["provider"] =
+    provider === "claude" ? "claude" : provider === "openai" ? "openai" : undefined;
   return {
     provider: providerNorm,
     model: body.model?.trim() || undefined,
