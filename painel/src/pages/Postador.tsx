@@ -58,6 +58,7 @@ export function Postador() {
   const [provedorVideo, setProvedorVideo] = useState<"slideshow" | "veo" | "sora">("slideshow");
   const [duracaoVideo, setDuracaoVideo] = useState<4 | 8 | 12>(8);
   const [ultimoCustoVideo, setUltimoCustoVideo] = useState<number | null>(null);
+  const [ultimoCustoPost, setUltimoCustoPost] = useState<number | null>(null);
   const [instrucoesImagem, setInstrucoesImagem] = useState("");
   const [textosCarrossel, setTextosCarrossel] = useState<string[]>([]);
   const [caption, setCaption] = useState<string | null>(null);
@@ -99,6 +100,8 @@ export function Postador() {
 
   const nichePack = niches.find((n) => n.id === nicheId);
   const templatesDoNicho = nichePack?.templates ?? [];
+  const templateSelecionado = templatesDoNicho.find((t) => t.key === templateKey);
+  const isCarrosselTemplate = templateSelecionado?.formato === "carrossel";
 
   const nicheParams = (): PostadorNicheParams => ({
     niche_id: nicheId || undefined,
@@ -206,10 +209,29 @@ export function Postador() {
           urlGerada = resVid.media_url;
           tipoGerado = "REELS";
           setUltimoCustoVideo(resVid.custo_estimado_usd);
+          setUltimoCustoPost(null);
+        } else if (isCarrosselTemplate) {
+          const resCar = await api.postador.gerarCarrossel({
+            brief: prompt,
+            provider: provedorImagem,
+            aplicar_moldura: true,
+            ...nicheParams(),
+          });
+          setCaption(resCar.caption);
+          setMediaUrls(resCar.media_urls);
+          setMediaUrl(null);
+          setMediaType("CAROUSEL");
+          setPreviewUrls(resCar.media_urls);
+          setTextosCarrossel(resCar.slide_texts);
+          setUltimoCustoVideo(null);
+          setUltimoCustoPost(resCar.custo_estimado_usd);
+          setStep("review");
+          return;
         } else {
           const resImg = await api.postador.gerarImagem(prompt, provedorImagem, nicheParams());
           urlGerada = resImg.media_url;
           setUltimoCustoVideo(null);
+          setUltimoCustoPost(null);
         }
       }
       const files = arquivos.length ? arquivos : undefined;
@@ -963,6 +985,12 @@ export function Postador() {
                     </div>
                   )}
 
+                  {isCarrosselTemplate && criarMidiaIA && tipoMidiaIA === "imagem" && (
+                    <p className="text-xs text-indigo-800 bg-indigo-50 border border-indigo-200 rounded-md px-3 py-2">
+                      Template de carrossel ({templateSelecionado?.slides} slides): a IA planeja roteiro visual + gera cada slide em modo criativo + aplica moldura com headline. Legenda curta vem pronta na revisão. Tempo estimado: 1–3 min.
+                    </p>
+                  )}
+
                   <button
                     type="button"
                     onClick={handleGerarCaption}
@@ -970,10 +998,14 @@ export function Postador() {
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:pointer-events-none"
                   >
                     {loading
-                      ? tipoMidiaIA === "video" && criarMidiaIA
-                        ? "Gerando vídeo (pode levar alguns minutos)..."
-                        : "Gerando..."
-                      : "Gerar legenda e seguir para revisão"}
+                      ? isCarrosselTemplate && criarMidiaIA && tipoMidiaIA === "imagem"
+                        ? `Gerando carrossel (${templateSelecionado?.slides ?? "…"} slides)...`
+                        : tipoMidiaIA === "video" && criarMidiaIA
+                          ? "Gerando vídeo (pode levar alguns minutos)..."
+                          : "Gerando..."
+                      : isCarrosselTemplate && criarMidiaIA && tipoMidiaIA === "imagem"
+                        ? "Gerar carrossel com IA e revisar"
+                        : "Gerar legenda e seguir para revisão"}
                   </button>
                 </div>
               )}
@@ -1079,6 +1111,11 @@ export function Postador() {
                 Custo estimado deste vídeo (dev): ~US$ {ultimoCustoVideo.toFixed(2)}
               </p>
             )}
+            {ultimoCustoPost != null && mediaType === "CAROUSEL" && (
+              <p className="text-xs text-gray-500 mt-1">
+                Custo estimado deste carrossel: ~US$ {ultimoCustoPost.toFixed(2)} ({previewUrls.length} slides)
+              </p>
+            )}
             {previewUrls.length > 1 && (
               <>
                 <div className="flex gap-2 flex-wrap">
@@ -1087,8 +1124,12 @@ export function Postador() {
                   ))}
                 </div>
                 <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  <p className="text-sm font-medium text-gray-700 mb-2">Textos para o Carrossel (Opcional)</p>
-                  <p className="text-xs text-gray-500 mb-4">Adicione títulos atrativos para as imagens. O sistema aplicará um design profissional automaticamente com o texto inserido.</p>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Textos do carrossel</p>
+                  <p className="text-xs text-gray-500 mb-4">
+                    {ultimoCustoPost != null
+                      ? "Headlines já aplicadas na moldura. Edite abaixo e clique em reaplicar se quiser ajustar."
+                      : "Adicione títulos atrativos para as imagens. O sistema aplicará um design profissional automaticamente."}
+                  </p>
                   <div className="space-y-2 mb-2">
                     {previewUrls.map((_, i) => (
                       <div key={i} className="flex items-center gap-2">

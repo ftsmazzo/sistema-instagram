@@ -6,10 +6,12 @@ import {
   buildCtaOverlaySystemPrompt,
   buildImagePrompt,
   buildImageEnrichSystemPrompt,
+  buildIngredientesSystemPrompt,
   getNichePack,
   resolveImageMode,
   type PostadorCaptionContext,
   type PostadorImageMode,
+  type PostadorIngredientes,
 } from "./postadorNiches.js";
 
 // Chaves de API (obrigatórias conforme o provedor usado). Escolha de provedor/modelo vem do painel.
@@ -271,4 +273,53 @@ export async function enriquecerPromptImagem(
   const user = `Brief estruturado:\n${base}\n\nPrompt cinematográfico em inglês:`;
   const enriched = await complete(system, user, options?.provider, options?.model ?? "gpt-4o-mini");
   return enriched.replace(/^["'`]|["'`]$/g, "").replace(/\s+/g, " ").trim().slice(0, 1200);
+}
+
+function parseIngredientesJson(raw: string, expectedSlides: number): PostadorIngredientes {
+  const match = raw.match(/\{[\s\S]*\}/);
+  const jsonStr = match ? match[0] : raw.replace(/```json/gi, "").replace(/```/g, "").trim();
+  const parsed = JSON.parse(jsonStr) as Record<string, unknown>;
+  const slidesRaw = Array.isArray(parsed.slides) ? parsed.slides : [];
+  const slides = slidesRaw
+    .filter((s): s is Record<string, unknown> => Boolean(s && typeof s === "object"))
+    .map((s) => ({
+      titulo: String(s.titulo ?? s.title ?? "").trim(),
+      corpo: String(s.corpo ?? s.body ?? "").trim(),
+      visual_hint: String(s.visual_hint ?? s.visual ?? s.cena ?? "").trim(),
+    }))
+    .filter((s) => s.titulo || s.visual_hint);
+
+  if (slides.length < expectedSlides) {
+    throw new Error(`Esperados ${expectedSlides} slides, recebidos ${slides.length}.`);
+  }
+
+  const hashtagsRaw = Array.isArray(parsed.hashtags) ? parsed.hashtags : [];
+  return {
+    hook: String(parsed.hook ?? "").trim(),
+    corpo: String(parsed.corpo ?? parsed.body ?? "").trim(),
+    cta_comentario: String(parsed.cta_comentario ?? parsed.cta ?? "").trim(),
+    hashtags: hashtagsRaw.map(String).filter(Boolean),
+    slides: slides.slice(0, expectedSlides),
+  };
+}
+
+/** Planeja ingredientes + roteiro visual de cada slide do carrossel. */
+export async function gerarIngredientesCarrossel(
+  brief: string,
+  options?: GerarCaptionOptions
+): Promise<PostadorIngredientes> {
+  const ctx = captionContextFromOptions(options);
+  if (ctx.template.formato !== "carrossel") {
+    throw new Error("Template atual não é carrossel.");
+  }
+  const system = buildIngredientesSystemPrompt(ctx);
+  const user = `Brief do post:\n\n""" ${brief} """\n\nRetorne o JSON com exatamente ${ctx.template.slides} slides:`;
+  const resText = await completeLong(system, user, options?.provider, options?.model ?? "gpt-4o-mini");
+  try {
+    return parseIngredientesJson(resText, ctx.template.slides);
+  } catch (err) {
+    console.error("Erro parse ingredientes carrossel:", resText);
+    const detail = err instanceof Error ? err.message : "";
+    throw new Error(detail ? `Ingredientes inválidos: ${detail}` : "A IA não retornou ingredientes em JSON válido.");
+  }
 }

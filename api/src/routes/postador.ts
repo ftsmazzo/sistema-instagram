@@ -10,6 +10,7 @@ import { publishToInstagram, publishCarouselToInstagram } from "../services/inst
 import { gerarImagemComIA } from "../services/imageGen.js";
 import { gerarVideoComIA, VIDEO_PROVIDERS_INFO, type VideoGenProvider, type VideoDuration } from "../services/videoGen.js";
 import { adicionarTextoCarrossel } from "../services/carouselTexto.js";
+import { gerarCarrosselCompleto } from "../services/postadorCarousel.js";
 import {
   listNichesForApi,
   suggestNicheFromSegmento,
@@ -477,6 +478,46 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
         return reply.status(503).send({ error: msg });
       }
       fastify.log.error({ err }, "gerar-imagem");
+      return reply.status(500).send({ error: msg });
+    }
+  });
+
+  // POST /api/postador/gerar-carrossel — Fase 2: ingredientes + N imagens + moldura + legenda
+  fastify.post("/gerar-carrossel", async (request, reply) => {
+    const body = request.body as {
+      brief?: string;
+      prompt?: string;
+      provider?: string;
+      aplicar_moldura?: boolean;
+    } & PostadorIaBody;
+    const brief = (body?.brief ?? body?.prompt ?? "").trim();
+    if (!brief) {
+      return reply.status(400).send({ error: "Campo 'brief' é obrigatório (descrição do post)." });
+    }
+    const provider = (body?.provider === "openai" ? "openai" : "gemini") as "openai" | "gemini";
+    const iaOpts = captionOptionsFromBody(body);
+    try {
+      const result = await gerarCarrosselCompleto({
+        brief,
+        provider,
+        aplicarMoldura: body.aplicar_moldura !== false,
+        options: iaOpts,
+      });
+      return reply.send(result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro ao gerar carrossel.";
+      if (
+        msg.includes("OPENAI_API_KEY") ||
+        msg.includes("GEMINI_API_KEY") ||
+        msg.includes("Cloudinary") ||
+        msg.includes("armazenamento")
+      ) {
+        return reply.status(503).send({ error: msg });
+      }
+      if (msg.includes("Template") || msg.includes("carrossel") || msg.includes("Brief")) {
+        return reply.status(400).send({ error: msg });
+      }
+      fastify.log.error({ err }, "gerar-carrossel");
       return reply.status(500).send({ error: msg });
     }
   });

@@ -418,6 +418,23 @@ export const api = {
         method: "POST",
         body: { prompt, provider: provider ?? "gemini", image_mode, ...niche },
       }),
+    gerarCarrossel: (body: {
+      brief: string;
+      provider?: "openai" | "gemini";
+      aplicar_moldura?: boolean;
+    } & PostadorNicheParams) =>
+      fetchJson<{
+        media_type: "CAROUSEL";
+        media_urls: string[];
+        slide_texts: string[];
+        caption: string;
+        overlay_applied: boolean;
+        slides_count: number;
+        custo_estimado_usd: number;
+      }>("/api/postador/gerar-carrossel", {
+        method: "POST",
+        body: { ...body, provider: body.provider ?? "gemini" },
+      }),
     getVideoProviders: () =>
       fetchJson<{
         providers: Array<{

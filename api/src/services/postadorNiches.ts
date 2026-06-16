@@ -672,3 +672,65 @@ Tom: ${getNichePack(ctx.nicheId).tom_legenda}
 Inspire-se no hook do template: "${ctx.template.hook_exemplo}"
 Sem hashtags, aspas ou emojis. Retorne só a frase.`;
 }
+
+export function buildIngredientesSystemPrompt(ctx: PostadorCaptionContext): string {
+  const pack = getNichePack(ctx.nicheId);
+  const { template } = ctx;
+  const marca = ctx.marcaNome ? `Marca: ${ctx.marcaNome}.` : "";
+  return `Planejador de carrossel Instagram 2026 (${pack.label}, template "${template.label}").
+
+${marca}
+Tom: ${pack.tom_legenda}
+Paleta visual: ${pack.paleta_sugerida.join(", ")}
+
+Retorne APENAS JSON válido (sem markdown):
+{
+  "hook": "1 linha scroll-stopping",
+  "corpo": "2-3 linhas curtas para a legenda do post",
+  "cta_comentario": "1 frase convidando a comentar",
+  "hashtags": ["tag1", "tag2"],
+  "slides": [
+    {
+      "titulo": "4-7 palavras para overlay na imagem",
+      "corpo": "1 frase do propósito deste slide",
+      "visual_hint": "cena editorial/mood — texturas, luz, ambiente; SEM embalagem ou packshot"
+    }
+  ]
+}
+
+OBRIGATÓRIO:
+- Exatamente ${template.slides} slides no array "slides"
+- Slide 1 = gancho visual; meio = valor/prova; último = CTA ou fechamento
+- Cada visual_hint: cena criativa distinta mas paleta coesa (${pack.paleta_sugerida.join(", ")})
+- titulo: curto, impactante, max 45 caracteres
+- hashtags: max ${template.hashtags_max}, sem # no JSON
+- PROIBIDO inventar preços ou promessas não citadas no briefing`;
+}
+
+export function montarCaptionDeIngredientes(ing: PostadorIngredientes, ctx: PostadorCaptionContext): string {
+  const maxTags = ctx.template.hashtags_max;
+  const tags = ing.hashtags
+    .slice(0, maxTags)
+    .map((h) => (h.startsWith("#") ? h : `#${h.replace(/^#/, "")}`))
+    .join(" ");
+  const parts = [ing.hook.trim(), ing.corpo.trim(), ing.cta_comentario.trim(), tags].filter(Boolean);
+  return parts.join("\n\n").slice(0, ctx.template.legenda_max_chars);
+}
+
+export function buildCarouselSlideBrief(
+  slide: { titulo: string; corpo: string; visual_hint: string },
+  slideIndex: number,
+  totalSlides: number,
+  ctx: PostadorCaptionContext
+): string {
+  const pack = getNichePack(ctx.nicheId);
+  return [
+    `Slide ${slideIndex + 1} de ${totalSlides} do carrossel "${ctx.template.label}".`,
+    `Propósito: ${slide.corpo.trim()}`,
+    `Cena: ${slide.visual_hint.trim()}`,
+    `Série coesa — mesma paleta (${pack.paleta_sugerida.join(", ")}) e tom ${pack.tom_visual}.`,
+    slideIndex === totalSlides - 1 ? "Último slide: sensação de fechamento/CTA visual." : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
