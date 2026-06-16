@@ -51,6 +51,7 @@ export function startCronJob(fastify: FastifyInstance) {
             id_container: result.id_container,
             link_post: result.link_post,
             data_post: dataPost,
+            organization_id: row.organization_id,
           });
 
           const mediaUrlsArr = typeof row.media_urls === "string" ? JSON.parse(row.media_urls) : row.media_urls;

@@ -34,6 +34,42 @@ export function clampDelayPrimeiraMsg(minutes: number | undefined | null): numbe
   return Math.min(Math.max(Math.round(n), 0), 1440);
 }
 
+export class WhatsappInstanceNameTakenError extends Error {
+  readonly code = "INSTANCE_NAME_TAKEN";
+
+  constructor(instanceName: string) {
+    super(
+      `O nome "${instanceName}" já está em uso por outra empresa. Escolha outro (ex.: sua-empresa-wa).`
+    );
+    this.name = "WhatsappInstanceNameTakenError";
+  }
+}
+
+export async function getWhatsappInstanceByName(instanceName: string): Promise<WhatsappInstanceRecord | null> {
+  await ensureTables();
+  const pool = getPool();
+  const name = instanceName.trim();
+  if (!name) return null;
+  const r = await pool.query(
+    `SELECT id, organization_id, instance_name, evolution_base_url, agent_ativo,
+            COALESCE(agent_nome, '') AS agent_nome, COALESCE(agent_prompt, '') AS agent_prompt,
+            objetivos, status, COALESCE(delay_primeira_msg_minutos, 20) AS delay_primeira_msg_minutos,
+            created_at, updated_at
+     FROM whatsapp_instances WHERE instance_name = $1 LIMIT 1`,
+    [name]
+  );
+  const row = r.rows[0];
+  return row ? rowToRecord(row) : null;
+}
+
+/** Garante que o nome da instância não pertence a outra organização. */
+export async function assertWhatsappInstanceNameAvailable(orgId: string, instanceName: string): Promise<void> {
+  const existing = await getWhatsappInstanceByName(instanceName);
+  if (existing && existing.organization_id !== orgId) {
+    throw new WhatsappInstanceNameTakenError(instanceName);
+  }
+}
+
 function rowToRecord(row: {
   id: string;
   organization_id: string;
@@ -91,6 +127,8 @@ export async function upsertWhatsappInstance(
   const pool = getPool();
   const instanceName = input.instance_name.trim();
   if (!instanceName) throw new Error("instance_name obrigatório");
+
+  await assertWhatsappInstanceNameAvailable(orgId, instanceName);
 
   const delay = clampDelayPrimeiraMsg(input.delay_primeira_msg_minutos);
 

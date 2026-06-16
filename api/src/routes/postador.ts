@@ -10,7 +10,7 @@ import { publishToInstagram, publishCarouselToInstagram } from "../services/inst
 import { gerarImagemComIA } from "../services/imageGen.js";
 import { adicionarTextoCarrossel } from "../services/carouselTexto.js";
 import { getContaParaPublicar } from "../store/config.js";
-import { resolveConfigStore, getOrgIdFromRequest } from "../context/workspaceConfig.js";
+import { resolveConfigStore, getOrgIdFromRequest, resolveOrgIdForPostador } from "../context/workspaceConfig.js";
 import { upsertPostagemFromPostador } from "../store/crmPostagens.js";
 import { appendCronograma, listCronograma, deleteCronograma } from "../store/cronograma.js";
 import { listAgendados, addAgendado, getAgendado, deleteAgendado } from "../store/agendados.js";
@@ -90,22 +90,25 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
   });
 
   // GET /api/postador/cronograma — lista de posts finalizados (para cronograma/histórico)
-  fastify.get("/cronograma", async (_request, reply) => {
-    const list = await listCronograma();
+  fastify.get("/cronograma", async (request, reply) => {
+    const orgId = await getOrgIdFromRequest(fastify, request);
+    const list = await listCronograma(orgId);
     return reply.send({ cronograma: list, total: list.length });
   });
 
   // POST /api/postador/cronograma/:id/delete — excluir item do histórico
   fastify.post<{ Params: { id: string } }>("/cronograma/:id/delete", async (request, reply) => {
     const { id } = request.params;
+    const orgId = await getOrgIdFromRequest(fastify, request);
     console.log(`[API] DELETE cronograma: ${id}`);
-    const ok = await deleteCronograma(id);
+    const ok = await deleteCronograma(id, orgId);
     return reply.send({ ok });
   });
 
   // GET /api/postador/agendados — lista de posts salvos para agendar
-  fastify.get("/agendados", async (_request, reply) => {
-    const list = await listAgendados();
+  fastify.get("/agendados", async (request, reply) => {
+    const orgId = await getOrgIdFromRequest(fastify, request);
+    const list = await listAgendados(orgId);
     return reply.send({ agendados: list, total: list.length });
   });
 
@@ -138,6 +141,10 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
+      const orgId = await resolveOrgIdForPostador(fastify, request, conta_id);
+      if (!orgId) {
+        return reply.status(400).send({ error: "Faça login para salvar agendamentos." });
+      }
       const item = await addAgendado({
         caption,
         media_url: media_type === "CAROUSEL" ? null : media_url,
@@ -145,7 +152,8 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
         media_type,
         data_agendamento,
         conta_id,
-        status: data_agendamento ? 'pendente' : 'draft'
+        status: data_agendamento ? "pendente" : "draft",
+        organization_id: orgId,
       });
       return reply.send({ ok: true, agendado: item });
     } catch (err) {
@@ -157,8 +165,9 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/postador/agendados/:id/delete
   fastify.post<{ Params: { id: string } }>("/agendados/:id/delete", async (request, reply) => {
     const { id } = request.params;
+    const orgId = await getOrgIdFromRequest(fastify, request);
     console.log(`[API] DELETE agendado: ${id}`);
-    const ok = await deleteAgendado(id);
+    const ok = await deleteAgendado(id, orgId);
     if (!ok) return reply.status(404).send({ error: "Agendado não encontrado." });
     return reply.send({ ok: true });
   });
@@ -168,7 +177,8 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
     const { id } = request.params;
     console.log(`[API] POST publicar agendado: ${id}`);
     const body = request.body as { conta_id?: string };
-    const agendado = await getAgendado(id);
+    const orgId = await resolveOrgIdForPostador(fastify, request, body?.conta_id);
+    const agendado = await getAgendado(id, orgId);
     if (!agendado) {
       return reply.status(404).send({ error: "Agendado não encontrado." });
     }
@@ -181,7 +191,6 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
     const { token, igUserId } = creds;
-    const orgId = await getOrgIdFromRequest(fastify, request);
 
     try {
       if (agendado.media_type === "CAROUSEL" && agendado.media_urls?.length) {
@@ -194,6 +203,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
           id_container: result.id_container,
           link_post: result.link_post,
           data_post: dataPost,
+          organization_id: orgId,
         });
         await recordCrmPostagemAposPublicar(fastify, orgId, creds, {
           id_media: result.id_media,
@@ -203,7 +213,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
           link_post: result.link_post,
           data_post: dataPost,
         });
-        await deleteAgendado(id);
+        await deleteAgendado(id, orgId);
         return reply.send({ ok: true, id_container: result.id_container, id_media: result.id_media, link_post: result.link_post, message: "Carrossel publicado." });
       }
       const mediaUrl = agendado.media_url;
@@ -219,6 +229,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
         id_container: result.id_container,
         link_post: result.link_post,
         data_post: dataPost,
+        organization_id: orgId,
       });
       await recordCrmPostagemAposPublicar(fastify, orgId, creds, {
         id_media: result.id_media,
@@ -228,7 +239,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
         link_post: result.link_post,
         data_post: dataPost,
       });
-      await deleteAgendado(id);
+      await deleteAgendado(id, orgId);
       return reply.send({ ok: true, id_container: result.id_container, id_media: result.id_media, link_post: result.link_post, message: "Post publicado." });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao publicar.";
@@ -559,7 +570,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
     const { token, igUserId } = creds;
-    const orgId = await getOrgIdFromRequest(fastify, request);
+    const orgId = await resolveOrgIdForPostador(fastify, request, body?.conta_id);
 
     try {
       if (isCarousel) {
@@ -572,6 +583,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
           id_container: result.id_container,
           link_post: result.link_post,
           data_post: dataPost,
+          organization_id: orgId,
         });
         await recordCrmPostagemAposPublicar(fastify, orgId, creds, {
           id_media: result.id_media,
@@ -598,6 +610,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
         id_container: result.id_container,
         link_post: result.link_post,
         data_post: dataPost,
+        organization_id: orgId,
       });
       await recordCrmPostagemAposPublicar(fastify, orgId, creds, {
         id_media: result.id_media,

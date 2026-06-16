@@ -15,6 +15,7 @@ import {
   backfillLeadWhatsappDigits,
   getWhatsappInstanceForOrg,
   upsertWhatsappInstance,
+  WhatsappInstanceNameTakenError,
 } from "../store/whatsappInstance.js";
 import type { WhatsappObjetivo } from "../services/whatsappAgentDefaults.js";
 
@@ -118,18 +119,25 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
       });
     }
 
-    const instance = await upsertWhatsappInstance(u.orgId, {
-      instance_name: instanceName,
-      evolution_base_url: evolutionBaseUrl,
-      agent_ativo: body.agent_ativo,
-      agent_nome: body.agent_nome,
-      agent_prompt: body.agent_prompt,
-      objetivos: body.objetivos,
-      status: body.status ?? existing?.status,
-      delay_primeira_msg_minutos: body.delay_primeira_msg_minutos,
-    });
+    try {
+      const instance = await upsertWhatsappInstance(u.orgId, {
+        instance_name: instanceName,
+        evolution_base_url: evolutionBaseUrl,
+        agent_ativo: body.agent_ativo,
+        agent_nome: body.agent_nome,
+        agent_prompt: body.agent_prompt,
+        objetivos: body.objetivos,
+        status: body.status ?? existing?.status,
+        delay_primeira_msg_minutos: body.delay_primeira_msg_minutos,
+      });
 
-    return reply.send({ saved: true, instance });
+      return reply.send({ saved: true, instance });
+    } catch (err) {
+      if (err instanceof WhatsappInstanceNameTakenError) {
+        return reply.status(409).send({ error: err.message, code: err.code });
+      }
+      throw err;
+    }
   });
 
   /**
@@ -202,6 +210,9 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
         webhook_synced: true,
       });
     } catch (err) {
+      if (err instanceof WhatsappInstanceNameTakenError) {
+        return reply.status(409).send({ ok: false, error: err.message, code: err.code });
+      }
       const message = err instanceof Error ? err.message : "Falha ao iniciar conexão WhatsApp.";
       request.log.warn({ err, instance_name: instanceName }, "whatsapp/connect falhou");
       return reply.status(502).send({ ok: false, error: message });

@@ -327,6 +327,48 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_wa_inbound_queue_dedup
   WHERE message_id_ext IS NOT NULL AND message_id_ext <> '';
 `;
 
+/** Postador multi-tenant + nome WA único — espelha api/migrations/013_multitenant_postador_wa_name.sql */
+const MIGRATE_MULTITENANT_POSTADOR_WA = `
+ALTER TABLE postador_cronograma ADD COLUMN IF NOT EXISTS organization_id uuid REFERENCES organizations (id) ON DELETE CASCADE;
+ALTER TABLE postador_agendados ADD COLUMN IF NOT EXISTS organization_id uuid REFERENCES organizations (id) ON DELETE CASCADE;
+
+UPDATE postador_cronograma
+SET organization_id = (SELECT id FROM organizations ORDER BY created_at ASC LIMIT 1)
+WHERE organization_id IS NULL
+  AND EXISTS (SELECT 1 FROM organizations LIMIT 1);
+
+UPDATE postador_agendados
+SET organization_id = (SELECT id FROM organizations ORDER BY created_at ASC LIMIT 1)
+WHERE organization_id IS NULL
+  AND EXISTS (SELECT 1 FROM organizations LIMIT 1);
+
+CREATE INDEX IF NOT EXISTS idx_postador_cronograma_org ON postador_cronograma (organization_id);
+CREATE INDEX IF NOT EXISTS idx_postador_agendados_org ON postador_agendados (organization_id);
+
+DO $$
+DECLARE
+  row_rec RECORD;
+  suffix text;
+BEGIN
+  FOR row_rec IN
+    SELECT id, instance_name, organization_id,
+           ROW_NUMBER() OVER (PARTITION BY instance_name ORDER BY created_at ASC) AS rn
+    FROM whatsapp_instances
+  LOOP
+    IF row_rec.rn > 1 THEN
+      suffix := '-' || LEFT(row_rec.organization_id::text, 8);
+      UPDATE whatsapp_instances
+      SET instance_name = LEFT(row_rec.instance_name, 120 - LENGTH(suffix)) || suffix,
+          updated_at = NOW()
+      WHERE id = row_rec.id;
+    END IF;
+  END LOOP;
+END $$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_whatsapp_instances_name_unique
+  ON whatsapp_instances (instance_name);
+`;
+
 let initDone = false;
 
 export async function ensureTables(): Promise<void> {
@@ -343,5 +385,6 @@ export async function ensureTables(): Promise<void> {
   await p.query(MIGRATE_WHATSAPP_IA_AGENDA);
   await p.query(MIGRATE_N8N_CHAT_HISTORIES_WA);
   await p.query(MIGRATE_WHATSAPP_INBOUND_QUEUE);
+  await p.query(MIGRATE_MULTITENANT_POSTADOR_WA);
   initDone = true;
 }

@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { loadConfig, type ConfigStore } from "../store/config.js";
 import { loadWorkspaceConfigStore } from "../store/workspace.js";
+import { lookupOrganizationIdByInstagramAccount } from "../store/agendados.js";
 
 type JwtUser = { sub: string; orgId: string; email: string };
 
@@ -40,4 +41,16 @@ export async function resolveConfigStore(app: FastifyInstance, request: FastifyR
     // token inválido ou expirado
   }
   return loadConfig();
+}
+
+/** Org do JWT ou inferida pela conta Instagram (Postador multi-tenant). */
+export async function resolveOrgIdForPostador(
+  app: FastifyInstance,
+  request: FastifyRequest,
+  contaId?: string | null
+): Promise<string | null> {
+  const fromJwt = await getOrgIdFromRequest(app, request);
+  if (fromJwt) return fromJwt;
+  if (contaId?.trim()) return lookupOrganizationIdByInstagramAccount(contaId);
+  return null;
 }

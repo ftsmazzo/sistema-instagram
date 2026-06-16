@@ -16,6 +16,10 @@ export type CronogramaItem = {
   created_at: string;
 };
 
+type CronogramaInsert = Omit<CronogramaItem, "id" | "created_at"> & {
+  organization_id?: string | null;
+};
+
 async function ensureCronogramaFile(): Promise<CronogramaItem[]> {
   try {
     const raw = await readFile(CRONOGRAMA_PATH, "utf-8");
@@ -31,11 +35,15 @@ async function listFromFile(): Promise<CronogramaItem[]> {
   return list.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 }
 
-async function listFromDb(): Promise<CronogramaItem[]> {
+async function listFromDb(organizationId: string): Promise<CronogramaItem[]> {
   await ensureTables();
   const pool = getPool();
   const res = await pool.query<CronogramaItem>(
-    "SELECT id, caption, media_url, media_type, id_container, link_post, data_post, created_at::text FROM postador_cronograma ORDER BY created_at DESC"
+    `SELECT id, caption, media_url, media_type, id_container, link_post, data_post, created_at::text
+     FROM postador_cronograma
+     WHERE organization_id = $1::uuid
+     ORDER BY created_at DESC`,
+    [organizationId]
   );
   return res.rows.map((r) => ({
     id: r.id,
@@ -49,12 +57,15 @@ async function listFromDb(): Promise<CronogramaItem[]> {
   }));
 }
 
-export async function listCronograma(): Promise<CronogramaItem[]> {
-  if (isDbConfigured()) return listFromDb();
+export async function listCronograma(organizationId?: string | null): Promise<CronogramaItem[]> {
+  if (isDbConfigured()) {
+    if (!organizationId) return [];
+    return listFromDb(organizationId);
+  }
   return listFromFile();
 }
 
-async function appendToFile(item: Omit<CronogramaItem, "id" | "created_at">): Promise<CronogramaItem> {
+async function appendToFile(item: CronogramaInsert): Promise<CronogramaItem> {
   await mkdir(DATA_DIR, { recursive: true });
   const list = await ensureCronogramaFile();
   const created_at = new Date().toISOString();
@@ -74,14 +85,18 @@ async function appendToFile(item: Omit<CronogramaItem, "id" | "created_at">): Pr
   return full;
 }
 
-async function appendToDb(item: Omit<CronogramaItem, "id" | "created_at">): Promise<CronogramaItem> {
+async function appendToDb(item: CronogramaInsert): Promise<CronogramaItem> {
+  if (!item.organization_id) {
+    throw new Error("organization_id obrigatório para gravar cronograma.");
+  }
   await ensureTables();
   const pool = getPool();
   const id = `post-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   const created_at = new Date().toISOString();
   await pool.query(
-    `INSERT INTO postador_cronograma (id, caption, media_url, media_type, id_container, link_post, data_post, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    `INSERT INTO postador_cronograma (
+       id, caption, media_url, media_type, id_container, link_post, data_post, created_at, organization_id
+     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::uuid)`,
     [
       id,
       item.caption,
@@ -91,6 +106,7 @@ async function appendToDb(item: Omit<CronogramaItem, "id" | "created_at">): Prom
       item.link_post ?? null,
       item.data_post,
       created_at,
+      item.organization_id,
     ]
   );
   return {
@@ -105,22 +121,25 @@ async function appendToDb(item: Omit<CronogramaItem, "id" | "created_at">): Prom
   };
 }
 
-export async function appendCronograma(item: Omit<CronogramaItem, "id" | "created_at">): Promise<CronogramaItem> {
+export async function appendCronograma(item: CronogramaInsert): Promise<CronogramaItem> {
   if (isDbConfigured()) return appendToDb(item);
   return appendToFile(item);
 }
 
-export async function deleteCronograma(id: string): Promise<boolean> {
+export async function deleteCronograma(id: string, organizationId?: string | null): Promise<boolean> {
   if (isDbConfigured()) {
+    if (!organizationId) return false;
     await ensureTables();
     const pool = getPool();
-    const res = await pool.query("DELETE FROM postador_cronograma WHERE id = $1", [id]);
+    const res = await pool.query(
+      "DELETE FROM postador_cronograma WHERE id = $1 AND organization_id = $2::uuid",
+      [id, organizationId]
+    );
     return (res.rowCount ?? 0) > 0;
-  } else {
-    const list = await ensureCronogramaFile();
-    const filtered = list.filter((i) => i.id !== id);
-    if (list.length === filtered.length) return false;
-    await writeFile(CRONOGRAMA_PATH, JSON.stringify(filtered, null, 2), "utf-8");
-    return true;
   }
+  const list = await ensureCronogramaFile();
+  const filtered = list.filter((i) => i.id !== id);
+  if (list.length === filtered.length) return false;
+  await writeFile(CRONOGRAMA_PATH, JSON.stringify(filtered, null, 2), "utf-8");
+  return true;
 }
