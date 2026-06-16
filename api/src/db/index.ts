@@ -302,6 +302,31 @@ BEGIN
 END $$;
 `;
 
+/** Fila inbound WhatsApp — espelha api/migrations/012_whatsapp_inbound_queue.sql */
+const MIGRATE_WHATSAPP_INBOUND_QUEUE = `
+CREATE TABLE IF NOT EXISTS whatsapp_inbound_queue (
+  id                SERIAL PRIMARY KEY,
+  organization_id   uuid NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,
+  instance_name     VARCHAR(128) NOT NULL,
+  telefone          VARCHAR(32) NOT NULL,
+  message_id_ext    VARCHAR(255),
+  message_text      TEXT NOT NULL,
+  batch_key         VARCHAR(128) NOT NULL,
+  status            VARCHAR(32) NOT NULL DEFAULT 'queued',
+  received_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  debounce_until    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  processed_at      TIMESTAMPTZ,
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_wa_inbound_queue_batch_status
+  ON whatsapp_inbound_queue (batch_key, status, debounce_until);
+CREATE INDEX IF NOT EXISTS idx_wa_inbound_queue_org_phone
+  ON whatsapp_inbound_queue (organization_id, telefone, status);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_wa_inbound_queue_dedup
+  ON whatsapp_inbound_queue (organization_id, message_id_ext)
+  WHERE message_id_ext IS NOT NULL AND message_id_ext <> '';
+`;
+
 let initDone = false;
 
 export async function ensureTables(): Promise<void> {
@@ -317,5 +342,6 @@ export async function ensureTables(): Promise<void> {
   await p.query(MIGRATE_WHATSAPP_DELAY);
   await p.query(MIGRATE_WHATSAPP_IA_AGENDA);
   await p.query(MIGRATE_N8N_CHAT_HISTORIES_WA);
+  await p.query(MIGRATE_WHATSAPP_INBOUND_QUEUE);
   initDone = true;
 }

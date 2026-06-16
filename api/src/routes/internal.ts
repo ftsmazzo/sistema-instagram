@@ -2,6 +2,8 @@ import type { FastifyInstance, FastifyPluginOptions } from "fastify";
 import { isDbConfigured } from "../db/index.js";
 import { resolveAgentConfig } from "../store/agentConfig.js";
 import { resolveWhatsappAgentConfig } from "../store/whatsappAgentConfig.js";
+import { enqueueWhatsappInbound, getWhatsappQueueStatus } from "../store/whatsappInboundQueue.js";
+import { isRedisConfigured, pingRedis } from "../services/redis.js";
 import { getInternalSecretConfigured, verifyInternalSecret } from "../util/internalAuth.js";
 import { AGENT_GRAPH_API_BASE, AGENT_GRAPH_API_VERSION, AGENT_TIMEZONE } from "../services/agentConfigDefaults.js";
 
@@ -36,10 +38,13 @@ export async function internalRoutes(app: FastifyInstance, _opts: FastifyPluginO
    * Não exige parâmetros além do segredo.
    */
   app.get("/health", async (_request, reply) => {
+    const redisConfigured = isRedisConfigured();
+    const redisOk = redisConfigured ? await pingRedis() : false;
     return reply.send({
       ok: true,
       service: "maquina-vendas-internal",
       database: isDbConfigured(),
+      redis: { configured: redisConfigured, ok: redisOk },
       graph_api_version: AGENT_GRAPH_API_VERSION,
       graph_api_base: AGENT_GRAPH_API_BASE,
       timezone: AGENT_TIMEZONE,
@@ -129,6 +134,71 @@ export async function internalRoutes(app: FastifyInstance, _opts: FastifyPluginO
 
     if (!result.ok && result.code === "DATABASE_NOT_CONFIGURED") {
       return reply.status(503).send(result);
+    }
+
+    return reply.send(result);
+  });
+
+  /**
+   * Enfileira mensagem inbound WhatsApp (Passo 1 — fila + debounce Redis).
+   * O n8n webhook chama isto em vez de ir direto ao agente.
+   */
+  app.post("/whatsapp/enqueue", async (request, reply) => {
+    const body = request.body as {
+      instance?: string;
+      instance_name?: string;
+      phone?: string;
+      telefone?: string;
+      message_text?: string;
+      message_id_ext?: string;
+    };
+
+    const instanceName = (body.instance_name ?? body.instance ?? "").trim();
+    const phone = (body.phone ?? body.telefone ?? "").trim();
+    const messageText = (body.message_text ?? "").trim();
+    const messageIdExt = (body.message_id_ext ?? "").trim() || null;
+
+    const result = await enqueueWhatsappInbound({
+      instanceName,
+      phone,
+      messageText,
+      messageIdExt,
+    });
+
+    if (!result.ok) {
+      const status =
+        result.code === "DATABASE_NOT_CONFIGURED"
+          ? 503
+          : result.code === "INSTANCE_NOT_FOUND"
+            ? 404
+            : 400;
+      return reply.status(status).send(result);
+    }
+
+    return reply.send(result);
+  });
+
+  /**
+   * Diagnóstico da fila por instância + telefone (validação do passo 1).
+   */
+  app.get("/whatsapp/queue-status", async (request, reply) => {
+    const q = request.query as { instance?: string; phone?: string; telefone?: string };
+    const instanceName = (q.instance ?? "").trim();
+    const phone = (q.phone ?? q.telefone ?? "").trim();
+
+    if (!instanceName || !phone) {
+      return reply.status(400).send({
+        ok: false,
+        code: "MISSING_LOOKUP",
+        error: "Informe instance e phone/telefone.",
+        example: "/api/internal/whatsapp/queue-status?instance=Agente&phone=5516999998888",
+      });
+    }
+
+    const result = await getWhatsappQueueStatus({ instanceName, phone });
+    if (!result.ok) {
+      const status = result.code === "INSTANCE_NOT_FOUND" ? 404 : 400;
+      return reply.status(status).send(result);
     }
 
     return reply.send(result);
