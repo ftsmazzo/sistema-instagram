@@ -144,7 +144,7 @@ export async function internalRoutes(app: FastifyInstance, _opts: FastifyPluginO
    * O n8n webhook chama isto em vez de ir direto ao agente.
    */
   app.post("/whatsapp/enqueue", async (request, reply) => {
-    const body = request.body as {
+    const body = (request.body ?? {}) as {
       instance?: string;
       instance_name?: string;
       phone?: string;
@@ -153,10 +153,25 @@ export async function internalRoutes(app: FastifyInstance, _opts: FastifyPluginO
       message_id_ext?: string;
     };
 
-    const instanceName = (body.instance_name ?? body.instance ?? "").trim();
-    const phone = (body.phone ?? body.telefone ?? "").trim();
-    const messageText = (body.message_text ?? "").trim();
-    const messageIdExt = (body.message_id_ext ?? "").trim() || null;
+    const instanceName = String(body.instance_name ?? body.instance ?? "").trim();
+    const phone = String(body.phone ?? body.telefone ?? "").trim();
+    const messageText = String(body.message_text ?? "").trim();
+    const messageIdExt = String(body.message_id_ext ?? "").trim() || null;
+
+    if (!instanceName && !phone && !messageText) {
+      return reply.status(400).send({
+        ok: false,
+        code: "MISSING_BODY",
+        message:
+          "Envie JSON no body (Content-Type: application/json) com instance, phone e message_text.",
+        example: {
+          instance: "Agente",
+          phone: "5516999998888",
+          message_text: "Boa noite",
+          message_id_ext: "msg-001",
+        },
+      });
+    }
 
     const result = await enqueueWhatsappInbound({
       instanceName,
