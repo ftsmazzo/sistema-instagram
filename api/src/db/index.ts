@@ -101,6 +101,7 @@ ALTER TABLE organizations ADD COLUMN IF NOT EXISTS handoff_whatsapp text NOT NUL
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS link_produto_servico text NOT NULL DEFAULT '';
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS agenda_config jsonb NOT NULL DEFAULT '{"dias_semana":[1,2,3,4,5],"horario_inicio":"09:00","horario_fim":"18:00","duracao_minutos":60}'::jsonb;
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS criterios_qualificacao text NOT NULL DEFAULT '';
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS agenda_local text NOT NULL DEFAULT '';
 `;
 
 /** CRM do agente (postagens, comentarios, direct, leads) — mesmo banco da API, escopo por organization_id.
@@ -394,5 +395,6 @@ export async function ensureTables(): Promise<void> {
   await p.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS link_produto_servico text NOT NULL DEFAULT ''`);
   await p.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS agenda_config jsonb NOT NULL DEFAULT '{"dias_semana":[1,2,3,4,5],"horario_inicio":"09:00","horario_fim":"18:00","duracao_minutos":60}'::jsonb`);
   await p.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS criterios_qualificacao text NOT NULL DEFAULT ''`);
+  await p.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS agenda_local text NOT NULL DEFAULT ''`);
   initDone = true;
 }

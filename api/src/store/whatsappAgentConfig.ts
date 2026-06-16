@@ -7,7 +7,7 @@ import {
   WHATSAPP_DEFAULT_OBJETIVOS,
   type WhatsappObjetivo,
 } from "../services/whatsappAgentDefaults.js";
-import { parseAgendaConfig, type AgendaConfig } from "../services/empresaConfigHelpers.js";
+import { parseAgendaConfig, buildCalendarioContext, type AgendaConfig } from "../services/empresaConfigHelpers.js";
 import { normalizePhoneDigits } from "../util/phone.js";
 import { clampDelayPrimeiraMsg } from "./whatsappInstance.js";
 
@@ -37,6 +37,7 @@ export type WhatsappAgentOrganization = {
   link_produto_servico: string | null;
   agenda_config: AgendaConfig;
   criterios_qualificacao: string;
+  agenda_local: string;
 };
 
 export type WhatsappAgentInstance = {
@@ -96,6 +97,7 @@ export type WhatsappAgentRuntime = {
   timezone: string;
   locale: string;
   delay_primeira_msg_minutos: number;
+  calendario_resumo: string;
 };
 
 export type WhatsappAgentConfigResult = {
@@ -129,6 +131,7 @@ type OrgRow = {
   link_produto_servico: string | null;
   agenda_config: unknown;
   criterios_qualificacao: string;
+  agenda_local: string;
 };
 
 type InstanceRow = {
@@ -186,6 +189,7 @@ function orgFromRow(row: OrgRow): WhatsappAgentOrganization {
     link_produto_servico: row.link_produto_servico?.trim() || null,
     agenda_config: parseAgendaConfig(row.agenda_config),
     criterios_qualificacao: row.criterios_qualificacao ?? "",
+    agenda_local: row.agenda_local?.trim() || "",
   };
 }
 
@@ -202,6 +206,7 @@ function empresaFromOrg(org: WhatsappAgentOrganization) {
     link_produto_servico: org.link_produto_servico ?? "",
     agenda_config: org.agenda_config,
     criterios_qualificacao: org.criterios_qualificacao,
+    agenda_local: org.agenda_local,
   };
 }
 
@@ -219,7 +224,8 @@ async function fetchOrg(orgId: string): Promise<OrgRow | null> {
             COALESCE(o.handoff_whatsapp, '') AS handoff_whatsapp,
             COALESCE(o.link_produto_servico, '') AS link_produto_servico,
             COALESCE(o.agenda_config, '{"dias_semana":[1,2,3,4,5],"horario_inicio":"09:00","horario_fim":"18:00","duracao_minutos":60}'::jsonb) AS agenda_config,
-            COALESCE(o.criterios_qualificacao, '') AS criterios_qualificacao
+            COALESCE(o.criterios_qualificacao, '') AS criterios_qualificacao,
+            COALESCE(o.agenda_local, '') AS agenda_local
      FROM organizations o WHERE o.id = $1::uuid LIMIT 1`,
     [orgId]
   );
@@ -538,6 +544,7 @@ function assembleConfig(args: {
       timezone: AGENT_TIMEZONE,
       locale: AGENT_LOCALE,
       delay_primeira_msg_minutos: clampDelayPrimeiraMsg(instance?.delay_primeira_msg_minutos),
+      calendario_resumo: buildCalendarioContext(AGENT_TIMEZONE),
     },
   };
 }

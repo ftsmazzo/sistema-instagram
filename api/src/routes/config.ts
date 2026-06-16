@@ -23,6 +23,7 @@ export async function configRoutes(
         link_produto_servico: "",
         agenda_config: { dias_semana: [1, 2, 3, 4, 5], horario_inicio: "09:00", horario_fim: "18:00", duracao_minutos: 60 },
         criterios_qualificacao: "",
+        agenda_local: "",
       },
       contas_instagram: contas,
       instagram_default_id: config.instagram_default_id ?? null,

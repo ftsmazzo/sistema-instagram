@@ -210,7 +210,7 @@ const prepAgenteWa = node({
           { id: 'a2', name: 'telefone', value: expr("={{ $('Prep Proativo').isExecuted ? $('Prep Proativo').item.json.telefone_raw : $('Normaliza Inbound').item.json.telefone_raw }}"), type: 'string' },
           { id: 'a3', name: 'message_text', value: expr("={{ $('Prep Proativo').isExecuted ? ($('Prep Proativo').item.json.message_text || '') : ($('Normaliza Inbound').item.json.message_text || '') }}"), type: 'string' },
           { id: 'a4', name: 'modo', value: expr("={{ $('Prep Proativo').isExecuted ? $('Prep Proativo').item.json.modo : $('Normaliza Inbound').item.json.modo }}"), type: 'string' },
-          { id: 'a5', name: 'prompt_runtime', value: expr("={{ $('HTTP Config WA').item.json.prompts.whatsapp + '\\n\\n--- CONTEXTO INSTAGRAM ---\\n' + ($('HTTP Config WA').item.json.instagram_context?.resumo || 'Sem historico Instagram registrado para este lead.') + '\\n\\n--- REGRAS FIXAS ---\\n- Maximo 400 caracteres.\\n- Uma ideia + no maximo uma pergunta.\\n- Se ha historico Direct acima: CONTINUE a conversa — nao trate como primeiro contato nem pitch frio do post.\\n- Se modo proativo: retome conversa do Instagram sem repetir boas-vindas.\\n- Se lead pedir humano ou estiver qualificado: use qualificar_acionar_humano com motivo e criterios.' }}"), type: 'string' },
+          { id: 'a5', name: 'prompt_runtime', value: expr("={{ $('HTTP Config WA').item.json.prompts.whatsapp + '\\n\\n--- CONTEXTO INSTAGRAM ---\\n' + ($('HTTP Config WA').item.json.instagram_context?.resumo || 'Sem historico Instagram registrado para este lead.') + '\\n\\n--- CALENDARIO ---\\n' + ($('HTTP Config WA').item.json.runtime?.calendario_resumo || '') + '\\n\\n--- REGRAS FIXAS ---\\n- Maximo 400 caracteres.\\n- Uma ideia + no maximo uma pergunta.\\n- Se ha historico Direct acima: CONTINUE a conversa.\\n- enviar_link_produto: a ferramenta JA envia o link — NAO repita URL na resposta final.\\n- agendar_compromisso: use data ISO; confirme ao lead dia da semana + DD/MM/AAAA + horario + local.\\n- qualificar_acionar_humano: quando lead qualificado ou pedir humano.' }}"), type: 'string' },
           { id: 'a6', name: 'organization_id', value: expr('={{ $('HTTP Config WA').item.json.organization.id }}'), type: 'string' },
           { id: 'a7', name: 'send_text_path', value: expr('={{ $('HTTP Config WA').item.json.evolution.send_text_path }}'), type: 'string' },
           { id: 'a8', name: 'session_key', value: expr("={{ $('HTTP Config WA').item.json.runtime.redis_key_prefix }}"), type: 'string' },
@@ -250,22 +250,33 @@ const memoriaWa = memory({
   },
 });
 
-const agendarVisita = tool({
-  type: 'n8n-nodes-base.postgresTool',
-  version: 2.6,
+const agendarCompromisso = tool({
+  type: 'n8n-nodes-base.httpRequestTool',
+  version: 4.4,
   config: {
-    name: 'agendar_visita',
+    name: 'agendar_compromisso',
     position: [1520, 620],
     parameters: {
       descriptionType: 'manual',
-      toolDescription: 'Agenda compromisso do lead (visita, reunião ou demonstração). Params: data_visita ISO, observacoes opcional.',
-      operation: 'executeQuery',
-      query: `=INSERT INTO visitas (organization_id, lead_id, telefone, id_post_origem, data_visita, observacoes, status)
-VALUES ('{{ $('Prep Agente WA').item.json.organization_id }}'::uuid, NULLIF('{{ $('Prep Agente WA').item.json.lead_id }}','')::int, '{{ $('Prep Agente WA').item.json.telefone }}', '{{ $('Prep Agente WA').item.json.config.lead?.id_post_origem || '' }}', '{{ $fromAI('data_visita', 'Data/hora da visita ISO8601', 'string') }}'::timestamptz, '{{ $fromAI('observacoes', 'Observacoes', 'string') }}', 'agendada');
-UPDATE leads SET status = 'qualificado', updated_at = NOW() WHERE organization_id = '{{ $('Prep Agente WA').item.json.organization_id }}'::uuid AND whatsapp_digits = '{{ $('Prep Agente WA').item.json.telefone }}';`,
-      options: {},
+      toolDescription:
+        'Registra compromisso (visita/reunião) e alerta o consultor. Params: data_visita ISO8601 (obrigatório), assunto (opcional), observacoes (opcional). Use após confirmar dia/hora com o lead.',
+      method: 'POST',
+      url: 'https://plataforma-instagram-instagram-backend.kxryyk.easypanel.host/api/internal/whatsapp/agendar-compromisso',
+      sendHeaders: true,
+      headerParameters: {
+        parameters: [
+          { name: 'Content-Type', value: 'application/json' },
+          { name: 'X-Internal-Secret', value: 'CONFIGURE_INTERNAL_SECRET' },
+        ],
+      },
+      sendBody: true,
+      specifyBody: 'json',
+      jsonBody: expr(
+        '={\n  "organization_id": {{ JSON.stringify($(\'Prep Agente WA\').item.json.organization_id) }},\n  "phone": {{ JSON.stringify($(\'Prep Agente WA\').item.json.telefone) }},\n  "data_visita": {{ JSON.stringify($fromAI(\'data_visita\', \'Data/hora do compromisso em ISO8601\', \'string\')) }},\n  "assunto": {{ JSON.stringify($fromAI(\'assunto\', \'Assunto da reunião\', \'string\')) }},\n  "observacoes": {{ JSON.stringify($fromAI(\'observacoes\', \'Observações\', \'string\')) }}\n}'
+      ),
+      optimizeResponse: true,
+      options: { response: { response: { neverError: true } } },
     },
-    credentials: { postgres: { id: '7XLmPrmB0innRVr5', name: 'Maquina-Instagram' } },
   },
 });
 
@@ -307,7 +318,7 @@ const enviarLink = tool({
     position: [1840, 620],
     parameters: {
       descriptionType: 'manual',
-      toolDescription: 'Envia mensagem WhatsApp com link de produto/serviço. Param url obrigatorio, texto opcional.',
+      toolDescription: 'Envia UMA mensagem WhatsApp com link de produto/serviço. Param url obrigatorio, texto opcional. Nao inclua o link de novo na resposta do agente.',
       method: 'POST',
       url: expr("={{ $('Prep Agente WA').item.json.send_text_path }}"),
       authentication: 'genericCredentialType',
@@ -336,7 +347,7 @@ const agenteWa = node({
     subnodes: {
       model: openAiModel,
       memory: memoriaWa,
-      tools: [agendarVisita, qualificarAcionarHumano, enviarLink],
+      tools: [agendarCompromisso, qualificarAcionarHumano, enviarLink],
     },
   },
   output: [{ output: 'Resposta curta do agente' }],

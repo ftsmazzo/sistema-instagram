@@ -8,6 +8,7 @@ import {
   getWhatsappQueueStatus,
   processReadyWhatsappBatches,
 } from "../store/whatsappInboundQueue.js";
+import { agendarCompromisso } from "../services/whatsappAgendar.js";
 import { qualificarEAcionarHumano } from "../services/whatsappHandoff.js";
 import { isRedisConfigured, pingRedis } from "../services/redis.js";
 import { getInternalSecretConfigured, verifyInternalSecret } from "../util/internalAuth.js";
@@ -259,6 +260,47 @@ export async function internalRoutes(app: FastifyInstance, _opts: FastifyPluginO
       motivo,
       criterios: body.criterios ?? null,
       resumo: body.resumo ?? null,
+    });
+
+    if (!result.ok) {
+      return reply.status(502).send(result);
+    }
+
+    return reply.send(result);
+  });
+
+  /**
+   * Registra compromisso agendado e alerta consultor no WhatsApp configurado (tool do agente WA).
+   */
+  app.post("/whatsapp/agendar-compromisso", async (request, reply) => {
+    const body = (request.body ?? {}) as {
+      organization_id?: string;
+      phone?: string;
+      telefone?: string;
+      data_visita?: string;
+      assunto?: string;
+      observacoes?: string;
+      id_post_origem?: string;
+    };
+
+    const organizationId = String(body.organization_id ?? "").trim();
+    const phone = String(body.phone ?? body.telefone ?? "").trim();
+    const dataVisita = String(body.data_visita ?? "").trim();
+
+    if (!organizationId || !phone || !dataVisita) {
+      return reply.status(400).send({
+        ok: false,
+        error: "Informe organization_id, phone/telefone e data_visita (ISO8601).",
+      });
+    }
+
+    const result = await agendarCompromisso({
+      organizationId,
+      leadPhone: phone,
+      dataVisita,
+      assunto: body.assunto ?? null,
+      observacoes: body.observacoes ?? null,
+      idPostOrigem: body.id_post_origem ?? null,
     });
 
     if (!result.ok) {

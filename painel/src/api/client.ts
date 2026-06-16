@@ -107,6 +107,7 @@ export type EmpresaPerfilRes = {
   link_produto_servico: string;
   agenda_config: AgendaConfigRes;
   criterios_qualificacao: string;
+  agenda_local: string;
 };
 
 export type Config = {

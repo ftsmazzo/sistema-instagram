@@ -18,6 +18,7 @@ export function buildDefaultPromptWhatsapp(empresa: EmpresaPerfil, agentNome: st
     "qualificar o lead e avançar para compromisso agendado, link do produto/serviço ou fechamento com consultor humano";
   const sobre = (empresa.sobre ?? "").trim();
   const linkPadrao = (empresa.link_produto_servico ?? "").trim();
+  const localCompromisso = (empresa.agenda_local ?? "").trim();
   const criteriosBloco = formatCriteriosForPrompt(empresa.criterios_qualificacao);
   const agendaBloco = formatAgendaForPrompt(empresa.agenda_config);
 
@@ -45,22 +46,22 @@ export function buildDefaultPromptWhatsapp(empresa: EmpresaPerfil, agentNome: st
     "",
     "FERRAMENTAS (use conforme objetivos ativos da organização):",
     linkPadrao
-      ? `- enviar_link_produto: link padrão da empresa: ${linkPadrao}. Use quando o lead pedir detalhes, catálogo ou ficha — personalize a mensagem.`
-      : "- enviar_link_produto: quando o lead pedir detalhes — envie URL com mensagem curta e personalizada.",
-    `- agendar_visita: compromisso presencial ou reunião. Disponibilidade: ${agendaBloco}. Confirme dia, horário e observações antes de registrar.`,
-    "- qualificar_acionar_humano: quando o lead estiver qualificado ou pedir atendente. Informe motivo, critérios atendidos e resumo da conversa.",
+      ? `- enviar_link_produto: link padrão: ${linkPadrao}. A ferramenta envia a mensagem — você NÃO repete a URL na resposta final.`
+      : "- enviar_link_produto: envia o link ao lead. NÃO repita a URL na sua resposta final — só confirme.",
+    `- agendar_compromisso: registra visita/reunião. Disponibilidade: ${agendaBloco}.`,
+    localCompromisso
+      ? `  Local do compromisso: ${localCompromisso} — informe ao lead na confirmação.`
+      : "  Local: configure no painel ou combine com o lead antes de confirmar.",
+  "  Use o bloco CALENDÁRIO do runtime: converta 'quarta' em data DD/MM/AAAA; na confirmação cite dia da semana + data numérica + horário + local.",
+    "- qualificar_acionar_humano: quando o lead estiver qualificado ou pedir atendente.",
     "",
     "CRITÉRIOS PARA ACIONAR CONSULTOR HUMANO:",
-    "- Interesse confirmado + dados essenciais coletados, OU",
-    "- Pedido explícito de humano, OU",
-    "- Lead pronto para fechar (proposta, negociação, contratação).",
-    "Após acionar: avise o lead em 1 frase que um consultor assume em instantes.",
+    "- Interesse confirmado + dados essenciais coletados, OU pedido explícito de humano, OU lead pronto para fechar.",
     "",
     "COMPORTAMENTO:",
     "- Use nome, post de origem e histórico Instagram quando disponíveis.",
-    "- Seja proativo: sugira próximo passo quando o lead demonstrar interesse, sem ser invasivo.",
-    "- Não invente preços ou condições — diga que o consultor confirma valores específicos.",
-    "- Em objeções (preço, distância, tempo): acolha, pergunte o que pesa e ofereça alternativa concreta.",
+    "- Não invente preços ou condições.",
+    "- Em objeções: acolha e ofereça alternativa concreta.",
   ];
   return linhas.filter(Boolean).join("\n");
 }

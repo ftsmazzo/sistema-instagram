@@ -88,6 +88,7 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
       link_produto_servico: empresaCfg.link_produto_servico ?? "",
       agenda_config: empresaCfg.agenda_config,
       criterios_qualificacao: empresaCfg.criterios_qualificacao ?? "",
+      agenda_local: empresaCfg.agenda_local ?? "",
       evolution_configured: evolutionConfigured,
       connection: connection
         ? {
@@ -121,6 +122,7 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
         duracao_minutos?: number;
       };
       criterios_qualificacao?: string;
+      agenda_local?: string;
     };
 
     const existing = await getWhatsappInstanceForOrg(u.orgId);
@@ -160,6 +162,7 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
       if (body.link_produto_servico !== undefined) empresaPatch.link_produto_servico = body.link_produto_servico;
       if (body.agenda_config !== undefined) empresaPatch.agenda_config = parseAgendaConfig(body.agenda_config);
       if (body.criterios_qualificacao !== undefined) empresaPatch.criterios_qualificacao = body.criterios_qualificacao;
+      if (body.agenda_local !== undefined) empresaPatch.agenda_local = body.agenda_local;
       if (Object.keys(empresaPatch).length > 0) {
         await saveWorkspaceConfig(u.orgId, { empresa: empresaPatch });
       }

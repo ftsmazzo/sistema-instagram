@@ -35,6 +35,7 @@ function emptyEmpresa(): EmpresaPerfilRes {
     link_produto_servico: "",
     agenda_config: { ...DEFAULT_AGENDA_CONFIG },
     criterios_qualificacao: "",
+    agenda_local: "",
   };
 }
 
@@ -497,6 +498,14 @@ export function AdminPage() {
               </label>
             </div>
           </fieldset>
+          <label className="label-field">Local do compromisso (reunião / visita)</label>
+          <input
+            type="text"
+            value={empresa.agenda_local ?? ""}
+            onChange={(e) => setEmpresa((x) => ({ ...x, agenda_local: e.target.value }))}
+            className="input-field"
+            placeholder="Ex.: Google Meet, endereço da loja, link de videochamada"
+          />
           <label className="label-field">WhatsApp do consultor humano (fechamento)</label>
           <input
             type="text"

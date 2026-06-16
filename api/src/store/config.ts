@@ -42,6 +42,8 @@ export type EmpresaPerfil = {
   agenda_config: AgendaConfig;
   /** Critérios de qualificação (um por linha). */
   criterios_qualificacao: string;
+  /** Local padrão do compromisso (endereço, link de reunião, etc.). */
+  agenda_local: string;
 };
 
 export type ConfigStore = {
@@ -66,6 +68,7 @@ export const emptyEmpresa = (): EmpresaPerfil => ({
   link_produto_servico: "",
   agenda_config: { ...DEFAULT_AGENDA_CONFIG },
   criterios_qualificacao: "",
+  agenda_local: "",
 });
 
 const defaultConfig: ConfigStore = {
@@ -225,6 +228,7 @@ export async function saveConfig(
     if (e.link_produto_servico !== undefined) emp.link_produto_servico = (e.link_produto_servico ?? "").trim();
     if (e.agenda_config !== undefined) emp.agenda_config = parseAgendaConfig(e.agenda_config);
     if (e.criterios_qualificacao !== undefined) emp.criterios_qualificacao = (e.criterios_qualificacao ?? "").trim();
+    if (e.agenda_local !== undefined) emp.agenda_local = (e.agenda_local ?? "").trim();
     current.empresa = emp;
   }
 

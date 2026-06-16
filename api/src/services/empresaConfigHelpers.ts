@@ -54,3 +54,48 @@ export function formatCriteriosForPrompt(text: string | null | undefined): strin
   if (items.length === 0) return null;
   return items.map((c, i) => `${i + 1}. ${c}`).join("\n");
 }
+
+function formatDateInTz(date: Date, timezone: string): { diaSemana: string; data: string; hora: string } {
+  const parts = new Intl.DateTimeFormat("pt-BR", {
+    timeZone: timezone,
+    weekday: "long",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === type)?.value ?? "";
+  return {
+    diaSemana: get("weekday"),
+    data: `${get("day")}/${get("month")}/${get("year")}`,
+    hora: `${get("hour")}:${get("minute")}`,
+  };
+}
+
+/** Bloco de calendário para o agente converter "quarta" em data exata. */
+export function buildCalendarioContext(timezone: string): string {
+  const tz = timezone.trim() || "America/Sao_Paulo";
+  const now = new Date();
+  const hoje = formatDateInTz(now, tz);
+  const lines = [
+    `Fuso horário: ${tz}.`,
+    `Agora: ${hoje.diaSemana}, ${hoje.data} às ${hoje.hora}.`,
+    "Próximos 7 dias (use ao agendar — sempre confirme DD/MM/AAAA com o lead):",
+  ];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(now.getTime() + i * 86_400_000);
+    const f = formatDateInTz(d, tz);
+    lines.push(`- ${f.diaSemana}: ${f.data}`);
+  }
+  return lines.join("\n");
+}
+
+export function formatDataVisitaParaAlerta(iso: string, timezone: string): string {
+  const parsed = new Date(iso);
+  if (Number.isNaN(parsed.getTime())) return iso;
+  const f = formatDateInTz(parsed, timezone);
+  return `${f.diaSemana}, ${f.data} às ${f.hora}`;
+}

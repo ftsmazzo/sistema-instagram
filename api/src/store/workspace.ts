@@ -52,6 +52,7 @@ export async function loadWorkspaceConfigStore(orgId: string): Promise<ConfigSto
     link_produto_servico: string;
     agenda_config: unknown;
     criterios_qualificacao: string;
+    agenda_local: string;
   }>(
     `SELECT name, default_instagram_account_id,
             COALESCE(nome_fantasia, '') AS nome_fantasia,
@@ -63,7 +64,8 @@ export async function loadWorkspaceConfigStore(orgId: string): Promise<ConfigSto
             COALESCE(handoff_whatsapp, '') AS handoff_whatsapp,
             COALESCE(link_produto_servico, '') AS link_produto_servico,
             COALESCE(agenda_config, '{"dias_semana":[1,2,3,4,5],"horario_inicio":"09:00","horario_fim":"18:00","duracao_minutos":60}'::jsonb) AS agenda_config,
-            COALESCE(criterios_qualificacao, '') AS criterios_qualificacao
+            COALESCE(criterios_qualificacao, '') AS criterios_qualificacao,
+            COALESCE(agenda_local, '') AS agenda_local
      FROM organizations WHERE id = $1`,
     [orgId]
   );
@@ -80,6 +82,7 @@ export async function loadWorkspaceConfigStore(orgId: string): Promise<ConfigSto
       link_produto_servico: "",
       agenda_config: parseAgendaConfig(null),
       criterios_qualificacao: "",
+      agenda_local: "",
     };
     return { empresa: empty, contas_instagram: [], instagram_default_id: null };
   }
@@ -133,6 +136,7 @@ export async function loadWorkspaceConfigStore(orgId: string): Promise<ConfigSto
     link_produto_servico: r.link_produto_servico ?? "",
     agenda_config: parseAgendaConfig(r.agenda_config),
     criterios_qualificacao: r.criterios_qualificacao ?? "",
+    agenda_local: r.agenda_local ?? "",
   };
   return {
     empresa,
@@ -179,6 +183,8 @@ export async function saveWorkspaceConfig(
         sets.push({ col: "agenda_config", val: parseAgendaConfig(e.agenda_config) });
       if (e.criterios_qualificacao !== undefined)
         sets.push({ col: "criterios_qualificacao", val: (e.criterios_qualificacao ?? "").trim() });
+      if (e.agenda_local !== undefined)
+        sets.push({ col: "agenda_local", val: (e.agenda_local ?? "").trim() });
       if (sets.length > 0) {
         const placeholders = sets.map((s, idx) => `${s.col} = $${idx + 1}`).join(", ");
         await client.query(`UPDATE organizations SET ${placeholders} WHERE id = $${sets.length + 1}`, [
