@@ -353,12 +353,8 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       provider?: string;
       image_urls?: string[];
       duration_seconds?: number;
-      niche_id?: string;
-      template_id?: string;
-      segmento?: string;
-      marca_nome?: string;
       auto_imagem_slideshow?: boolean;
-    };
+    } & PostadorIaBody;
 
     const providerRaw = (body?.provider ?? "slideshow").trim().toLowerCase();
     const provider: VideoGenProvider =
