@@ -7,7 +7,7 @@ import {
   WHATSAPP_DEFAULT_OBJETIVOS,
   type WhatsappObjetivo,
 } from "../services/whatsappAgentDefaults.js";
-import { parseAgendaConfig, buildCalendarioContext, type AgendaConfig, buildWhatsappPromptRuntime, formatLeadContextLine } from "../services/empresaConfigHelpers.js";
+import { parseAgendaConfig, buildCalendarioContext, type AgendaConfig, buildWhatsappPromptRuntime, buildWhatsappInboundContinuityHint, formatLeadContextLine } from "../services/empresaConfigHelpers.js";
 import { normalizePhoneDigits } from "../util/phone.js";
 import { clampDelayPrimeiraMsg } from "./whatsappInstance.js";
 
@@ -77,6 +77,7 @@ export type WhatsappAgentLead = {
   url_interesse: string | null;
   handoff_at: string | null;
   whatsapp_boas_vindas_enviado: boolean;
+  whatsapp_primeira_ia_enviada: boolean;
 };
 
 export type WhatsappAgentPostContext = {
@@ -165,6 +166,7 @@ type LeadRow = {
   url_interesse: string | null;
   handoff_at: Date | null;
   whatsapp_boas_vindas_enviado: boolean;
+  whatsapp_primeira_ia_enviada: boolean;
   id_instagram: string | null;
 };
 
@@ -172,6 +174,8 @@ export type ResolveWhatsappAgentConfigParams = {
   instanceName?: string | null;
   phone?: string | null;
   organizationId?: string | null;
+  /** Texto inbound atual (batch da fila) — ajusta tom da 1ª resposta após boas-vindas. */
+  inboundMessage?: string | null;
 };
 
 function parseObjetivos(raw: unknown): WhatsappObjetivo[] {
@@ -273,7 +277,7 @@ async function fetchLeadByPhone(orgId: string, phoneDigits: string): Promise<Lea
   const r = await pool.query<LeadRow>(
     `SELECT id, nome, whatsapp, username_instagram, objetivo, status,
             id_post_origem, origem_interacao, url_interesse, handoff_at,
-            whatsapp_boas_vindas_enviado, id_instagram
+            whatsapp_boas_vindas_enviado, whatsapp_primeira_ia_enviada, id_instagram
      FROM leads
      WHERE organization_id = $1::uuid
        AND (whatsapp_digits = $2 OR regexp_replace(COALESCE(whatsapp, ''), '\\D', '', 'g') = $2)
@@ -413,6 +417,7 @@ function assembleConfig(args: {
   lead: LeadRow | null;
   postContext: WhatsappAgentPostContext | null;
   instagramContext: WhatsappAgentInstagramContext | null;
+  inboundMessage?: string | null;
 }): WhatsappAgentConfigResult {
   const issues: WhatsappAgentIssue[] = [];
   const organization = orgFromRow(args.org);
@@ -502,6 +507,12 @@ function assembleConfig(args: {
     else code = "NOT_READY";
   }
 
+  const inboundHint = buildWhatsappInboundContinuityHint({
+    boasVindasEnviado: Boolean(args.lead?.whatsapp_boas_vindas_enviado),
+    primeiraIaEnviada: Boolean(args.lead?.whatsapp_primeira_ia_enviada),
+    inboundMessage: args.inboundMessage,
+  });
+
   return {
     ok: true,
     ready,
@@ -537,6 +548,7 @@ function assembleConfig(args: {
         calendarioResumo,
         urlInteresse: args.lead?.url_interesse,
         linkPadrao: organization.link_produto_servico,
+        inboundHint,
       }),
       agent_context_line: formatLeadContextLine(args.lead?.nome, args.lead?.username_instagram),
     },
@@ -554,6 +566,7 @@ function assembleConfig(args: {
           url_interesse: args.lead.url_interesse,
           handoff_at: args.lead.handoff_at?.toISOString() ?? null,
           whatsapp_boas_vindas_enviado: args.lead.whatsapp_boas_vindas_enviado,
+          whatsapp_primeira_ia_enviada: args.lead.whatsapp_primeira_ia_enviada,
         }
       : null,
     post_context: args.postContext,
@@ -746,5 +759,6 @@ export async function resolveWhatsappAgentConfig(
     lead,
     postContext,
     instagramContext,
+    inboundMessage: params.inboundMessage,
   });
 }

@@ -278,6 +278,12 @@ CREATE INDEX IF NOT EXISTS idx_leads_wa_agenda ON leads (organization_id, whatsa
   WHERE whatsapp_primeira_ia_enviada = false AND whatsapp_boas_vindas_enviado = true;
 `;
 
+const MIGRATE_WHATSAPP_BOAS_VINDAS_EM = `
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS whatsapp_boas_vindas_em TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_leads_wa_boas_vindas_em ON leads (organization_id, whatsapp_boas_vindas_em)
+  WHERE whatsapp_boas_vindas_enviado = true AND whatsapp_primeira_ia_enviada = false;
+`;
+
 /** Memória n8n WhatsApp separada do Instagram — espelha api/migrations/011_n8n_chat_histories_wa.sql */
 const MIGRATE_N8N_CHAT_HISTORIES_WA = `
 CREATE TABLE IF NOT EXISTS n8n_chat_histories_wa (
@@ -388,6 +394,7 @@ export async function ensureTables(): Promise<void> {
   await p.query(WHATSAPP_AGENT_SQL);
   await p.query(MIGRATE_WHATSAPP_DELAY);
   await p.query(MIGRATE_WHATSAPP_IA_AGENDA);
+  await p.query(MIGRATE_WHATSAPP_BOAS_VINDAS_EM);
   await p.query(MIGRATE_N8N_CHAT_HISTORIES_WA);
   await p.query(MIGRATE_WHATSAPP_INBOUND_QUEUE);
   await p.query(MIGRATE_MULTITENANT_POSTADOR_WA);

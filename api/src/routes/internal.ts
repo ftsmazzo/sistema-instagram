@@ -11,6 +11,7 @@ import {
 import { agendarCompromisso } from "../services/whatsappAgendar.js";
 import { tentarAgendarDaConversa } from "../services/whatsappAgendarConversa.js";
 import { qualificarEAcionarHumano } from "../services/whatsappHandoff.js";
+import { listLeadsReadyForProactiveIa, markWhatsappBoasVindas } from "../store/whatsappProactiveSchedule.js";
 import { consultarProximaData } from "../services/empresaConfigHelpers.js";
 import { isRedisConfigured, pingRedis } from "../services/redis.js";
 import { getInternalSecretConfigured, verifyInternalSecret } from "../util/internalAuth.js";
@@ -117,10 +118,12 @@ export async function internalRoutes(app: FastifyInstance, _opts: FastifyPluginO
       phone?: string;
       telefone?: string;
       organization_id?: string;
+      inbound_message?: string;
     };
     const instanceName = typeof q.instance === "string" ? q.instance.trim() : "";
     const phone = (typeof q.phone === "string" ? q.phone : typeof q.telefone === "string" ? q.telefone : "").trim();
     const organizationId = typeof q.organization_id === "string" ? q.organization_id.trim() : "";
+    const inboundMessage = typeof q.inbound_message === "string" ? q.inbound_message.trim() : "";
 
     if (!instanceName && !phone && !organizationId) {
       return reply.status(400).send({
@@ -135,6 +138,7 @@ export async function internalRoutes(app: FastifyInstance, _opts: FastifyPluginO
       instanceName: instanceName || null,
       phone: phone || null,
       organizationId: organizationId || null,
+      inboundMessage: inboundMessage || null,
     });
 
     if (!result.ok && result.code === "TENANT_NOT_FOUND") {
@@ -145,6 +149,45 @@ export async function internalRoutes(app: FastifyInstance, _opts: FastifyPluginO
       return reply.status(503).send(result);
     }
 
+    return reply.send(result);
+  });
+
+  /**
+   * Leads prontos para 1ª mensagem proativa (cron n8n). Faz backfill de whatsapp_ia_agendada_em quando ausente.
+   */
+  app.get("/whatsapp/leads-proativo-ready", async (request, reply) => {
+    const q = request.query as { limit?: string };
+    const limit = Math.min(20, Math.max(1, Number(q.limit) || 5));
+    const leads = await listLeadsReadyForProactiveIa(limit);
+    return reply.send({ ok: true, leads, count: leads.length });
+  });
+
+  /**
+   * Marca boas-vindas enviada e agenda 1ª msg proativa (workflow de welcome deve chamar após enviar a msg).
+   */
+  app.post("/whatsapp/mark-boas-vindas", async (request, reply) => {
+    const body = (request.body ?? {}) as {
+      organization_id?: string;
+      phone?: string;
+      telefone?: string;
+      delay_minutes?: number;
+    };
+    const organizationId = String(body.organization_id ?? "").trim();
+    const phone = String(body.phone ?? body.telefone ?? "").trim();
+    if (!organizationId || !phone) {
+      return reply.status(400).send({
+        ok: false,
+        error: "organization_id e phone são obrigatórios.",
+      });
+    }
+    const result = await markWhatsappBoasVindas({
+      organizationId,
+      phoneDigits: phone.replace(/\D/g, ""),
+      delayMinutes: body.delay_minutes,
+    });
+    if (!result.ok) {
+      return reply.status(404).send({ ok: false, error: "Lead não encontrado para este telefone." });
+    }
     return reply.send(result);
   });
 

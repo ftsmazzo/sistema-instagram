@@ -86,10 +86,20 @@ FROM leads l
 INNER JOIN whatsapp_instances wi ON wi.organization_id = l.organization_id AND wi.agent_ativo = true
 WHERE l.whatsapp_boas_vindas_enviado = true
   AND l.whatsapp_primeira_ia_enviada = false
-  AND l.whatsapp_ia_agendada_em IS NOT NULL
-  AND l.whatsapp_ia_agendada_em <= NOW()
   AND l.status NOT IN ('handoff', 'convertido', 'perdido')
   AND COALESCE(l.whatsapp_digits, '') <> ''
+  AND (
+    (l.whatsapp_ia_agendada_em IS NOT NULL AND l.whatsapp_ia_agendada_em <= NOW())
+    OR (
+      COALESCE(l.whatsapp_boas_vindas_em, (
+        SELECT MIN(wm.created_at) FROM whatsapp_messages wm
+        WHERE wm.organization_id = l.organization_id
+          AND wm.telefone = l.whatsapp_digits
+          AND wm.direction = 'outbound'
+      ), l.updated_at)
+      + (COALESCE(wi.delay_primeira_msg_minutos, 20) || ' minutes')::interval <= NOW()
+    )
+  )
 LIMIT 5`,
       options: {},
     },
@@ -149,7 +159,7 @@ const httpConfigWa = node({
     name: 'HTTP Config WA',
     position: [720, 400],
     parameters: {
-      url: expr('={{ "https://plataforma-instagram-instagram-backend.kxryyk.easypanel.host/api/internal/whatsapp-agent-config?instance=" + encodeURIComponent($json.instance_name) + "&phone=" + encodeURIComponent($json.telefone_raw) }}'),
+      url: expr('={{ "https://plataforma-instagram-instagram-backend.kxryyk.easypanel.host/api/internal/whatsapp-agent-config?instance=" + encodeURIComponent($json.instance_name) + "&phone=" + encodeURIComponent($json.telefone_raw) + "&inbound_message=" + encodeURIComponent($json.message_text || "") }}'),
       sendHeaders: true,
       headerParameters: {
         parameters: [{ name: 'X-Internal-Secret', value: 'CONFIGURE_INTERNAL_SECRET' }],

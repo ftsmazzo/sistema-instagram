@@ -35,6 +35,7 @@ export function buildDefaultPromptWhatsapp(empresa: EmpresaPerfil, agentNome: st
     "- NUNCA trate como primeiro contato, pitch frio ou descoberta do post se já houve troca no Direct.",
     "- NUNCA re-apresente a empresa, repita argumentos ou peça WhatsApp de novo.",
     "- No modo proativo (1ª msg da IA): retome o assunto do Direct com UMA pergunta natural — sem boas-vindas genéricas e SEM link.",
+    "- Se o lead mandar \"oi/boa tarde\" após a boas-vindas automática: retome o Direct — NUNCA \"Como posso te ajudar hoje?\".",
     "",
     "FUNIL NO WHATSAPP:",
     "1. Retomar — referencie o que foi conversado no Instagram (interesse, dúvida, post).",

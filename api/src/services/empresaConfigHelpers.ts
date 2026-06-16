@@ -293,6 +293,7 @@ export function buildWhatsappRuntimeRules(): string {
     "REGRAS FIXAS (prioridade máxima):",
     "- Máximo 400 caracteres. Uma ideia + no máximo uma pergunta.",
     "- Se há histórico Direct acima: CONTINUE a conversa — sem pitch frio.",
+    "- 1ª resposta do lead após boas-vindas no Zap: retome o assunto do Instagram — PROIBIDO \"Como posso te ajudar hoje?\" ou atendimento genérico.",
     "- Nome: use UM único nome por toda a conversa. NUNCA @desconhecido, @n/a ou placeholders.",
     "- LINK: NUNCA envie na 1ª mensagem nem em resposta a ok/perfeito/obrigado. Só após discovery + pedido explícito ou interesse confirmado no assunto do Instagram.",
     "- enviar_link_produto: a ferramenta JÁ envia o link — NÃO repita URL na resposta final.",
@@ -307,12 +308,48 @@ export function buildWhatsappRuntimeRules(): string {
   ].join("\n");
 }
 
+/** Instrução extra quando o lead responde no Zap logo após a boas-vindas (antes da 1ª msg proativa). */
+export function buildWhatsappInboundContinuityHint(args: {
+  boasVindasEnviado: boolean;
+  primeiraIaEnviada: boolean;
+  inboundMessage: string | null | undefined;
+}): string | null {
+  if (!args.boasVindasEnviado || args.primeiraIaEnviada) return null;
+  const msg = (args.inboundMessage ?? "").trim();
+  if (!msg) return null;
+
+  const lower = msg.toLowerCase();
+  const isGreeting =
+    /^(oi|ol[aá]|bom dia|boa tarde|boa noite|e a[ií]|tudo bem|hey|hello|opa|salve)\b/.test(lower) &&
+    msg.length < 100;
+
+  if (isGreeting) {
+    return [
+      "INSTRUÇÃO URGENTE (lead acabou de responder após boas-vindas no Zap):",
+      "- Ele veio do Instagram Direct — você JÁ conversou com ele lá.",
+      "- PROIBIDO: \"Como posso te ajudar hoje?\", \"Alguma dúvida?\" genérico, re-apresentar empresa ou pedir WhatsApp de novo.",
+      "- Faça: cumprimento breve + retome em 1 frase o assunto do Direct + 1 pergunta natural sobre o que vocês já falaram.",
+      "- Exemplo de tom: \"Boa tarde, [nome]! No Insta você comentou sobre [tema do histórico] — quer que eu te mostre como isso funciona na prática?\"",
+      "- SEM link nesta mensagem.",
+    ].join("\n");
+  }
+
+  if (msg.length < 60) {
+    return [
+      "INSTRUÇÃO: Lead respondeu após boas-vindas — continue do contexto Instagram Direct (bloco acima), sem script de call center.",
+    ].join("\n");
+  }
+
+  return null;
+}
+
 export function buildWhatsappPromptRuntime(args: {
   basePrompt: string;
   instagramResumo: string | null;
   calendarioResumo: string;
   urlInteresse?: string | null;
   linkPadrao?: string | null;
+  inboundHint?: string | null;
 }): string {
   const blocos = [
     args.basePrompt,
@@ -326,6 +363,9 @@ export function buildWhatsappPromptRuntime(args: {
     blocos.push(`Link padrão (só enviar após discovery + interesse): ${args.linkPadrao.trim()}`);
   }
   blocos.push("", "--- CALENDÁRIO ---", args.calendarioResumo, "", buildWhatsappRuntimeRules());
+  if (args.inboundHint?.trim()) {
+    blocos.push("", args.inboundHint.trim());
+  }
   return blocos.join("\n");
 }
 
