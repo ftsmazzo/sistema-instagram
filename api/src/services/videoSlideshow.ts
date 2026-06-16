@@ -14,7 +14,23 @@ const FADE_SEC = 0.45;
 
 export type SlideshowMusicOptions = {
   track?: PostadorMusicTrack | null;
+  /** Segundo inicial na faixa (corte manual do trecho) */
+  startSec?: number;
 };
+
+function clampMusicStart(raw: unknown): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(180, Math.round(n * 10) / 10);
+}
+
+/** Filtro ffmpeg: volume + recorte [start, start+duration) */
+function audioTrimFilter(volume: number, startSec: number, durationSec: number): string {
+  const vol = Math.max(0.05, Math.min(1, volume));
+  const start = clampMusicStart(startSec);
+  const end = start + durationSec;
+  return `volume=${vol},atrim=start=${start}:end=${end},asetpts=PTS-STARTPTS`;
+}
 
 async function assertFfmpeg(): Promise<void> {
   try {
@@ -65,6 +81,7 @@ export async function gerarSlideshowReels(
   const dir = await mkdtemp(join(tmpdir(), "postador-slideshow-"));
   const outPath = join(dir, "reels.mp4");
   const track = musicOpts?.track?.url ? musicOpts.track : null;
+  const musicStart = clampMusicStart(musicOpts?.startSec);
   let musicPath: string | null = null;
 
   try {
@@ -104,7 +121,7 @@ export async function gerarSlideshowReels(
           "-i",
           musicPath,
           "-filter_complex",
-          `[0:v]${vf}[outv];[1:a]volume=${track.volume},atrim=0:${durationSeconds},asetpts=PTS-STARTPTS[aout]`,
+          `[0:v]${vf}[outv];[1:a]${audioTrimFilter(track.volume, musicStart, durationSeconds)}[aout]`,
           "-map",
           "[outv]",
           "-map",
@@ -174,9 +191,7 @@ export async function gerarSlideshowReels(
       filterParts.push(`${concatIn}concat=n=${n}:v=1:a=0[outv]`);
 
       if (musicPath) {
-        filterParts.push(
-          `[${n}:a]volume=${track!.volume},atrim=0:${durationSeconds},asetpts=PTS-STARTPTS[aout]`
-        );
+        filterParts.push(`[${n}:a]${audioTrimFilter(track!.volume, musicStart, durationSeconds)}[aout]`);
       }
 
       const filterComplex = filterParts.join(";");

@@ -396,6 +396,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       duration_seconds?: number;
       auto_imagem_slideshow?: boolean;
       music_id?: string;
+      music_start_sec?: number;
     } & PostadorIaBody;
 
     const providerRaw = (body?.provider ?? "slideshow").trim().toLowerCase();
@@ -466,6 +467,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
         image_urls: imageUrls,
         duration_seconds: duration,
         music_id: body.music_id,
+        music_start_sec: body.music_start_sec,
       });
       return reply.send(result);
     } catch (err) {

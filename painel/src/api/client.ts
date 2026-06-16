@@ -261,6 +261,7 @@ export type PostadorNicheParams = {
   image_mode?: "criativo" | "produto";
   slide_template?: PostadorSlideTemplateId;
   music_id?: string;
+  music_start_sec?: number;
 };
 
 export type PostadorNicheTemplateRes = {
@@ -496,6 +497,7 @@ export const api = {
           mood: string;
           volume: number;
           preview_url?: string;
+          preview_duration_sec?: number;
         }>;
       }>("/api/postador/music-tracks"),
     getSlideTemplates: () =>
@@ -514,6 +516,7 @@ export const api = {
       duration_seconds?: 4 | 8 | 12;
       auto_imagem_slideshow?: boolean;
       music_id?: string;
+      music_start_sec?: number;
     } & PostadorNicheParams) =>
       fetchJson<{
         media_url: string;

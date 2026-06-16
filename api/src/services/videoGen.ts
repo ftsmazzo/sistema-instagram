@@ -23,6 +23,7 @@ export type GerarVideoInput = {
   image_urls?: string[];
   duration_seconds?: VideoDuration;
   music_id?: string;
+  music_start_sec?: number;
 };
 
 export type GerarVideoResult = {
@@ -203,7 +204,10 @@ export async function gerarVideoComIA(input: GerarVideoInput): Promise<GerarVide
         throw new Error("Slideshow precisa de pelo menos 1 imagem. Envie fotos ou gere uma imagem antes.");
       }
       const musicTrack = resolveMusicTrack(input.music_id);
-      buffer = await gerarSlideshowReels(imageUrls, duration, { track: musicTrack });
+      buffer = await gerarSlideshowReels(imageUrls, duration, {
+        track: musicTrack,
+        startSec: input.music_start_sec,
+      });
       break;
     }
     case "veo": {

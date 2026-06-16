@@ -10,6 +10,8 @@ export type PostadorMusicTrack = {
   /** URL pública do preview MP3 */
   url: string;
   volume: number;
+  /** Duração aproximada do preview (seg) — limite do slider de corte */
+  preview_duration_sec?: number;
 };
 
 export const POSTADOR_MUSIC_CATALOG: PostadorMusicTrack[] = [
@@ -26,6 +28,7 @@ export const POSTADOR_MUSIC_CATALOG: PostadorMusicTrack[] = [
     mood: "calmo · spa · bem-estar",
     url: "https://assets.mixkit.co/music/preview/mixkit-serene-view-443.mp3",
     volume: 0.32,
+    preview_duration_sec: 90,
   },
   {
     id: "dreaming",
@@ -33,6 +36,7 @@ export const POSTADOR_MUSIC_CATALOG: PostadorMusicTrack[] = [
     mood: "inspirador · marcas · lifestyle",
     url: "https://assets.mixkit.co/music/preview/mixkit-dreaming-big-31.mp3",
     volume: 0.3,
+    preview_duration_sec: 90,
   },
   {
     id: "champion",
@@ -40,6 +44,7 @@ export const POSTADOR_MUSIC_CATALOG: PostadorMusicTrack[] = [
     mood: "energético · fitness · motivação",
     url: "https://assets.mixkit.co/music/preview/mixkit-spirit-of-the-champion-878.mp3",
     volume: 0.28,
+    preview_duration_sec: 90,
   },
   {
     id: "tech",
@@ -47,6 +52,7 @@ export const POSTADOR_MUSIC_CATALOG: PostadorMusicTrack[] = [
     mood: "moderno · tech · B2B",
     url: "https://assets.mixkit.co/music/preview/mixkit-tech-house-vibes-130.mp3",
     volume: 0.3,
+    preview_duration_sec: 90,
   },
   {
     id: "lofi",
@@ -54,6 +60,7 @@ export const POSTADOR_MUSIC_CATALOG: PostadorMusicTrack[] = [
     mood: "relax · criativo · reels suaves",
     url: "https://assets.mixkit.co/music/preview/mixkit-lo-fi-chill-438.mp3",
     volume: 0.32,
+    preview_duration_sec: 90,
   },
   {
     id: "corporate",
@@ -61,6 +68,7 @@ export const POSTADOR_MUSIC_CATALOG: PostadorMusicTrack[] = [
     mood: "corporativo · serviços · consultoria",
     url: "https://assets.mixkit.co/music/preview/mixkit-corporate-success-342.mp3",
     volume: 0.28,
+    preview_duration_sec: 90,
   },
   {
     id: "beauty",
@@ -68,16 +76,20 @@ export const POSTADOR_MUSIC_CATALOG: PostadorMusicTrack[] = [
     mood: "beleza · estética · delicado",
     url: "https://assets.mixkit.co/music/preview/mixkit-silent-descent-614.mp3",
     volume: 0.28,
+    preview_duration_sec: 90,
   },
 ];
 
-export function listMusicTracksForApi(): Array<Omit<PostadorMusicTrack, "url"> & { preview_url?: string }> {
-  return POSTADOR_MUSIC_CATALOG.map(({ id, label, mood, url, volume }) => ({
+export function listMusicTracksForApi(): Array<
+  Omit<PostadorMusicTrack, "url"> & { preview_url?: string }
+> {
+  return POSTADOR_MUSIC_CATALOG.map(({ id, label, mood, url, volume, preview_duration_sec }) => ({
     id,
     label,
     mood,
     volume,
     preview_url: url || undefined,
+    preview_duration_sec,
   }));
 }
 

@@ -43,6 +43,82 @@ function saveIA(provider: string, model: string) {
   }
 }
 
+type MusicTrackOption = {
+  id: string;
+  label: string;
+  mood: string;
+  preview_url?: string;
+  preview_duration_sec?: number;
+};
+
+function MusicTrimPanel({
+  musicTrackId,
+  musicTracks,
+  musicStartSec,
+  setMusicStartSec,
+  clipDurationSec,
+  disabled,
+}: {
+  musicTrackId: string;
+  musicTracks: MusicTrackOption[];
+  musicStartSec: number;
+  setMusicStartSec: (v: number) => void;
+  clipDurationSec: number;
+  disabled?: boolean;
+}) {
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const track = musicTracks.find((t) => t.id === musicTrackId);
+  if (!track?.preview_url || musicTrackId === "none") return null;
+
+  const trackLen = track.preview_duration_sec ?? 90;
+  const maxStart = Math.max(0, Math.round((trackLen - clipDurationSec) * 10) / 10);
+  const start = Math.min(musicStartSec, maxStart);
+  const end = Math.round((start + clipDurationSec) * 10) / 10;
+
+  const handlePreview = () => {
+    const el = audioRef.current;
+    if (!el || !track.preview_url) return;
+    el.src = track.preview_url;
+    el.currentTime = start;
+    void el.play().catch(() => undefined);
+    window.setTimeout(() => {
+      el.pause();
+    }, clipDurationSec * 1000 + 100);
+  };
+
+  return (
+    <div className="mt-2 space-y-2 rounded-md border border-violet-200 bg-violet-50/60 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <label className="text-xs font-medium text-violet-900">
+          Corte do trecho: {start.toFixed(1)}s → {end.toFixed(1)}s ({clipDurationSec}s no Reels)
+        </label>
+        <button
+          type="button"
+          onClick={handlePreview}
+          disabled={disabled}
+          className="text-xs font-medium text-violet-800 underline hover:text-violet-950 disabled:opacity-50"
+        >
+          ▶ Ouvir preview
+        </button>
+      </div>
+      <input
+        type="range"
+        min={0}
+        max={maxStart}
+        step={0.5}
+        value={start}
+        onChange={(e) => setMusicStartSec(Number(e.target.value))}
+        disabled={disabled || maxStart <= 0}
+        className="w-full accent-violet-600"
+      />
+      <p className="text-[11px] text-violet-800">
+        Arraste para escolher de qual segundo da música começa o Reels. O fim segue a duração do vídeo ({clipDurationSec}s).
+      </p>
+      <audio ref={audioRef} className="sr-only" preload="none" />
+    </div>
+  );
+}
+
 type Step = "form" | "review" | "published";
 /** Passos do assistente antes de gerar (só em step === "form") */
 type WizardStep = 1 | 2 | 3 | 4;
@@ -104,9 +180,8 @@ export function Postador() {
     Array<{ id: PostadorSlideTemplateId; label: string; descricao: string; recomendado?: boolean }>
   >([]);
   const [musicTrackId, setMusicTrackId] = useState("serene");
-  const [musicTracks, setMusicTracks] = useState<
-    Array<{ id: string; label: string; mood: string; preview_url?: string }>
-  >([]);
+  const [musicStartSec, setMusicStartSec] = useState(0);
+  const [musicTracks, setMusicTracks] = useState<MusicTrackOption[]>([]);
   const [brandKitAtivo, setBrandKitAtivo] = useState(false);
   const [arquivoProduto, setArquivoProduto] = useState<File | null>(null);
   const productFileRef = useRef<HTMLInputElement>(null);
@@ -129,6 +204,7 @@ export function Postador() {
     image_mode: modoImagemIA,
     slide_template: slideTemplate,
     music_id: musicTrackId !== "none" ? musicTrackId : undefined,
+    music_start_sec: musicTrackId !== "none" ? musicStartSec : undefined,
   });
 
   useEffect(() => {
@@ -159,6 +235,10 @@ export function Postador() {
         /* catálogos opcionais */
       });
   }, []);
+
+  useEffect(() => {
+    setMusicStartSec(0);
+  }, [musicTrackId]);
 
   useEffect(() => {
     if (step !== "review" || !caption) {
@@ -1083,8 +1163,16 @@ export function Postador() {
                                   </option>
                                 ))}
                               </select>
+                              <MusicTrimPanel
+                                musicTrackId={musicTrackId}
+                                musicTracks={musicTracks}
+                                musicStartSec={musicStartSec}
+                                setMusicStartSec={setMusicStartSec}
+                                clipDurationSec={duracaoVideo}
+                                disabled={loading}
+                              />
                               <p className="mt-1 text-xs text-gray-500">
-                                Músicas royalty-free (Mixkit). Volume já balanceado para Reels.
+                                Músicas royalty-free (Mixkit). Volume balanceado para Reels.
                               </p>
                             </div>
                           )}
@@ -1383,6 +1471,14 @@ export function Postador() {
                           </option>
                         ))}
                       </select>
+                      <MusicTrimPanel
+                        musicTrackId={musicTrackId}
+                        musicTracks={musicTracks}
+                        musicStartSec={musicStartSec}
+                        setMusicStartSec={setMusicStartSec}
+                        clipDurationSec={8}
+                        disabled={loading}
+                      />
                     </div>
                     <button
                       type="button"
