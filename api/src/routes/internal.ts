@@ -8,6 +8,7 @@ import {
   getWhatsappQueueStatus,
   processReadyWhatsappBatches,
 } from "../store/whatsappInboundQueue.js";
+import { qualificarEAcionarHumano } from "../services/whatsappHandoff.js";
 import { isRedisConfigured, pingRedis } from "../services/redis.js";
 import { getInternalSecretConfigured, verifyInternalSecret } from "../util/internalAuth.js";
 import { AGENT_GRAPH_API_BASE, AGENT_GRAPH_API_VERSION, AGENT_TIMEZONE } from "../services/agentConfigDefaults.js";
@@ -225,6 +226,45 @@ export async function internalRoutes(app: FastifyInstance, _opts: FastifyPluginO
       const status = result.code === "DATABASE_NOT_CONFIGURED" ? 503 : 400;
       return reply.status(status).send(result);
     }
+    return reply.send(result);
+  });
+
+  /**
+   * Qualifica lead e alerta consultor humano no WhatsApp configurado (tool do agente WA).
+   */
+  app.post("/whatsapp/qualificar-handoff", async (request, reply) => {
+    const body = (request.body ?? {}) as {
+      organization_id?: string;
+      phone?: string;
+      telefone?: string;
+      motivo?: string;
+      criterios?: string;
+      resumo?: string;
+    };
+
+    const organizationId = String(body.organization_id ?? "").trim();
+    const phone = String(body.phone ?? body.telefone ?? "").trim();
+    const motivo = String(body.motivo ?? "").trim();
+
+    if (!organizationId || !phone) {
+      return reply.status(400).send({
+        ok: false,
+        error: "Informe organization_id e phone/telefone do lead.",
+      });
+    }
+
+    const result = await qualificarEAcionarHumano({
+      organizationId,
+      leadPhone: phone,
+      motivo,
+      criterios: body.criterios ?? null,
+      resumo: body.resumo ?? null,
+    });
+
+    if (!result.ok) {
+      return reply.status(502).send(result);
+    }
+
     return reply.send(result);
   });
 

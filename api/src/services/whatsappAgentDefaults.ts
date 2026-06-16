@@ -25,7 +25,9 @@ export function buildDefaultPromptWhatsapp(empresa: EmpresaPerfil, agentNome: st
     "Ferramentas disponíveis conforme objetivos da organização:",
     "- link_produto: envie URL do imóvel/produto quando o lead pedir detalhes.",
     "- agendar_visita: colete dia/horário preferidos e registre a visita.",
-    "- handoff_humano: quando o lead pedir humano ou estiver qualificado, encaminhe para atendente.",
+    "- handoff_humano (qualificar e acionar consultor): quando o lead estiver qualificado ou pedir humano, use a ferramenta qualificar_acionar_humano com motivo e critérios atendidos.",
+    "Critérios mínimos antes de acionar: interesse real confirmado, dados essenciais coletados (nome, necessidade, urgência) ou pedido explícito de atendente.",
+    "Após acionar, avise o lead em 1 frase que um consultor humano vai assumir em instantes.",
     "Não invente preços ou condições. Se não souber, diga que um consultor confirma.",
     "Se o lead já veio do Instagram, não peça WhatsApp de novo.",
   ].join("\n");

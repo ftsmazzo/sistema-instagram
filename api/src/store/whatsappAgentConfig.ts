@@ -32,6 +32,7 @@ export type WhatsappAgentOrganization = {
   tom_voz: string;
   sobre: string;
   objetivo_qualificacao: string;
+  handoff_whatsapp: string | null;
 };
 
 export type WhatsappAgentInstance = {
@@ -120,6 +121,7 @@ type OrgRow = {
   tom_voz: string;
   sobre: string;
   objetivo_qualificacao: string;
+  handoff_whatsapp: string | null;
 };
 
 type InstanceRow = {
@@ -173,6 +175,7 @@ function orgFromRow(row: OrgRow): WhatsappAgentOrganization {
     tom_voz: row.tom_voz ?? "",
     sobre: row.sobre ?? "",
     objetivo_qualificacao: row.objetivo_qualificacao ?? "",
+    handoff_whatsapp: row.handoff_whatsapp?.trim() || null,
   };
 }
 
@@ -185,6 +188,7 @@ function empresaFromOrg(org: WhatsappAgentOrganization) {
     tom_voz: org.tom_voz,
     sobre: org.sobre,
     objetivo_qualificacao: org.objetivo_qualificacao,
+    handoff_whatsapp: org.handoff_whatsapp ?? "",
   };
 }
 
@@ -198,7 +202,8 @@ async function fetchOrg(orgId: string): Promise<OrgRow | null> {
             COALESCE(o.cidade, '') AS cidade,
             COALESCE(o.tom_voz, '') AS tom_voz,
             COALESCE(o.sobre, '') AS sobre,
-            COALESCE(o.objetivo_qualificacao, '') AS objetivo_qualificacao
+            COALESCE(o.objetivo_qualificacao, '') AS objetivo_qualificacao,
+            COALESCE(o.handoff_whatsapp, '') AS handoff_whatsapp
      FROM organizations o WHERE o.id = $1::uuid LIMIT 1`,
     [orgId]
   );
@@ -425,6 +430,14 @@ function assembleConfig(args: {
   }
 
   const objetivos = parseObjetivos(instance?.objetivos);
+  if (objetivos.includes("handoff_humano") && !organization.handoff_whatsapp?.trim()) {
+    issues.push({
+      code: "HANDOFF_WHATSAPP_MISSING",
+      message:
+        "Objetivo de qualificar e acionar consultor ativo, mas nenhum WhatsApp de consultor está configurado no painel.",
+      severity: "warning",
+    });
+  }
   const baseUrl = resolveEvolutionBaseUrl(instance?.evolution_base_url);
   const instanceName = instance?.instance_name ?? "";
 

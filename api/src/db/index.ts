@@ -97,6 +97,7 @@ ALTER TABLE organizations ADD COLUMN IF NOT EXISTS cidade text NOT NULL DEFAULT 
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS tom_voz text NOT NULL DEFAULT '';
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS sobre text NOT NULL DEFAULT '';
 ALTER TABLE organizations ADD COLUMN IF NOT EXISTS objetivo_qualificacao text NOT NULL DEFAULT '';
+ALTER TABLE organizations ADD COLUMN IF NOT EXISTS handoff_whatsapp text NOT NULL DEFAULT '';
 `;
 
 /** CRM do agente (postagens, comentarios, direct, leads) — mesmo banco da API, escopo por organization_id.
@@ -386,5 +387,6 @@ export async function ensureTables(): Promise<void> {
   await p.query(MIGRATE_N8N_CHAT_HISTORIES_WA);
   await p.query(MIGRATE_WHATSAPP_INBOUND_QUEUE);
   await p.query(MIGRATE_MULTITENANT_POSTADOR_WA);
+  await p.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS handoff_whatsapp text NOT NULL DEFAULT ''`);
   initDone = true;
 }

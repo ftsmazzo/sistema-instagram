@@ -47,6 +47,7 @@ export async function loadWorkspaceConfigStore(orgId: string): Promise<ConfigSto
     tom_voz: string;
     sobre: string;
     objetivo_qualificacao: string;
+    handoff_whatsapp: string;
   }>(
     `SELECT name, default_instagram_account_id,
             COALESCE(nome_fantasia, '') AS nome_fantasia,
@@ -54,7 +55,8 @@ export async function loadWorkspaceConfigStore(orgId: string): Promise<ConfigSto
             COALESCE(cidade, '') AS cidade,
             COALESCE(tom_voz, '') AS tom_voz,
             COALESCE(sobre, '') AS sobre,
-            COALESCE(objetivo_qualificacao, '') AS objetivo_qualificacao
+            COALESCE(objetivo_qualificacao, '') AS objetivo_qualificacao,
+            COALESCE(handoff_whatsapp, '') AS handoff_whatsapp
      FROM organizations WHERE id = $1`,
     [orgId]
   );
@@ -67,6 +69,7 @@ export async function loadWorkspaceConfigStore(orgId: string): Promise<ConfigSto
       tom_voz: "",
       sobre: "",
       objetivo_qualificacao: "",
+      handoff_whatsapp: "",
     };
     return { empresa: empty, contas_instagram: [], instagram_default_id: null };
   }
@@ -116,6 +119,7 @@ export async function loadWorkspaceConfigStore(orgId: string): Promise<ConfigSto
     tom_voz: r.tom_voz ?? "",
     sobre: r.sobre ?? "",
     objetivo_qualificacao: r.objetivo_qualificacao ?? "",
+    handoff_whatsapp: r.handoff_whatsapp ?? "",
   };
   return {
     empresa,
@@ -154,6 +158,8 @@ export async function saveWorkspaceConfig(
       if (e.sobre !== undefined) sets.push({ col: "sobre", val: (e.sobre ?? "").trim() });
       if (e.objetivo_qualificacao !== undefined)
         sets.push({ col: "objetivo_qualificacao", val: (e.objetivo_qualificacao ?? "").trim() });
+      if (e.handoff_whatsapp !== undefined)
+        sets.push({ col: "handoff_whatsapp", val: (e.handoff_whatsapp ?? "").trim() });
       if (sets.length > 0) {
         const placeholders = sets.map((s, idx) => `${s.col} = $${idx + 1}`).join(", ");
         await client.query(`UPDATE organizations SET ${placeholders} WHERE id = $${sets.length + 1}`, [

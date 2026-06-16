@@ -446,6 +446,31 @@ export async function deleteEvolutionInstance(instanceName: string, baseUrl?: st
   });
 }
 
+/** Envia mensagem de texto via Evolution API. */
+export async function sendEvolutionText(
+  instanceName: string,
+  phoneDigits: string,
+  text: string,
+  baseUrl?: string
+): Promise<void> {
+  const env = getEvolutionEnv();
+  if (!env) throw new Error("Evolution não configurada na API.");
+  const name = instanceName.trim();
+  const number = phoneDigits.replace(/\D/g, "");
+  const message = text.trim();
+  if (!name) throw new Error("instance_name obrigatório.");
+  if (!number) throw new Error("Número inválido.");
+  if (!message) throw new Error("Mensagem vazia.");
+  const url = baseUrl?.trim() || env.baseUrl;
+  await evolutionFetch(
+    url,
+    env.apiKey,
+    "POST",
+    `/message/sendText/${encodeURIComponent(name)}`,
+    { number, text: message }
+  );
+}
+
 export async function findInstanceWebhook(
   instanceName: string,
   baseUrl?: string

@@ -31,6 +31,8 @@ export type EmpresaPerfil = {
   sobre: string;
   /** O que o agente deve qualificar no lead (multi-segmento; ex.: agendar consulta, orçamento). */
   objetivo_qualificacao: string;
+  /** WhatsApp do consultor humano para alerta quando o lead estiver qualificado. */
+  handoff_whatsapp: string;
 };
 
 export type ConfigStore = {
@@ -51,6 +53,7 @@ export const emptyEmpresa = (): EmpresaPerfil => ({
   tom_voz: "",
   sobre: "",
   objetivo_qualificacao: "",
+  handoff_whatsapp: "",
 });
 
 const defaultConfig: ConfigStore = {
@@ -206,6 +209,7 @@ export async function saveConfig(
     if (e.tom_voz !== undefined) emp.tom_voz = (e.tom_voz ?? "").trim();
     if (e.sobre !== undefined) emp.sobre = (e.sobre ?? "").trim();
     if (e.objetivo_qualificacao !== undefined) emp.objetivo_qualificacao = (e.objetivo_qualificacao ?? "").trim();
+    if (e.handoff_whatsapp !== undefined) emp.handoff_whatsapp = (e.handoff_whatsapp ?? "").trim();
     current.empresa = emp;
   }
 

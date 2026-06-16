@@ -20,6 +20,7 @@ function emptyEmpresa(): EmpresaPerfilRes {
     tom_voz: "",
     sobre: "",
     objetivo_qualificacao: "",
+    handoff_whatsapp: "",
   };
 }
 
@@ -380,6 +381,14 @@ export function AdminPage() {
             onChange={(e) => setEmpresa((x) => ({ ...x, objetivo_qualificacao: e.target.value }))}
             className="textarea-field min-h-[88px]"
             placeholder="O que o agente deve descobrir no lead (ex.: interesse em compra, agendar visita, orçamento)."
+          />
+          <label className="label-field">WhatsApp do consultor humano (fechamento)</label>
+          <input
+            type="text"
+            value={empresa.handoff_whatsapp ?? ""}
+            onChange={(e) => setEmpresa((x) => ({ ...x, handoff_whatsapp: e.target.value }))}
+            className="input-field font-mono text-sm"
+            placeholder="ex.: 16999998888 — recebe alerta quando lead for qualificado"
           />
           <button type="button" onClick={handleSaveEmpresa} disabled={saving} className="btn-primary">
             Salvar dados da empresa

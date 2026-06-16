@@ -13,7 +13,7 @@ import {
 const OBJETIVOS: { id: WhatsappObjetivo; label: string }[] = [
   { id: "link_produto", label: "Enviar link de produto/imóvel" },
   { id: "agendar_visita", label: "Agendar visita" },
-  { id: "handoff_humano", label: "Encaminhar para humano" },
+  { id: "handoff_humano", label: "Qualificar e acionar consultor" },
 ];
 
 const DEFAULT_OBJETIVOS: WhatsappObjetivo[] = ["link_produto", "agendar_visita", "handoff_humano"];
@@ -24,6 +24,7 @@ type AgentForm = {
   agent_prompt: string;
   objetivos: WhatsappObjetivo[];
   delay_primeira_msg_minutos: number;
+  handoff_whatsapp: string;
 };
 
 function emptyAgentForm(): AgentForm {
@@ -33,6 +34,7 @@ function emptyAgentForm(): AgentForm {
     agent_prompt: "",
     objetivos: [...DEFAULT_OBJETIVOS],
     delay_primeira_msg_minutos: 20,
+    handoff_whatsapp: "",
   };
 }
 
@@ -139,6 +141,7 @@ export function WhatsAppPage() {
       agent_prompt: wa.instance?.agent_prompt ?? "",
       objetivos: wa.instance?.objetivos?.length ? wa.instance.objetivos : [...DEFAULT_OBJETIVOS],
       delay_primeira_msg_minutos: wa.instance?.delay_primeira_msg_minutos ?? 20,
+      handoff_whatsapp: wa.handoff_whatsapp ?? "",
     };
     setAgentForm(loadedAgent);
     setSavedAgent(loadedAgent);
@@ -300,7 +303,12 @@ export function WhatsAppPage() {
     try {
       await api.agentes.putWhatsapp({
         instance_name: instanceName.trim() || undefined,
-        ...agentForm,
+        handoff_whatsapp: agentForm.handoff_whatsapp.trim() || undefined,
+        agent_ativo: agentForm.agent_ativo,
+        agent_nome: agentForm.agent_nome,
+        agent_prompt: agentForm.agent_prompt,
+        objetivos: agentForm.objetivos,
+        delay_primeira_msg_minutos: agentForm.delay_primeira_msg_minutos,
       });
       setSavedAgent({ ...agentForm });
       setEditingAgent(false);
@@ -605,6 +613,14 @@ export function WhatsAppPage() {
                   <p className="text-sm text-gray-600">
                     Refinamentos: <span className="text-gray-800">{promptSummary(savedAgent.agent_prompt)}</span>
                   </p>
+                  {savedAgent.objetivos.includes("handoff_humano") && (
+                    <p className="text-sm text-gray-600">
+                      Consultor humano:{" "}
+                      <span className="font-mono text-gray-800">
+                        {formatPhone(savedAgent.handoff_whatsapp) ?? "não configurado"}
+                      </span>
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     {objetivosLabels(savedAgent.objetivos).map((label) => (
                       <span
@@ -680,6 +696,21 @@ export function WhatsAppPage() {
                     placeholder="Complementa o prompt profissional interno — não substitui. Vazio = só o template da empresa."
                   />
                 </label>
+
+                {agentForm.objetivos.includes("handoff_humano") && (
+                  <label className="block text-sm md:max-w-sm">
+                    <span className="font-medium text-gray-700">WhatsApp do consultor humano</span>
+                    <input
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm font-mono"
+                      value={agentForm.handoff_whatsapp}
+                      onChange={(e) => setAgentForm((f) => ({ ...f, handoff_whatsapp: e.target.value }))}
+                      placeholder="ex.: 16999998888"
+                    />
+                    <span className="mt-1 block text-xs text-gray-500">
+                      Quando o lead estiver qualificado, o agente envia um alerta para este número avisando que é hora de fechar.
+                    </span>
+                  </label>
+                )}
 
                 <fieldset>
                   <legend className="text-sm font-medium text-gray-700">Objetivos programáveis</legend>

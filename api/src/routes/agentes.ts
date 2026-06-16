@@ -21,6 +21,7 @@ import {
   WhatsappInstanceNameTakenError,
 } from "../store/whatsappInstance.js";
 import type { WhatsappObjetivo } from "../services/whatsappAgentDefaults.js";
+import { loadWorkspaceConfigStore, saveWorkspaceConfig } from "../store/workspace.js";
 
 export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOptions) {
   app.addHook("preHandler", async (request, reply) => {
@@ -80,6 +81,7 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
 
     return reply.send({
       instance,
+      handoff_whatsapp: (await loadWorkspaceConfigStore(u.orgId)).empresa.handoff_whatsapp ?? "",
       evolution_configured: evolutionConfigured,
       connection: connection
         ? {
@@ -104,6 +106,7 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
       objetivos?: WhatsappObjetivo[];
       status?: string;
       delay_primeira_msg_minutos?: number;
+      handoff_whatsapp?: string;
     };
 
     const existing = await getWhatsappInstanceForOrg(u.orgId);
@@ -133,6 +136,12 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
         status: body.status ?? existing?.status,
         delay_primeira_msg_minutos: body.delay_primeira_msg_minutos,
       });
+
+      if (body.handoff_whatsapp !== undefined) {
+        await saveWorkspaceConfig(u.orgId, {
+          empresa: { handoff_whatsapp: body.handoff_whatsapp },
+        });
+      }
 
       return reply.send({ saved: true, instance });
     } catch (err) {

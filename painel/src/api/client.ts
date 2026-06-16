@@ -89,6 +89,7 @@ export type EmpresaPerfilRes = {
   tom_voz: string;
   sobre: string;
   objetivo_qualificacao: string;
+  handoff_whatsapp: string;
 };
 
 export type Config = {
@@ -154,6 +155,7 @@ export type WhatsappConnectionRes = {
 
 export type WhatsappGetRes = {
   instance: WhatsappInstanceRes | null;
+  handoff_whatsapp?: string;
   evolution_configured: boolean;
   connection: {
     state: WhatsappConnectionState;
@@ -392,6 +394,7 @@ export const api = {
       agent_prompt?: string;
       objetivos?: WhatsappObjetivo[];
       delay_primeira_msg_minutos?: number;
+      handoff_whatsapp?: string;
     }) =>
       fetchJson<{ saved: boolean; instance: WhatsappInstanceRes }>("/api/agentes/whatsapp", {
         method: "PUT",

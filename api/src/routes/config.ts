@@ -19,6 +19,7 @@ export async function configRoutes(
         tom_voz: "",
         sobre: "",
         objetivo_qualificacao: "",
+        handoff_whatsapp: "",
       },
       contas_instagram: contas,
       instagram_default_id: config.instagram_default_id ?? null,

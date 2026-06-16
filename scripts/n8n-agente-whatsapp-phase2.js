@@ -10,7 +10,7 @@ import {
   expr,
 } from '@n8n/workflow-sdk';
 
- = trigger({
+const webhookEvolution = trigger({
   type: 'n8n-nodes-base.webhook',
   version: 2.1,
   config: {
@@ -210,7 +210,7 @@ const prepAgenteWa = node({
           { id: 'a2', name: 'telefone', value: expr("={{ $('Prep Proativo').isExecuted ? $('Prep Proativo').item.json.telefone_raw : $('Normaliza Inbound').item.json.telefone_raw }}"), type: 'string' },
           { id: 'a3', name: 'message_text', value: expr("={{ $('Prep Proativo').isExecuted ? ($('Prep Proativo').item.json.message_text || '') : ($('Normaliza Inbound').item.json.message_text || '') }}"), type: 'string' },
           { id: 'a4', name: 'modo', value: expr("={{ $('Prep Proativo').isExecuted ? $('Prep Proativo').item.json.modo : $('Normaliza Inbound').item.json.modo }}"), type: 'string' },
-          { id: 'a5', name: 'prompt_runtime', value: expr("={{ $('HTTP Config WA').item.json.prompts.whatsapp + '\\n\\n--- CONTEXTO INSTAGRAM ---\\n' + ($('HTTP Config WA').item.json.instagram_context?.resumo || 'Sem historico Instagram registrado para este lead.') + '\\n\\n--- REGRAS FIXAS ---\\n- Maximo 400 caracteres.\\n- Uma ideia + no maximo uma pergunta.\\n- Se ha historico Direct acima: CONTINUE a conversa — nao trate como primeiro contato nem pitch frio do post.\\n- Se modo proativo: retome conversa do Instagram sem repetir boas-vindas.\\n- Se lead pedir humano ou estiver qualificado: use encaminhar_humano.' }}"), type: 'string' },
+          { id: 'a5', name: 'prompt_runtime', value: expr("={{ $('HTTP Config WA').item.json.prompts.whatsapp + '\\n\\n--- CONTEXTO INSTAGRAM ---\\n' + ($('HTTP Config WA').item.json.instagram_context?.resumo || 'Sem historico Instagram registrado para este lead.') + '\\n\\n--- REGRAS FIXAS ---\\n- Maximo 400 caracteres.\\n- Uma ideia + no maximo uma pergunta.\\n- Se ha historico Direct acima: CONTINUE a conversa — nao trate como primeiro contato nem pitch frio do post.\\n- Se modo proativo: retome conversa do Instagram sem repetir boas-vindas.\\n- Se lead pedir humano ou estiver qualificado: use qualificar_acionar_humano com motivo e criterios.' }}"), type: 'string' },
           { id: 'a6', name: 'organization_id', value: expr('={{ $('HTTP Config WA').item.json.organization.id }}'), type: 'string' },
           { id: 'a7', name: 'send_text_path', value: expr('={{ $('HTTP Config WA').item.json.evolution.send_text_path }}'), type: 'string' },
           { id: 'a8', name: 'session_key', value: expr("={{ $('HTTP Config WA').item.json.runtime.redis_key_prefix }}"), type: 'string' },
@@ -269,21 +269,33 @@ UPDATE leads SET status = 'qualificado', updated_at = NOW() WHERE organization_i
   },
 });
 
-const encaminharHumano = tool({
-  type: 'n8n-nodes-base.postgresTool',
-  version: 2.6,
+const qualificarAcionarHumano = tool({
+  type: 'n8n-nodes-base.httpRequestTool',
+  version: 4.4,
   config: {
-    name: 'encaminhar_humano',
+    name: 'qualificar_acionar_humano',
     position: [1680, 620],
     parameters: {
       descriptionType: 'manual',
-      toolDescription: 'Encaminha lead para atendimento humano. Param motivo opcional.',
-      operation: 'executeQuery',
-      query: `=UPDATE leads SET status = 'handoff', handoff_at = NOW(), handoff_motivo = '{{ $fromAI('motivo', 'Motivo do handoff', 'string') }}', updated_at = NOW()
-WHERE organization_id = '{{ $('Prep Agente WA').item.json.organization_id }}'::uuid AND whatsapp_digits = '{{ $('Prep Agente WA').item.json.telefone }}';`,
-      options: {},
+      toolDescription:
+        'Qualifica o lead e alerta o consultor humano no WhatsApp configurado. Params: motivo (obrigatório), criterios (opcional), resumo (opcional). Use quando o lead estiver pronto para fechamento ou pedir humano.',
+      method: 'POST',
+      url: 'https://plataforma-instagram-instagram-backend.kxryyk.easypanel.host/api/internal/whatsapp/qualificar-handoff',
+      sendHeaders: true,
+      headerParameters: {
+        parameters: [
+          { name: 'Content-Type', value: 'application/json' },
+          { name: 'X-Internal-Secret', value: 'CONFIGURE_INTERNAL_SECRET' },
+        ],
+      },
+      sendBody: true,
+      specifyBody: 'json',
+      jsonBody: expr(
+        '={\n  "organization_id": {{ JSON.stringify($(\'Prep Agente WA\').item.json.organization_id) }},\n  "phone": {{ JSON.stringify($(\'Prep Agente WA\').item.json.telefone) }},\n  "motivo": {{ JSON.stringify($fromAI(\'motivo\', \'Motivo da qualificação/handoff\', \'string\')) }},\n  "criterios": {{ JSON.stringify($fromAI(\'criterios\', \'Critérios atendidos na qualificação\', \'string\')) }},\n  "resumo": {{ JSON.stringify($fromAI(\'resumo\', \'Resumo curto da conversa para o consultor\', \'string\')) }}\n}'
+      ),
+      optimizeResponse: true,
+      options: { response: { response: { neverError: true } } },
     },
-    credentials: { postgres: { id: '7XLmPrmB0innRVr5', name: 'Maquina-Instagram' } },
   },
 });
 
@@ -324,7 +336,7 @@ const agenteWa = node({
     subnodes: {
       model: openAiModel,
       memory: memoriaWa,
-      tools: [agendarVisita, encaminharHumano, enviarLink],
+      tools: [agendarVisita, qualificarAcionarHumano, enviarLink],
     },
   },
   output: [{ output: 'Resposta curta do agente' }],
