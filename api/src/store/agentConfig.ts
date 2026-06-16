@@ -106,6 +106,7 @@ type WorkspaceRow = {
   tom_voz: string;
   sobre: string;
   objetivo_qualificacao: string;
+  handoff_whatsapp: string;
 };
 
 export type ResolveAgentConfigParams = {
@@ -127,6 +128,7 @@ function empresaFromRow(row: WorkspaceRow): EmpresaPerfil {
     tom_voz: row.tom_voz ?? "",
     sobre: row.sobre ?? "",
     objetivo_qualificacao: row.objetivo_qualificacao ?? "",
+    handoff_whatsapp: row.handoff_whatsapp ?? "",
   };
 }
 
@@ -352,7 +354,8 @@ async function fetchWorkspaceRow(params: ResolveAgentConfigParams): Promise<Work
          COALESCE(o.cidade, '') AS cidade,
          COALESCE(o.tom_voz, '') AS tom_voz,
          COALESCE(o.sobre, '') AS sobre,
-         COALESCE(o.objetivo_qualificacao, '') AS objetivo_qualificacao
+         COALESCE(o.objetivo_qualificacao, '') AS objetivo_qualificacao,
+         COALESCE(o.handoff_whatsapp, '') AS handoff_whatsapp
        FROM instagram_accounts ia
        INNER JOIN organizations o ON o.id = ia.organization_id
        WHERE ia.id = $1
@@ -383,7 +386,8 @@ async function fetchWorkspaceRow(params: ResolveAgentConfigParams): Promise<Work
        COALESCE(o.cidade, '') AS cidade,
        COALESCE(o.tom_voz, '') AS tom_voz,
        COALESCE(o.sobre, '') AS sobre,
-       COALESCE(o.objetivo_qualificacao, '') AS objetivo_qualificacao
+       COALESCE(o.objetivo_qualificacao, '') AS objetivo_qualificacao,
+       COALESCE(o.handoff_whatsapp, '') AS handoff_whatsapp
      FROM instagram_accounts ia
      INNER JOIN organizations o ON o.id = ia.organization_id
      WHERE ia.ig_user_id = $1
@@ -431,6 +435,7 @@ async function resolveFromLegacyAppConfig(igUserId: string): Promise<AgentConfig
       tom_voz: empresa.tom_voz ?? "",
       sobre: empresa.sobre ?? "",
       objetivo_qualificacao: empresa.objetivo_qualificacao ?? "",
+      handoff_whatsapp: empresa.handoff_whatsapp ?? "",
     },
     empresa,
     issues
