@@ -9,6 +9,7 @@ import {
   processReadyWhatsappBatches,
 } from "../store/whatsappInboundQueue.js";
 import { agendarCompromisso } from "../services/whatsappAgendar.js";
+import { tentarAgendarDaConversa } from "../services/whatsappAgendarConversa.js";
 import { qualificarEAcionarHumano } from "../services/whatsappHandoff.js";
 import { consultarProximaData } from "../services/empresaConfigHelpers.js";
 import { isRedisConfigured, pingRedis } from "../services/redis.js";
@@ -298,10 +299,10 @@ export async function internalRoutes(app: FastifyInstance, _opts: FastifyPluginO
         error: "Informe organization_id e phone/telefone do lead.",
       });
     }
-    if (!dataVisita && !(diaSemana && horario)) {
+    if (!dataVisita && !(diaSemana || horario)) {
       return reply.status(400).send({
         ok: false,
-        error: "Informe data_visita (ISO) ou dia_semana + horario (ex.: terça, 10:00).",
+        error: "Informe data_visita (ISO) ou dia_semana (horario opcional, padrão da agenda).",
       });
     }
 
@@ -317,6 +318,47 @@ export async function internalRoutes(app: FastifyInstance, _opts: FastifyPluginO
     });
 
     if (!result.ok) {
+      return reply.status(502).send(result);
+    }
+
+    return reply.send(result);
+  });
+
+  /**
+   * Fallback: grava visita a partir do texto da conversa quando o agente não chamou a tool.
+   * Chamado pelo n8n após cada resposta do Agente WA.
+   */
+  app.post("/whatsapp/agendar-da-conversa", async (request, reply) => {
+    const body = (request.body ?? {}) as {
+      organization_id?: string;
+      phone?: string;
+      telefone?: string;
+      texto_lead?: string;
+      texto_agente?: string;
+      contexto_extra?: string;
+    };
+
+    const organizationId = String(body.organization_id ?? "").trim();
+    const phone = String(body.phone ?? body.telefone ?? "").trim();
+    const textoLead = String(body.texto_lead ?? "").trim();
+    const textoAgente = String(body.texto_agente ?? "").trim();
+
+    if (!organizationId || !phone) {
+      return reply.status(400).send({
+        ok: false,
+        error: "Informe organization_id e phone/telefone.",
+      });
+    }
+
+    const result = await tentarAgendarDaConversa({
+      organizationId,
+      leadPhone: phone,
+      textoLead,
+      textoAgente,
+      contextoExtra: body.contexto_extra ?? null,
+    });
+
+    if (!result.skipped && !result.ok) {
       return reply.status(502).send(result);
     }
 

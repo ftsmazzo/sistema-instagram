@@ -135,10 +135,11 @@ export function resolveAgendamentoDateTime(args: {
   dataVisitaRaw?: string | null;
   diaSemana?: string | null;
   horario?: string | null;
+  horarioPadrao?: string | null;
   timezone: string;
 }): { date: Date | null; source: "dia_semana" | "iso" | null; error?: string } {
   const tz = args.timezone.trim() || "America/Sao_Paulo";
-  const horario = (args.horario ?? "").trim();
+  const horario = (args.horario ?? "").trim() || (args.horarioPadrao ?? "").trim();
 
   if (args.diaSemana?.trim() && horario) {
     const resolved = resolveProximoDiaSemana(args.diaSemana, horario, tz, true);

@@ -128,6 +128,7 @@ export async function agendarCompromisso(input: AgendarCompromissoInput): Promis
     dataVisitaRaw: input.dataVisita,
     diaSemana: input.diaSemana,
     horario: input.horario,
+    horarioPadrao: agenda.horario_inicio,
     timezone,
   });
   if (!resolved.date) {
