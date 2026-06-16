@@ -499,7 +499,15 @@ export const api = {
           preview_url?: string;
           preview_duration_sec?: number;
         }>;
-      }>("/api/postador/music-tracks"),
+      }>("/api/postador/music-tracks").then((res) => ({
+        tracks: res.tracks.map((t) => ({
+          ...t,
+          preview_url:
+            t.preview_url && !t.preview_url.startsWith("http")
+              ? `${base}${t.preview_url}`
+              : t.preview_url,
+        })),
+      })),
     getSlideTemplates: () =>
       fetchJson<{
         templates: Array<{

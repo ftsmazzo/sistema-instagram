@@ -5,6 +5,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 import { uploadMedia, isStorageConfigured } from "./storage.js";
 import type { PostadorMusicTrack } from "./postadorMusic.js";
+import { loadMusicBuffer } from "./postadorMusic.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -80,7 +81,7 @@ export async function gerarSlideshowReels(
 
   const dir = await mkdtemp(join(tmpdir(), "postador-slideshow-"));
   const outPath = join(dir, "reels.mp4");
-  const track = musicOpts?.track?.url ? musicOpts.track : null;
+  const track = musicOpts?.track?.local_file || musicOpts?.track?.source_url ? musicOpts.track : null;
   const musicStart = clampMusicStart(musicOpts?.startSec);
   let musicPath: string | null = null;
 
@@ -94,8 +95,8 @@ export async function gerarSlideshowReels(
       paths.push(p);
     }
 
-    if (track?.url) {
-      const musicBuf = await downloadBuffer(track.url, "música");
+    if (track?.local_file || track?.source_url) {
+      const musicBuf = await loadMusicBuffer(track);
       musicPath = join(dir, "track.mp3");
       await writeFile(musicPath, musicBuf);
     }

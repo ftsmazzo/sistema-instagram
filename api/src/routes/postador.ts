@@ -14,7 +14,7 @@ import { gerarCarrosselCompleto } from "../services/postadorCarousel.js";
 import { parsePostadorBrandKit } from "../services/postadorBrand.js";
 import { compositarProdutoNoFundo } from "../services/postadorComposite.js";
 import { checarQualidadePost } from "../services/postadorQuality.js";
-import { listMusicTracksForApi } from "../services/postadorMusic.js";
+import { listMusicTracksForApi, resolveMusicTrack, getMusicAssetPath, loadMusicBuffer } from "../services/postadorMusic.js";
 import type { PostadorSlideTemplate } from "../services/carouselTemplates.js";
 import { parseSlideTemplateId, SLIDE_TEMPLATES_CATALOG } from "../services/carouselTemplates.js";
 import {
@@ -380,6 +380,35 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
   // GET /api/postador/music-tracks — trilhas royalty-free para slideshow
   fastify.get("/music-tracks", async (_request, reply) => {
     return reply.send({ tracks: listMusicTracksForApi() });
+  });
+
+  // GET /api/postador/music-tracks/:id/preview — stream MP3 para preview no painel
+  fastify.get("/music-tracks/:id/preview", async (request, reply) => {
+    const id = (request.params as { id?: string }).id?.trim();
+    const track = resolveMusicTrack(id);
+    if (!track?.local_file) {
+      return reply.status(404).send({ error: "Trilha não encontrada." });
+    }
+    const localPath = getMusicAssetPath(track.id);
+    if (localPath) {
+      try {
+        await stat(localPath);
+        reply.header("Content-Type", "audio/mpeg");
+        reply.header("Cache-Control", "public, max-age=86400");
+        return reply.send(createReadStream(localPath));
+      } catch {
+        /* fallback buffer */
+      }
+    }
+    try {
+      const buf = await loadMusicBuffer(track);
+      reply.header("Content-Type", "audio/mpeg");
+      reply.header("Cache-Control", "public, max-age=3600");
+      return reply.send(buf);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro ao carregar trilha.";
+      return reply.status(503).send({ error: msg });
+    }
   });
 
   // GET /api/postador/slide-templates — layouts visuais de carrossel/moldura
