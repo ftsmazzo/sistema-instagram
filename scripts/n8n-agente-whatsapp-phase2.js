@@ -210,7 +210,7 @@ const prepAgenteWa = node({
           { id: 'a2', name: 'telefone', value: expr("={{ $('Prep Proativo').isExecuted ? $('Prep Proativo').item.json.telefone_raw : $('Normaliza Inbound').item.json.telefone_raw }}"), type: 'string' },
           { id: 'a3', name: 'message_text', value: expr("={{ $('Prep Proativo').isExecuted ? ($('Prep Proativo').item.json.message_text || '') : ($('Normaliza Inbound').item.json.message_text || '') }}"), type: 'string' },
           { id: 'a4', name: 'modo', value: expr("={{ $('Prep Proativo').isExecuted ? $('Prep Proativo').item.json.modo : $('Normaliza Inbound').item.json.modo }}"), type: 'string' },
-          { id: 'a5', name: 'prompt_runtime', value: expr("={{ $('HTTP Config WA').item.json.prompts.whatsapp + '\\n\\n--- REGRAS FIXAS ---\\n- Maximo 400 caracteres.\\n- Uma ideia + no maximo uma pergunta.\\n- Use contexto do Instagram/post se disponivel.\\n- Se modo proativo: retome conversa do Instagram sem repetir boas-vindas.\\n- Se lead pedir humano ou estiver qualificado: use encaminhar_humano.' }}"), type: 'string' },
+          { id: 'a5', name: 'prompt_runtime', value: expr("={{ $('HTTP Config WA').item.json.prompts.whatsapp + '\\n\\n--- CONTEXTO INSTAGRAM ---\\n' + ($('HTTP Config WA').item.json.instagram_context?.resumo || 'Sem historico Instagram registrado para este lead.') + '\\n\\n--- REGRAS FIXAS ---\\n- Maximo 400 caracteres.\\n- Uma ideia + no maximo uma pergunta.\\n- Se ha historico Direct acima: CONTINUE a conversa — nao trate como primeiro contato nem pitch frio do post.\\n- Se modo proativo: retome conversa do Instagram sem repetir boas-vindas.\\n- Se lead pedir humano ou estiver qualificado: use encaminhar_humano.' }}"), type: 'string' },
           { id: 'a6', name: 'organization_id', value: expr('={{ $('HTTP Config WA').item.json.organization.id }}'), type: 'string' },
           { id: 'a7', name: 'send_text_path', value: expr('={{ $('HTTP Config WA').item.json.evolution.send_text_path }}'), type: 'string' },
           { id: 'a8', name: 'session_key', value: expr("={{ $('HTTP Config WA').item.json.runtime.redis_key_prefix }}"), type: 'string' },
@@ -229,7 +229,7 @@ const openAiModel = languageModel({
   config: {
     name: 'Model WA',
     position: [1200, 620],
-    parameters: { model: expr('={{ "gpt-4.1-mini" }}'), options: { temperature: 0.4 } },
+    parameters: { model: expr('={{ "gpt-4o-mini" }}'), options: { temperature: 0.4 } },
     credentials: { openAiApi: { id: 'h16ESiG18xo2Y7O7', name: 'OpenAI account' } },
   },
 });
@@ -243,6 +243,8 @@ const memoriaWa = memory({
     parameters: {
       sessionIdType: 'customKey',
       sessionKey: expr("={{ $('Prep Agente WA').item.json.session_key }}"),
+      tableName: 'n8n_chat_histories_wa',
+      contextWindowLength: 5,
     },
     credentials: { postgres: { id: '7XLmPrmB0innRVr5', name: 'Maquina-Instagram' } },
   },
@@ -316,7 +318,7 @@ const agenteWa = node({
     position: [1440, 400],
     parameters: {
       promptType: 'define',
-      text: expr("=Modo: {{ $('Prep Agente WA').item.json.modo }}\nLead: {{ $('Prep Agente WA').item.json.config.lead?.nome || 'desconhecido' }} (@{{ $('Prep Agente WA').item.json.config.lead?.username_instagram || 'n/a' }})\nPost origem: {{ $('Prep Agente WA').item.json.config.post_context?.caption_post || 'n/a' }}\nUltimo IG: {{ $('Prep Agente WA').item.json.config.instagram_context?.ultima_dm || 'n/a' }}\n\nMensagem:\n{{ $('Prep Agente WA').item.json.message_text || '[INICIAR CONVERSA PROATIVA - retome contexto do Instagram]' }}"),
+      text: expr("=Modo: {{ $('Prep Agente WA').item.json.modo }}\nLead: {{ $('Prep Agente WA').item.json.config.lead?.nome || 'desconhecido' }} (@{{ $('Prep Agente WA').item.json.config.lead?.username_instagram || 'n/a' }})\nOrigem: {{ $('Prep Agente WA').item.json.config.lead?.origem_interacao || 'n/a' }}\n\nMensagem WhatsApp agora:\n{{ $('Prep Agente WA').item.json.message_text || '[INICIAR CONVERSA PROATIVA - retome contexto do Instagram Direct no system prompt]' }}"),
       options: { systemMessage: expr('={{ $('Prep Agente WA').item.json.prompt_runtime }}') },
     },
     subnodes: {

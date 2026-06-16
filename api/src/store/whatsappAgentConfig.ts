@@ -79,6 +79,11 @@ export type WhatsappAgentPostContext = {
 export type WhatsappAgentInstagramContext = {
   ultimo_comentario: string | null;
   ultima_dm: string | null;
+  /** Transcrição cronológica Lead/Agente das DMs no Instagram (ambas direções). */
+  historico_direct: string | null;
+  total_mensagens_direct: number;
+  /** Bloco pronto para colar no system prompt do agente WhatsApp. */
+  resumo: string | null;
 };
 
 export type WhatsappAgentRuntime = {
@@ -263,27 +268,104 @@ async function fetchPostContext(orgId: string, idPost: string): Promise<Whatsapp
   };
 }
 
+const DIRECT_HISTORY_LIMIT = 40;
+
+type DirectHistoryRow = {
+  direct_text: string | null;
+  enviado_pelo_negocio: boolean;
+};
+
+function formatDirectHistory(rows: DirectHistoryRow[]): string | null {
+  const lines = rows
+    .map((row) => {
+      const text = (row.direct_text ?? "").trim();
+      if (!text) return null;
+      const autor = row.enviado_pelo_negocio ? "Agente" : "Lead";
+      return `${autor}: ${text}`;
+    })
+    .filter((line): line is string => Boolean(line));
+  return lines.length > 0 ? lines.join("\n") : null;
+}
+
+function buildInstagramContextResumo(args: {
+  instagramContext: Omit<WhatsappAgentInstagramContext, "resumo">;
+  lead: LeadRow | null;
+  postContext: WhatsappAgentPostContext | null;
+}): string | null {
+  const { instagramContext, lead, postContext } = args;
+  const lines: string[] = [];
+  const origem = (lead?.origem_interacao ?? "").trim().toLowerCase();
+  const temHistorico = Boolean(instagramContext.historico_direct);
+  const veioDoDirect = origem === "direct" || (temHistorico && !instagramContext.ultimo_comentario);
+
+  if (veioDoDirect) {
+    lines.push(
+      "ORIGEM: conversa iniciada no Instagram DIRECT — você já engajou este lead lá. Continue com naturalidade, sem pitch frio."
+    );
+  } else if (origem === "comment" || instagramContext.ultimo_comentario) {
+    lines.push("ORIGEM: lead interagiu via comentário no post e depois seguiu no Direct/WhatsApp.");
+  }
+
+  if (lead?.nome?.trim()) {
+    lines.push(`Nome do lead: ${lead.nome.trim()}`);
+  }
+  if (lead?.username_instagram?.trim()) {
+    lines.push(`Instagram: @${lead.username_instagram.trim()}`);
+  }
+  if (instagramContext.ultimo_comentario?.trim()) {
+    lines.push(`Comentário no post: "${instagramContext.ultimo_comentario.trim()}"`);
+  }
+  if (postContext?.caption_post?.trim()) {
+    const caption = postContext.caption_post.trim();
+    lines.push(`Post de origem: "${caption.length > 220 ? `${caption.slice(0, 217)}...` : caption}"`);
+  }
+  if (temHistorico) {
+    lines.push(
+      `\nHistórico Instagram Direct (${instagramContext.total_mensagens_direct} mensagens — retome exatamente deste ponto):`
+    );
+    lines.push(instagramContext.historico_direct!);
+  } else if (instagramContext.ultima_dm?.trim()) {
+    lines.push(`Última mensagem do lead no Direct: "${instagramContext.ultima_dm.trim()}"`);
+  }
+
+  return lines.length > 0 ? lines.join("\n") : null;
+}
+
 async function fetchInstagramContext(orgId: string, idInstaLead: string | null): Promise<WhatsappAgentInstagramContext | null> {
   if (!idInstaLead) return null;
   await ensureTables();
   const pool = getPool();
-  const [com, dm] = await Promise.all([
+  const [com, history] = await Promise.all([
     pool.query<{ comment_text: string | null }>(
       `SELECT comment_text FROM comentarios
        WHERE organization_id = $1::uuid AND id_insta_lead = $2
        ORDER BY data_comentario DESC NULLS LAST LIMIT 1`,
       [orgId, idInstaLead]
     ),
-    pool.query<{ direct_text: string | null }>(
-      `SELECT direct_text FROM direct
-       WHERE organization_id = $1::uuid AND id_insta_lead = $2 AND COALESCE(enviado_pelo_negocio, false) = false
-       ORDER BY data_direct DESC NULLS LAST LIMIT 1`,
-      [orgId, idInstaLead]
+    pool.query<DirectHistoryRow>(
+      `SELECT direct_text, enviado_pelo_negocio
+       FROM direct
+       WHERE organization_id = $1::uuid AND id_insta_lead = $2
+         AND COALESCE(TRIM(direct_text), '') <> ''
+       ORDER BY COALESCE(data_direct, created_at) ASC
+       LIMIT $3`,
+      [orgId, idInstaLead, DIRECT_HISTORY_LIMIT]
     ),
   ]);
-  return {
+
+  const historico_direct = formatDirectHistory(history.rows);
+  const ultima_dm_inbound = [...history.rows].reverse().find((r) => !r.enviado_pelo_negocio)?.direct_text ?? null;
+
+  const base: Omit<WhatsappAgentInstagramContext, "resumo"> = {
     ultimo_comentario: com.rows[0]?.comment_text ?? null,
-    ultima_dm: dm.rows[0]?.direct_text ?? null,
+    ultima_dm: ultima_dm_inbound,
+    historico_direct,
+    total_mensagens_direct: history.rows.length,
+  };
+
+  return {
+    ...base,
+    resumo: buildInstagramContextResumo({ instagramContext: base, lead: null, postContext: null }),
   };
 }
 
@@ -404,7 +486,16 @@ function assembleConfig(args: {
         }
       : null,
     post_context: args.postContext,
-    instagram_context: args.instagramContext,
+    instagram_context: args.instagramContext
+      ? {
+          ...args.instagramContext,
+          resumo: buildInstagramContextResumo({
+            instagramContext: args.instagramContext,
+            lead: args.lead,
+            postContext: args.postContext,
+          }),
+        }
+      : null,
     runtime: {
       redis_key_prefix: `wa:${args.org.organization_id}:${args.phoneDigits ?? "unknown"}:`,
       timezone: AGENT_TIMEZONE,
