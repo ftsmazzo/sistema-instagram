@@ -416,6 +416,35 @@ export const api = {
         method: "POST",
         body: { prompt, provider: provider ?? "gemini", ...niche },
       }),
+    getVideoProviders: () =>
+      fetchJson<{
+        providers: Array<{
+          id: "slideshow" | "veo" | "sora";
+          label: string;
+          descricao: string;
+          requer_imagens: boolean;
+          requer_prompt: boolean;
+          duracoes: Array<4 | 8 | 12>;
+          custo_ref_8s_usd: number;
+        }>;
+      }>("/api/postador/video-providers"),
+    gerarVideo: (body: {
+      prompt: string;
+      provider: "slideshow" | "veo" | "sora";
+      image_urls?: string[];
+      duration_seconds?: 4 | 8 | 12;
+      auto_imagem_slideshow?: boolean;
+    } & PostadorNicheParams) =>
+      fetchJson<{
+        media_url: string;
+        media_type: "REELS";
+        provider: string;
+        duration_seconds: number;
+        custo_estimado_usd: number;
+      }>("/api/postador/gerar-video", {
+        method: "POST",
+        body,
+      }),
     carouselAdicionarTexto: (image_urls: string[], texts: string[], niche?: PostadorNicheParams | null) =>
       fetchJson<{ image_urls: string[] }>("/api/postador/carousel-adicionar-texto", {
         method: "POST",

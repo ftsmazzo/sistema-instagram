@@ -8,6 +8,7 @@ import { uploadMedia, getUploadsDir, isStorageConfigured } from "../services/sto
 import { rasparPaginaImovel, montarDescricaoParaCaption, baixarEEnviarParaCloudinary } from "../services/imovel.js";
 import { publishToInstagram, publishCarouselToInstagram } from "../services/instagram.js";
 import { gerarImagemComIA } from "../services/imageGen.js";
+import { gerarVideoComIA, VIDEO_PROVIDERS_INFO, type VideoGenProvider, type VideoDuration } from "../services/videoGen.js";
 import { adicionarTextoCarrossel } from "../services/carouselTexto.js";
 import {
   listNichesForApi,
@@ -322,6 +323,101 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ error: "Nenhum arquivo enviado ou armazenamento não configurado." });
     }
     return reply.send({ media_url: mediaUrl });
+  });
+
+  // GET /api/postador/video-providers — opções de vídeo Reels (dev/teste)
+  fastify.get("/video-providers", async (_request, reply) => {
+    return reply.send({ providers: VIDEO_PROVIDERS_INFO });
+  });
+
+  // POST /api/postador/gerar-video — slideshow | veo | sora → MP4 Reels 9:16 (pode levar 1–5 min)
+  fastify.post("/gerar-video", async (request, reply) => {
+    const body = request.body as {
+      prompt?: string;
+      provider?: string;
+      image_urls?: string[];
+      duration_seconds?: number;
+      niche_id?: string;
+      template_id?: string;
+      segmento?: string;
+      marca_nome?: string;
+      auto_imagem_slideshow?: boolean;
+    };
+
+    const providerRaw = (body?.provider ?? "slideshow").trim().toLowerCase();
+    const provider: VideoGenProvider =
+      providerRaw === "veo" ? "veo" : providerRaw === "sora" ? "sora" : "slideshow";
+
+    const durationRaw = Number(body?.duration_seconds ?? 8);
+    const duration: VideoDuration = durationRaw === 4 ? 4 : durationRaw === 12 ? 12 : 8;
+
+    let prompt = (body?.prompt ?? "").trim();
+    const imageUrls = Array.isArray(body?.image_urls)
+      ? body.image_urls.filter((u) => typeof u === "string" && u.trim())
+      : [];
+
+    const ctx = resolveCaptionContext({
+      nicheId: body.niche_id,
+      templateKey: body.template_id,
+      segmento: body.segmento,
+      marcaNome: body.marca_nome,
+    });
+
+    if (!prompt && provider !== "slideshow") {
+      return reply.status(400).send({ error: "Campo 'prompt' é obrigatório para Veo e Sora." });
+    }
+
+    if (provider === "slideshow" && imageUrls.length === 0 && body.auto_imagem_slideshow !== false) {
+      if (!prompt) {
+        return reply.status(400).send({
+          error: "Slideshow precisa de imagens ou um prompt para gerar 1 imagem automaticamente.",
+        });
+      }
+      try {
+        const iaOpts = captionOptionsFromBody(body);
+        let imgPrompt = buildImagePrompt(prompt, ctx);
+        try {
+          imgPrompt = await enriquecerPromptImagem(prompt, ctx, iaOpts);
+        } catch {
+          /* fallback prompt base */
+        }
+        const imgUrl = await gerarImagemComIA(imgPrompt, "gemini");
+        imageUrls.push(imgUrl);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Erro ao gerar imagem para slideshow";
+        return reply.status(503).send({ error: msg });
+      }
+    }
+
+    if (provider === "veo" || provider === "sora") {
+      try {
+        const iaOpts = captionOptionsFromBody(body);
+        prompt = await enriquecerPromptImagem(
+          `${prompt}. Vertical 9:16 Instagram Reels, cinematic motion, smooth camera, no text overlay`,
+          ctx,
+          iaOpts
+        );
+      } catch {
+        prompt = `${prompt}. Vertical 9:16 Instagram Reels, cinematic motion.`;
+      }
+    }
+
+    try {
+      const result = await gerarVideoComIA({
+        provider,
+        prompt,
+        image_urls: imageUrls,
+        duration_seconds: duration,
+      });
+      return reply.send(result);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro ao gerar vídeo.";
+      if (msg.includes("OPENAI_API_KEY") || msg.includes("GEMINI_API_KEY") || msg.includes("ffmpeg")) {
+        return reply.status(503).send({ error: msg });
+      }
+      fastify.log.error({ err }, "gerar-video");
+      return reply.status(500).send({ error: msg });
+    }
   });
 
   // POST /api/postador/gerar-imagem — gera imagem com IA (openai = DALL·E, gemini = Imagen) e retorna URL (4:5 feed)

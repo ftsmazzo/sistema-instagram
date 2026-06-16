@@ -53,7 +53,11 @@ export function Postador() {
   const [urlImovel, setUrlImovel] = useState("");
   const [arquivos, setArquivos] = useState<File[]>([]);
   const [criarMidiaIA, setCriarMidiaIA] = useState(false);
+  const [tipoMidiaIA, setTipoMidiaIA] = useState<"imagem" | "video">("imagem");
   const [provedorImagem, setProvedorImagem] = useState<"openai" | "gemini">("gemini");
+  const [provedorVideo, setProvedorVideo] = useState<"slideshow" | "veo" | "sora">("slideshow");
+  const [duracaoVideo, setDuracaoVideo] = useState<4 | 8 | 12>(8);
+  const [ultimoCustoVideo, setUltimoCustoVideo] = useState<number | null>(null);
   const [instrucoesImagem, setInstrucoesImagem] = useState("");
   const [textosCarrossel, setTextosCarrossel] = useState<string[]>([]);
   const [caption, setCaption] = useState<string | null>(null);
@@ -180,10 +184,31 @@ export function Postador() {
     setLoading(true);
     try {
       let urlGerada: string | null = null;
+      let tipoGerado: "IMAGE" | "REELS" | undefined;
       if (criarMidiaIA) {
         const prompt = (instrucoesImagem || descricao).trim();
-        const resImg = await api.postador.gerarImagem(prompt, provedorImagem, nicheParams());
-        urlGerada = resImg.media_url;
+        if (tipoMidiaIA === "video") {
+          const imageUrls: string[] = [];
+          for (const f of arquivos.filter((a) => a.type.startsWith("image/"))) {
+            const up = await api.postador.uploadMidia(f);
+            imageUrls.push(up.media_url);
+          }
+          const resVid = await api.postador.gerarVideo({
+            prompt,
+            provider: provedorVideo,
+            image_urls: imageUrls.length ? imageUrls : undefined,
+            duration_seconds: duracaoVideo,
+            auto_imagem_slideshow: provedorVideo === "slideshow",
+            ...nicheParams(),
+          });
+          urlGerada = resVid.media_url;
+          tipoGerado = "REELS";
+          setUltimoCustoVideo(resVid.custo_estimado_usd);
+        } else {
+          const resImg = await api.postador.gerarImagem(prompt, provedorImagem, nicheParams());
+          urlGerada = resImg.media_url;
+          setUltimoCustoVideo(null);
+        }
       }
       const files = arquivos.length ? arquivos : undefined;
       const res = await api.postador.gerarCaption(
@@ -196,7 +221,9 @@ export function Postador() {
       setCaption(res.caption);
       setMediaUrl(res.media_url ?? urlGerada ?? null);
       setMediaUrls(res.media_urls ?? (urlGerada ? [urlGerada] : []));
-      const tipo = res.media_type === "REELS" ? "REELS" : res.media_type === "CAROUSEL" ? "CAROUSEL" : "IMAGE";
+      const tipo =
+        tipoGerado ??
+        (res.media_type === "REELS" ? "REELS" : res.media_type === "CAROUSEL" ? "CAROUSEL" : "IMAGE");
       setMediaType(tipo);
       if (tipo === "CAROUSEL" && res.media_urls?.length) {
         setPreviewUrls(res.media_urls);
@@ -802,25 +829,72 @@ export function Postador() {
                       className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                     />
                     <label htmlFor="criar-midia-ia" className="text-sm font-medium text-gray-700">
-                      Criar mídia com IA (imagem)
+                      Criar mídia com IA
                     </label>
                   </div>
                   {criarMidiaIA && (
-                    <div className="space-y-2 pl-1 border-l-2 border-indigo-100">
+                    <div className="space-y-3 pl-1 border-l-2 border-indigo-100">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Provedor de imagem</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de mídia</label>
                         <select
-                          value={provedorImagem}
-                          onChange={(e) => setProvedorImagem(e.target.value as "openai" | "gemini")}
+                          value={tipoMidiaIA}
+                          onChange={(e) => setTipoMidiaIA(e.target.value as "imagem" | "video")}
                           className="rounded-md border border-gray-300 px-3 py-2 text-sm w-full max-w-md"
                         >
-                          <option value="gemini">Imagen (Google)</option>
-                          <option value="openai">DALL·E (OpenAI)</option>
+                          <option value="imagem">Imagem (feed 4:5)</option>
+                          <option value="video">Vídeo Reels (9:16)</option>
                         </select>
                       </div>
+                      {tipoMidiaIA === "imagem" ? (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Provedor de imagem</label>
+                          <select
+                            value={provedorImagem}
+                            onChange={(e) => setProvedorImagem(e.target.value as "openai" | "gemini")}
+                            className="rounded-md border border-gray-300 px-3 py-2 text-sm w-full max-w-md"
+                          >
+                            <option value="gemini">Imagen 4 (Google)</option>
+                            <option value="openai">DALL·E / GPT Image (OpenAI)</option>
+                          </select>
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Provedor de vídeo (teste)</label>
+                            <select
+                              value={provedorVideo}
+                              onChange={(e) => setProvedorVideo(e.target.value as "slideshow" | "veo" | "sora")}
+                              className="rounded-md border border-gray-300 px-3 py-2 text-sm w-full max-w-md"
+                            >
+                              <option value="slideshow">Slideshow ffmpeg (~US$ 0,02)</option>
+                              <option value="veo">Veo Google (~US$ 0,40/8s)</option>
+                              <option value="sora">Sora 2 OpenAI (~US$ 0,80/8s)</option>
+                            </select>
+                            <p className="mt-1 text-xs text-gray-500">
+                              {provedorVideo === "slideshow"
+                                ? "Usa imagens enviadas ou gera 1 foto Imagen automaticamente."
+                                : provedorVideo === "veo"
+                                  ? "Texto → vídeo. Pode levar 1–3 min (GEMINI_API_KEY)."
+                                  : "Texto → vídeo com áudio. Pode levar 2–5 min (OPENAI_API_KEY)."}
+                            </p>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Duração</label>
+                            <select
+                              value={duracaoVideo}
+                              onChange={(e) => setDuracaoVideo(Number(e.target.value) as 4 | 8 | 12)}
+                              className="rounded-md border border-gray-300 px-3 py-2 text-sm w-full max-w-md"
+                            >
+                              <option value={4}>4 segundos</option>
+                              <option value={8}>8 segundos</option>
+                              {provedorVideo !== "veo" && <option value={12}>12 segundos</option>}
+                            </select>
+                          </div>
+                        </>
+                      )}
                       <div>
                         <label htmlFor="instrucoes" className="block text-sm font-medium text-gray-700 mb-1">
-                          Instruções para a imagem (opcional)
+                          {tipoMidiaIA === "video" ? "Brief do vídeo" : "Instruções para a imagem"} (opcional)
                         </label>
                         <textarea
                           id="instrucoes"
@@ -832,6 +906,11 @@ export function Postador() {
                           disabled={loading}
                         />
                       </div>
+                      {tipoMidiaIA === "video" && (
+                        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5">
+                          Geração de vídeo é lenta (até 5 min). Não feche a página.
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -864,7 +943,11 @@ export function Postador() {
                     disabled={loading || !descricao.trim()}
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:pointer-events-none"
                   >
-                    {loading ? "Gerando..." : "Gerar legenda e seguir para revisão"}
+                    {loading
+                      ? tipoMidiaIA === "video" && criarMidiaIA
+                        ? "Gerando vídeo (pode levar alguns minutos)..."
+                        : "Gerando..."
+                      : "Gerar legenda e seguir para revisão"}
                   </button>
                 </div>
               )}
@@ -954,8 +1037,20 @@ export function Postador() {
 
           <div>
             <span className="block text-sm font-medium text-gray-700 mb-1">Mídia do post</span>
-            {mediaType === "REELS" && (
-              <p className="text-sm text-gray-600 py-2">Vídeo enviado (não exibido aqui).</p>
+            {mediaType === "REELS" && previewUrls[0] && (
+              <video
+                src={previewUrls[0]}
+                controls
+                className="max-h-80 w-full max-w-sm rounded-md border border-gray-200 bg-black"
+              />
+            )}
+            {mediaType === "REELS" && !previewUrls[0] && (
+              <p className="text-sm text-gray-600 py-2">Vídeo Reels (sem preview).</p>
+            )}
+            {ultimoCustoVideo != null && mediaType === "REELS" && (
+              <p className="text-xs text-gray-500 mt-1">
+                Custo estimado deste vídeo (dev): ~US$ {ultimoCustoVideo.toFixed(2)}
+              </p>
             )}
             {previewUrls.length > 1 && (
               <>
