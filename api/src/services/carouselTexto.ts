@@ -6,14 +6,12 @@ import type { PostadorOverlayStyle } from "./postadorNiches.js";
 const INSTAGRAM_MAX_SIDE = 1080;
 
 const DEFAULT_OVERLAY: PostadorOverlayStyle = {
-  accentStart: "#7c3aed",
-  accentMid: "#4f46e5",
-  accentEnd: "#0ea5e9",
+  accentStart: "#fef3c7",
+  accentMid: "#d4af37",
+  accentEnd: "#b8860b",
+  panelTone: "dark",
 };
 
-/**
- * Quebra o texto em linhas dinamicamente baseado no comprimento máximo estimado
- */
 function wrapText(text: string, maxChars: number): string[] {
   const words = text.split(" ");
   const lines: string[] = [];
@@ -40,8 +38,8 @@ function escapeXml(t: string): string {
 }
 
 /**
- * Template premium para overlay de texto em imagens de post Instagram.
- * Cores do accent seguem a paleta do nicho quando informada.
+ * Overlay premium para headline em posts Instagram — gradiente suave na base,
+ * linha accent fina e tipografia limpa (sem barra vertical sobre o texto).
  */
 async function addTextToImage(
   imageUrl: string,
@@ -61,80 +59,58 @@ async function addTextToImage(
   const W = meta.width ?? INSTAGRAM_MAX_SIDE;
   const H = meta.height ?? INSTAGRAM_MAX_SIDE;
 
-  // ─── Tipografia dinâmica ───────────────────────────────────────────────────
-  let fontSize = 50;
-  const maxChars = text.length > 60 ? 24 : text.length > 30 ? 26 : 28;
-  if (text.length > 50) fontSize = 43;
-  if (text.length > 80) fontSize = 36;
+  let fontSize = 48;
+  const maxChars = text.length > 60 ? 22 : text.length > 30 ? 24 : 26;
+  if (text.length > 50) fontSize = 42;
+  if (text.length > 80) fontSize = 34;
 
-  const lines = wrapText(text, maxChars).slice(0, 4);
-  if (lines.length === 4 && wrapText(text, maxChars).length > 4)
-    lines[3] = lines[3].replace(/\s+\S*$/, "…");
+  const lines = wrapText(text, maxChars).slice(0, 3);
+  if (lines.length === 3 && wrapText(text, maxChars).length > 3) {
+    lines[2] = lines[2].replace(/\s+\S*$/, "…");
+  }
 
-  const lineH = fontSize * 1.3;
+  const lineH = fontSize * 1.35;
   const textBlockH = lines.length * lineH;
-
-  // ─── Dimensões do painel de fundo ─────────────────────────────────────────
-  const panelH = textBlockH + 80;
+  const panelPad = 56;
+  const panelH = textBlockH + panelPad;
   const panelY = H - panelH;
+  const accentH = 3;
 
-  // Accent bar (linha colorida no topo do painel)
-  const accentH = 5;
-
-  // ─── Geração de linhas SVG ────────────────────────────────────────────────
-  const startY = panelY + 40 + fontSize * 0.5;
+  const startY = panelY + panelPad / 2 + fontSize * 0.55;
   const svgLines = lines
     .map((line, i) => {
       const safe = escapeXml(line);
       const y = startY + i * lineH;
       return [
-        // Sombra do texto (duplica levemente deslocado)
-        `<text x="${W / 2 + 3}" y="${y + 3}" text-anchor="middle" dominant-baseline="central"
-          font-family="'Arial Black','Franklin Gothic Heavy','Impact',sans-serif"
-          font-size="${fontSize}" font-weight="900" fill="rgba(0,0,0,0.55)"
-          letter-spacing="-1">${safe}</text>`,
-        // Texto principal em branco
+        `<text x="${W / 2 + 2}" y="${y + 2}" text-anchor="middle" dominant-baseline="central"
+          font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif"
+          font-size="${fontSize}" font-weight="700" fill="rgba(0,0,0,0.35)"
+          letter-spacing="0.5">${safe}</text>`,
         `<text x="${W / 2}" y="${y}" text-anchor="middle" dominant-baseline="central"
-          font-family="'Arial Black','Franklin Gothic Heavy','Impact',sans-serif"
-          font-size="${fontSize}" font-weight="900" fill="#FFFFFF"
-          letter-spacing="-1">${safe}</text>`,
+          font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif"
+          font-size="${fontSize}" font-weight="700" fill="#FFFFFF"
+          letter-spacing="0.5">${safe}</text>`,
       ].join("\n");
     })
     .join("\n");
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
-    <!-- Gradiente do painel inferior: preto profundo com leve azul-violeta -->
     <linearGradient id="panelGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%"   stop-color="#0a0a14" stop-opacity="0"/>
-      <stop offset="25%"  stop-color="#0d0d1f" stop-opacity="0.82"/>
-      <stop offset="100%" stop-color="#050510" stop-opacity="0.97"/>
+      <stop offset="0%"   stop-color="#000000" stop-opacity="0"/>
+      <stop offset="35%"  stop-color="#000000" stop-opacity="0.45"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.82"/>
     </linearGradient>
-    <!-- Brilho lateral esquerdo (accent) -->
     <linearGradient id="accentGrad" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0%"   stop-color="${style.accentStart}"/>
       <stop offset="50%"  stop-color="${style.accentMid}"/>
       <stop offset="100%" stop-color="${style.accentEnd}"/>
     </linearGradient>
-    <filter id="glow">
-      <feGaussianBlur stdDeviation="6" result="blur"/>
-      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
-    </filter>
   </defs>
 
-  <!-- Painel de fundo gradiente -->
-  <rect x="0" y="${panelY - 60}" width="${W}" height="${panelH + 60}" fill="url(#panelGrad)"/>
+  <rect x="0" y="${panelY - 40}" width="${W}" height="${panelH + 40}" fill="url(#panelGrad)"/>
+  <rect x="${W * 0.08}" y="${panelY}" width="${W * 0.84}" height="${accentH}" fill="url(#accentGrad)" rx="1.5"/>
 
-  <!-- Linha accent vibrante (barra colorida) -->
-  <rect x="0" y="${panelY}" width="${W}" height="${accentH}" fill="url(#accentGrad)"/>
-
-  <!-- Ponto de brilho no lado esquerdo da barra -->
-  <circle cx="60" cy="${panelY + accentH / 2}" r="18" fill="${style.accentStart}4D" filter="url(#glow)"/>
-
-  <!-- Decoração: pequeno traço vertical colorido antes do texto -->
-  <rect x="${W / 2 - 130}" y="${startY - fontSize * 0.65}" width="4" height="${textBlockH}" fill="url(#accentGrad)" rx="2"/>
-
-  <!-- Bloco de texto -->
   ${svgLines}
 </svg>`;
 
@@ -149,10 +125,6 @@ async function addTextToImage(
   return uploadMedia(final, "image/jpeg", ".jpg");
 }
 
-/**
- * Para cada URL de imagem, adiciona o texto correspondente usando template premium.
- * Imagens sem texto são retornadas sem modificação.
- */
 export async function adicionarTextoCarrossel(
   imageUrls: string[],
   texts: string[],

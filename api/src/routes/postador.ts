@@ -37,6 +37,13 @@ function extFromMimetype(mimetype: string): string {
 
 const SAFE_FILENAME = /^[a-zA-Z0-9._-]+$/;
 
+function normalizePostadorUrl(raw: string): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed.replace(/^\/+/, "")}`;
+}
+
 type PostadorIaBody = {
   provider?: string;
   model?: string;
@@ -502,12 +509,12 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
   // POST /api/postador/por-url — JSON { url, provider?, model?, niche_id?, template_id?, ... }
   fastify.post("/por-url", async (request, reply) => {
     const body = request.body as { url?: string } & PostadorIaBody;
-    const url = body?.url?.trim();
+    const url = normalizePostadorUrl(body?.url ?? "");
     if (!url) {
       return reply.status(400).send({ error: "Campo 'url' é obrigatório (link da página de detalhes do produto ou serviço)." });
     }
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
-      return reply.status(400).send({ error: "URL inválida." });
+      return reply.status(400).send({ error: "URL inválida. Use um link completo (ex.: https://loja.com/produto)." });
     }
     const iaOpts = captionOptionsFromBody(body);
 
@@ -515,7 +522,10 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       const dados = await rasparPaginaImovel(url);
       const descricao = montarDescricaoParaCaption(dados);
       if (!descricao.trim()) {
-        return reply.status(400).send({ error: "Não foi possível extrair dados da página. Verifique se a URL é de uma página de produto/serviço compatível." });
+        return reply.status(400).send({
+          error:
+            "Não foi possível extrair dados da página. Confira se o link abre no navegador (página pública de produto) e inclua https:// no início.",
+        });
       }
 
       const urlsOriginais =

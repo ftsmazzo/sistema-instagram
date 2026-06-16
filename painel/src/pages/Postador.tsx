@@ -352,14 +352,16 @@ export function Postador() {
   };
 
   const handleGerarPorUrl = async () => {
-    if (!urlImovel.trim()) {
+    const raw = urlImovel.trim();
+    if (!raw) {
       setError("Cole o link da página de produto ou serviço.");
       return;
     }
+    const normalized = /^https?:\/\//i.test(raw) ? raw : `https://${raw.replace(/^\/+/, "")}`;
     setError(null);
     setLoading(true);
     try {
-      const res = await api.postador.gerarPorUrl(urlImovel.trim(), provider, effectiveModel, nicheParams());
+      const res = await api.postador.gerarPorUrl(normalized, provider, effectiveModel, nicheParams());
       if (res.jornada && res.jornada.length > 0) {
         setJornadaQueue(res.jornada);
         setJornadaIndex(1);
@@ -411,9 +413,9 @@ export function Postador() {
   };
 
   const handleGerarImagemIA = async () => {
-    const prompt = (promptImagemIA || caption || "").trim();
+    const prompt = promptImagemIA.trim();
     if (!prompt) {
-      setError("Digite uma descrição para gerar a imagem.");
+      setError("Descreva a CENA visual (produto + ambiente + luz), não a ficha técnica inteira.");
       return;
     }
     setError(null);
@@ -960,15 +962,16 @@ export function Postador() {
                     </label>
                     <input
                       id="url-produto"
-                      type="url"
+                      type="text"
+                      inputMode="url"
                       value={urlImovel}
                       onChange={(e) => setUrlImovel(e.target.value)}
-                      placeholder="https://.../imoveis/..."
+                      placeholder="https://loja.com/produto ou www.loja.com/produto"
                       className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                       disabled={loading}
                     />
                     <p className="mt-1 text-xs text-gray-500">
-                      A API raspa a página: se o site expuser a galeria (várias fotos), montamos um carrossel no Instagram (até 10 imagens) e geramos a legenda.
+                      Lojas Wix, Shopify e similares: cole o link da página do produto (com ou sem https). A API extrai título, preço, fotos e gera a legenda.
                     </p>
                   </div>
                   <button
@@ -1164,7 +1167,7 @@ export function Postador() {
                 <div className="flex flex-wrap items-center gap-2">
                   <input
                     type="text"
-                    placeholder="Descrição para gerar nova imagem (IA)"
+                    placeholder="Prompt visual curto (ex.: frasco honey em mármore, luz dourada)"
                     className="rounded-md border border-gray-300 px-2 py-1.5 text-sm flex-1 min-w-[160px]"
                     value={promptImagemIA}
                     onChange={(e) => setPromptImagemIA(e.target.value)}

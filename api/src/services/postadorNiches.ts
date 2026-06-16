@@ -460,12 +460,37 @@ ${template.regras_legenda.map((r) => `- ${r}`).join("\n")}
 Retorne SOMENTE a legenda final formatada, pronta para a Graph API do Instagram.`;
 }
 
+export function extractVisualBrief(userBrief: string, ctx: PostadorCaptionContext): string {
+  const text = userBrief.trim();
+  if (!text) return "Instagram post visual";
+
+  const tituloMatch = text.match(/^Título:\s*(.+)$/im) ?? text.match(/^Title:\s*(.+)$/im);
+  if (tituloMatch) {
+    const name = tituloMatch[1].trim().slice(0, 120);
+    if (ctx.nicheId === "ecommerce" || ctx.nicheId === "produtos_marcas" || ctx.nicheId === "beleza_estetica") {
+      return `Produto "${name}" — foto hero de catálogo premium, embalagem centralizada, fundo neutro ou lifestyle aspiracional, luz de estúdio suave.`;
+    }
+    return name;
+  }
+
+  if (text.length > 220) {
+    const firstLine = text.split(/\n/)[0]?.trim() ?? "";
+    if (firstLine.length >= 12 && firstLine.length <= 160) return firstLine;
+    const firstSentence = text.split(/[.!?]\s+/)[0]?.trim() ?? "";
+    if (firstSentence.length >= 12 && firstSentence.length <= 180) return firstSentence;
+    return text.slice(0, 160).trim() + "…";
+  }
+
+  return text;
+}
+
 export function buildImagePrompt(userBrief: string, ctx: PostadorCaptionContext): string {
   const pack = getNichePack(ctx.nicheId);
   const paleta = pack.paleta_sugerida.join(", ");
+  const visualBrief = extractVisualBrief(userBrief, ctx);
   return [
     ctx.template.prompt_imagem_base,
-    `Brief do usuário: ${userBrief.trim()}`,
+    `Cena visual: ${visualBrief}`,
     `Estilo visual do nicho: ${pack.tom_visual}`,
     `Paleta sugerida: ${paleta}`,
     "Vertical 4:5 Instagram feed, editorial social media 2026",
@@ -487,6 +512,8 @@ PALETA: ${paleta}
 
 Transforme o brief em UM único prompt em INGLÊS (máx. 900 caracteres) para gerador de imagens.
 
+IMPORTANTE: se o brief contiver descrição longa de marketing, ficha técnica ou parágrafo de vendas, IGNORE o texto promocional e foque só no VISUAL: produto/cena, ambiente, luz, materiais, mood. Para e-commerce/beleza: product hero shot, packshot ou lifestyle aspiracional — nunca ilustre bullet points ou claims.
+
 OBRIGATÓRIO no prompt:
 - Sujeito/cena concreta e específica (não genérica)
 - Ambiente detalhado (materiais, contexto, época do dia)
@@ -505,15 +532,20 @@ export type PostadorOverlayStyle = {
   accentStart: string;
   accentMid: string;
   accentEnd: string;
+  /** Cor do painel inferior (RGBA ou hex com opacidade via gradiente) */
+  panelTone?: "light" | "dark";
+};
+
+const OVERLAY_BY_NICHE: Record<PostadorNicheId, PostadorOverlayStyle> = {
+  servicos_b2b: { accentStart: "#60a5fa", accentMid: "#3b82f6", accentEnd: "#1d4ed8", panelTone: "dark" },
+  ecommerce: { accentStart: "#fef3c7", accentMid: "#d4af37", accentEnd: "#b8860b", panelTone: "dark" },
+  beleza_estetica: { accentStart: "#fce7f3", accentMid: "#f9a8d4", accentEnd: "#ec4899", panelTone: "dark" },
+  imobiliario: { accentStart: "#cbd5e1", accentMid: "#94a3b8", accentEnd: "#475569", panelTone: "dark" },
+  produtos_marcas: { accentStart: "#fef3c7", accentMid: "#c4b5fd", accentEnd: "#8b5cf6", panelTone: "dark" },
 };
 
 export function overlayStyleFromContext(ctx: PostadorCaptionContext): PostadorOverlayStyle {
-  const pal = getNichePack(ctx.nicheId).paleta_sugerida;
-  return {
-    accentStart: pal[1] ?? "#7c3aed",
-    accentMid: pal[2] ?? pal[1] ?? "#4f46e5",
-    accentEnd: pal[0] ?? "#0ea5e9",
-  };
+  return OVERLAY_BY_NICHE[ctx.nicheId] ?? OVERLAY_BY_NICHE.servicos_b2b;
 }
 
 export function buildCtaOverlaySystemPrompt(ctx: PostadorCaptionContext): string {

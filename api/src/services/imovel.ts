@@ -62,6 +62,35 @@ function resolveUrl(base: string, path: string): string {
 
 const MAX_IMAGENS_IMOVEL = 10;
 
+function decodeHtmlEntities(text: string): string {
+  return text
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, num) => String.fromCharCode(parseInt(num, 10)));
+}
+
+function normalizarOffersField(item: Record<string, unknown>): Record<string, unknown> | null {
+  const raw = item.offers ?? item.Offers ?? item.offer ?? item.Offer;
+  if (!raw || typeof raw !== "object") return null;
+  return Array.isArray(raw) ? (raw[0] as Record<string, unknown>) : (raw as Record<string, unknown>);
+}
+
+function extrairUrlImagemJsonLd(img: unknown, pageUrl: string): string | null {
+  if (typeof img === "string") return urlParaFetchImovel(resolveUrl(pageUrl, img));
+  if (!img || typeof img !== "object") return null;
+  const o = img as Record<string, unknown>;
+  const src =
+    (typeof o.contentUrl === "string" && o.contentUrl) ||
+    (typeof o.url === "string" && o.url) ||
+    (typeof o["@id"] === "string" && o["@id"]) ||
+    null;
+  return src ? urlParaFetchImovel(resolveUrl(pageUrl, src)) : null;
+}
+
 function formatPreco(val: unknown): string {
   if (val == null || val === "") return "";
   if (typeof val === "string") {
@@ -148,27 +177,29 @@ function extrairJsonLdProduto(html: string, pageUrl: string): Partial<ImovelDado
     const type = String(item["@type"] ?? "");
     if (!/product/i.test(type)) continue;
 
-    const titulo = String(item.name ?? item.title ?? "").trim();
-    const descricao = String(item.description ?? "").trim().slice(0, 800);
-    const offers = item.offers;
+    const titulo = decodeHtmlEntities(String(item.name ?? item.title ?? "").trim());
+    const descricao = decodeHtmlEntities(String(item.description ?? "").trim()).slice(0, 800);
+    const o = normalizarOffersField(item);
     let venda = "";
-    if (offers && typeof offers === "object") {
-      const o = Array.isArray(offers) ? (offers[0] as Record<string, unknown>) : (offers as Record<string, unknown>);
-      if (o?.price != null) {
-        const moeda = String(o.priceCurrency ?? "BRL");
-        venda = moeda === "BRL" ? formatPreco(o.price) : `${moeda} ${o.price}`;
-      }
+    if (o?.price != null) {
+      const moeda = String(o.priceCurrency ?? "BRL").toUpperCase();
+      if (moeda === "BRL") venda = formatPreco(o.price);
+      else if (moeda === "USD") venda = `$${o.price}`;
+      else venda = `${moeda} ${o.price}`;
     }
     const imgField = item.image;
     const imageUrls: string[] = [];
-    if (typeof imgField === "string") imageUrls.push(urlParaFetchImovel(resolveUrl(pageUrl, imgField)));
-    else if (Array.isArray(imgField)) {
+    if (typeof imgField === "string") {
+      const u = extrairUrlImagemJsonLd(imgField, pageUrl);
+      if (u) imageUrls.push(u);
+    } else if (Array.isArray(imgField)) {
       for (const img of imgField) {
-        if (typeof img === "string") imageUrls.push(urlParaFetchImovel(resolveUrl(pageUrl, img)));
-        else if (img && typeof img === "object" && typeof (img as { url?: string }).url === "string") {
-          imageUrls.push(urlParaFetchImovel(resolveUrl(pageUrl, (img as { url: string }).url)));
-        }
+        const u = extrairUrlImagemJsonLd(img, pageUrl);
+        if (u) imageUrls.push(u);
       }
+    } else if (imgField && typeof imgField === "object") {
+      const u = extrairUrlImagemJsonLd(imgField, pageUrl);
+      if (u) imageUrls.push(u);
     }
     return {
       titulo,
@@ -251,7 +282,13 @@ export async function rasparPaginaImovel(url: string): Promise<ImovelDados> {
   let res: Response;
   try {
     res = await fetch(fetchUrl, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; PostadorImovel/1.0)" },
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+      },
+      redirect: "follow",
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -271,6 +308,11 @@ export async function rasparPaginaImovel(url: string): Promise<ImovelDados> {
   if (!res.ok) throw new Error(`Não foi possível acessar a página: ${res.status}`);
   const html = await res.text();
   const baseUrl = url.replace(/\/[^/]*$/, "/");
+
+  const jsonLdEarly = extrairJsonLdProduto(html, url);
+  if (jsonLdEarly && dadosTemConteudo(jsonLdEarly as ImovelDados)) {
+    return jsonLdEarly as ImovelDados;
+  }
 
   // Next.js: dados em script#__NEXT_DATA__
   const nextDataMatch = html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
@@ -371,11 +413,12 @@ export async function rasparPaginaImovel(url: string): Promise<ImovelDados> {
   const absoluteImageUrl = imageUrls[0] ?? null;
 
   // Título: h1 ou og:title ou title
-  const titulo =
+  const titulo = decodeHtmlEntities(
     getText("h1") ||
-    getMeta("og:title")?.replace(/\s*[-|].*$/, "").trim() ||
-    root.querySelector("title")?.textContent?.trim()?.replace(/\s*[-|].*$/, "").trim() ||
-    "";
+      getMeta("og:title")?.replace(/\s*[-|].*$/, "").trim() ||
+      root.querySelector("title")?.textContent?.trim()?.replace(/\s*[-|].*$/, "").trim() ||
+      ""
+  );
 
   // Código: padrão "Cód. IMV-00003" ou similar
   const codigoMatch = html.match(/Cód\.\s*([^\s<]+)/i) || html.match(/codigo["']?\s*[:=]\s*["']?([^"'\s<]+)/i);
@@ -396,7 +439,11 @@ export async function rasparPaginaImovel(url: string): Promise<ImovelDados> {
   let venda = vendaMatch ? vendaMatch[0].replace(/\s+/g, " ").trim() : "";
   if (!venda) {
     const precoMeta = getMeta("product:price:amount") ?? getMeta("og:price:amount");
-    if (precoMeta) venda = formatPreco(precoMeta);
+    const moedaMeta = getMeta("product:price:currency") ?? getMeta("og:price:currency");
+    if (precoMeta) {
+      const moeda = (moedaMeta ?? "BRL").toUpperCase();
+      venda = moeda === "BRL" ? formatPreco(precoMeta) : moeda === "USD" ? `$${precoMeta}` : `${moeda} ${precoMeta}`;
+    }
   }
   if (!venda) {
     const precoHtml = html.match(/R\$\s*[\d]{1,3}(?:\.[\d]{3})*(?:,[\d]{2})?/);
@@ -431,10 +478,11 @@ export async function rasparPaginaImovel(url: string): Promise<ImovelDados> {
   const caracteristicas = caracList.length ? caracList : [];
 
   // Descrição: meta og primeiro, depois HTML
-  let descricao =
+  let descricao = decodeHtmlEntities(
     getMeta("og:description")?.trim() ||
-    getMeta("description")?.trim() ||
-    "";
+      getMeta("description")?.trim() ||
+      ""
+  );
   if (!descricao) {
     const descSection = root.querySelector("[class*='descricao'], .description, .product-description, section");
     if (descSection) {
