@@ -4,12 +4,17 @@ import { mkdtemp, rm, writeFile } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 import { uploadMedia, isStorageConfigured } from "./storage.js";
+import type { PostadorMusicTrack } from "./postadorMusic.js";
 
 const execFileAsync = promisify(execFile);
 
 const REELS_W = 1080;
 const REELS_H = 1920;
 const FADE_SEC = 0.45;
+
+export type SlideshowMusicOptions = {
+  track?: PostadorMusicTrack | null;
+};
 
 async function assertFfmpeg(): Promise<void> {
   try {
@@ -21,11 +26,11 @@ async function assertFfmpeg(): Promise<void> {
   }
 }
 
-async function downloadImageBuffer(url: string): Promise<Buffer> {
+async function downloadBuffer(url: string, kind: string): Promise<Buffer> {
   const res = await fetch(url, {
     headers: { "User-Agent": "Mozilla/5.0 (compatible; PostadorVideo/1.0)" },
   });
-  if (!res.ok) throw new Error(`Não foi possível baixar imagem para slideshow: HTTP ${res.status}`);
+  if (!res.ok) throw new Error(`Não foi possível baixar ${kind}: HTTP ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
 }
 
@@ -35,22 +40,19 @@ function scaleCropFilter(index: number, fps: number): string {
 
 function fadeFilter(label: string, duration: number, fadeSec: number, isFirst: boolean, isLast: boolean): string {
   const parts: string[] = [];
-  if (!isFirst) {
-    parts.push(`fade=t=in:st=0:d=${fadeSec}`);
-  }
-  if (!isLast) {
-    parts.push(`fade=t=out:st=${Math.max(0, duration - fadeSec)}:d=${fadeSec}`);
-  }
+  if (!isFirst) parts.push(`fade=t=in:st=0:d=${fadeSec}`);
+  if (!isLast) parts.push(`fade=t=out:st=${Math.max(0, duration - fadeSec)}:d=${fadeSec}`);
   if (!parts.length) return `[${label}]copy[${label}f]`;
   return `[${label}]${parts.join(",")}[${label}f]`;
 }
 
 /**
- * Monta MP4 vertical (9:16) a partir de 1–10 imagens — Ken Burns, crossfade suave e faixa de áudio silenciosa.
+ * Monta MP4 vertical (9:16) a partir de 1–10 imagens — Ken Burns, crossfade e trilha opcional.
  */
 export async function gerarSlideshowReels(
   imageUrls: string[],
-  durationSeconds: 4 | 8 | 12 = 8
+  durationSeconds: 4 | 8 | 12 = 8,
+  musicOpts?: SlideshowMusicOptions
 ): Promise<Buffer> {
   if (!isStorageConfigured()) {
     throw new Error("Configure armazenamento para salvar o vídeo gerado.");
@@ -62,15 +64,23 @@ export async function gerarSlideshowReels(
 
   const dir = await mkdtemp(join(tmpdir(), "postador-slideshow-"));
   const outPath = join(dir, "reels.mp4");
+  const track = musicOpts?.track?.url ? musicOpts.track : null;
+  let musicPath: string | null = null;
 
   try {
     const urls = imageUrls.slice(0, 10);
     const paths: string[] = [];
     for (let i = 0; i < urls.length; i++) {
-      const buf = await downloadImageBuffer(urls[i]);
+      const buf = await downloadBuffer(urls[i], "imagem");
       const p = join(dir, `slide_${String(i).padStart(2, "0")}.jpg`);
       await writeFile(p, buf);
       paths.push(p);
+    }
+
+    if (track?.url) {
+      const musicBuf = await downloadBuffer(track.url, "música");
+      musicPath = join(dir, "track.mp3");
+      await writeFile(musicPath, musicBuf);
     }
 
     const n = paths.length;
@@ -83,33 +93,64 @@ export async function gerarSlideshowReels(
         `crop=${REELS_W}:${REELS_H}`,
         `zoompan=z='min(zoom+0.0012,1.25)':d=${durationSeconds * fps}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${REELS_W}x${REELS_H}:fps=${fps}`,
       ].join(",");
-      await execFileAsync("ffmpeg", [
-        "-y",
-        "-loop",
-        "1",
-        "-i",
-        paths[0],
-        "-f",
-        "lavfi",
-        "-i",
-        "anullsrc=channel_layout=stereo:sample_rate=44100",
-        "-vf",
-        vf,
-        "-t",
-        String(durationSeconds),
-        "-c:v",
-        "libx264",
-        "-pix_fmt",
-        "yuv420p",
-        "-c:a",
-        "aac",
-        "-b:a",
-        "128k",
-        "-shortest",
-        "-r",
-        String(fps),
-        outPath,
-      ]);
+
+      if (musicPath && track) {
+        await execFileAsync("ffmpeg", [
+          "-y",
+          "-loop",
+          "1",
+          "-i",
+          paths[0],
+          "-i",
+          musicPath,
+          "-filter_complex",
+          `[0:v]${vf}[outv];[1:a]volume=${track.volume},atrim=0:${durationSeconds},asetpts=PTS-STARTPTS[aout]`,
+          "-map",
+          "[outv]",
+          "-map",
+          "[aout]",
+          "-t",
+          String(durationSeconds),
+          "-c:v",
+          "libx264",
+          "-pix_fmt",
+          "yuv420p",
+          "-c:a",
+          "aac",
+          "-b:a",
+          "128k",
+          "-shortest",
+          outPath,
+        ]);
+      } else {
+        await execFileAsync("ffmpeg", [
+          "-y",
+          "-loop",
+          "1",
+          "-i",
+          paths[0],
+          "-f",
+          "lavfi",
+          "-i",
+          "anullsrc=channel_layout=stereo:sample_rate=44100",
+          "-vf",
+          vf,
+          "-t",
+          String(durationSeconds),
+          "-c:v",
+          "libx264",
+          "-pix_fmt",
+          "yuv420p",
+          "-c:a",
+          "aac",
+          "-b:a",
+          "128k",
+          "-shortest",
+          "-r",
+          String(fps),
+          outPath,
+        ]);
+      }
     } else {
       const inputs = paths.flatMap((p) => [
         "-loop",
@@ -127,26 +168,29 @@ export async function gerarSlideshowReels(
         filterParts.push(scaleCropFilter(i, fps));
       }
       for (let i = 0; i < n; i++) {
-        filterParts.push(
-          fadeFilter(`v${i}`, secPerSlide, FADE_SEC, i === 0, i === n - 1)
-        );
+        filterParts.push(fadeFilter(`v${i}`, secPerSlide, FADE_SEC, i === 0, i === n - 1));
       }
       const concatIn = paths.map((_, i) => `[v${i}f]`).join("");
       filterParts.push(`${concatIn}concat=n=${n}:v=1:a=0[outv]`);
 
+      if (musicPath) {
+        filterParts.push(
+          `[${n}:a]volume=${track!.volume},atrim=0:${durationSeconds},asetpts=PTS-STARTPTS[aout]`
+        );
+      }
+
+      const filterComplex = filterParts.join(";");
+      const mapArgs = musicPath
+        ? ["-map", "[outv]", "-map", "[aout]"]
+        : ["-map", "[outv]", "-map", `${n}:a`];
+
       await execFileAsync("ffmpeg", [
         "-y",
         ...inputs,
-        "-f",
-        "lavfi",
-        "-i",
-        "anullsrc=channel_layout=stereo:sample_rate=44100",
+        ...(musicPath ? ["-i", musicPath] : ["-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=44100"]),
         "-filter_complex",
-        filterParts.join(";"),
-        "-map",
-        "[outv]",
-        "-map",
-        `${n}:a`,
+        filterComplex,
+        ...mapArgs,
         "-t",
         String(durationSeconds),
         "-c:v",

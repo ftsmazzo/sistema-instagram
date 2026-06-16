@@ -4,6 +4,7 @@ import { tmpdir } from "os";
 import { GoogleGenAI } from "@google/genai";
 import { uploadMedia, isStorageConfigured } from "./storage.js";
 import { gerarSlideshowReels } from "./videoSlideshow.js";
+import { resolveMusicTrack } from "./postadorMusic.js";
 import { POSTADOR_CUSTO_ESTIMADO_USD } from "./postadorNiches.js";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -21,6 +22,7 @@ export type GerarVideoInput = {
   prompt: string;
   image_urls?: string[];
   duration_seconds?: VideoDuration;
+  music_id?: string;
 };
 
 export type GerarVideoResult = {
@@ -29,6 +31,7 @@ export type GerarVideoResult = {
   provider: VideoGenProvider;
   duration_seconds: VideoDuration;
   custo_estimado_usd: number;
+  music_id?: string | null;
 };
 
 function sleep(ms: number): Promise<void> {
@@ -199,7 +202,8 @@ export async function gerarVideoComIA(input: GerarVideoInput): Promise<GerarVide
       if (!imageUrls.length) {
         throw new Error("Slideshow precisa de pelo menos 1 imagem. Envie fotos ou gere uma imagem antes.");
       }
-      buffer = await gerarSlideshowReels(imageUrls, duration);
+      const musicTrack = resolveMusicTrack(input.music_id);
+      buffer = await gerarSlideshowReels(imageUrls, duration, { track: musicTrack });
       break;
     }
     case "veo": {
@@ -223,5 +227,6 @@ export async function gerarVideoComIA(input: GerarVideoInput): Promise<GerarVide
     provider,
     duration_seconds: duration,
     custo_estimado_usd: custoEstimado(provider, duration),
+    music_id: input.music_id && input.music_id !== "none" ? input.music_id : null,
   };
 }

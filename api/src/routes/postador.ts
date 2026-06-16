@@ -14,7 +14,9 @@ import { gerarCarrosselCompleto } from "../services/postadorCarousel.js";
 import { parsePostadorBrandKit } from "../services/postadorBrand.js";
 import { compositarProdutoNoFundo } from "../services/postadorComposite.js";
 import { checarQualidadePost } from "../services/postadorQuality.js";
+import { listMusicTracksForApi } from "../services/postadorMusic.js";
 import type { PostadorSlideTemplate } from "../services/carouselTemplates.js";
+import { parseSlideTemplateId, SLIDE_TEMPLATES_CATALOG } from "../services/carouselTemplates.js";
 import {
   listNichesForApi,
   suggestNicheFromSegmento,
@@ -93,8 +95,7 @@ function captionOptionsFromBody(
 }
 
 function parseSlideTemplate(raw?: string): PostadorSlideTemplate {
-  if (raw === "minimal" || raw === "numerado" || raw === "capa") return raw;
-  return "capa";
+  return parseSlideTemplateId(raw);
 }
 
 async function iaOptsFromRequest(
@@ -376,6 +377,16 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ providers: VIDEO_PROVIDERS_INFO });
   });
 
+  // GET /api/postador/music-tracks — trilhas royalty-free para slideshow
+  fastify.get("/music-tracks", async (_request, reply) => {
+    return reply.send({ tracks: listMusicTracksForApi() });
+  });
+
+  // GET /api/postador/slide-templates — layouts visuais de carrossel/moldura
+  fastify.get("/slide-templates", async (_request, reply) => {
+    return reply.send({ templates: SLIDE_TEMPLATES_CATALOG });
+  });
+
   // POST /api/postador/gerar-video — slideshow | veo | sora → MP4 Reels 9:16 (pode levar 1–5 min)
   fastify.post("/gerar-video", async (request, reply) => {
     const body = request.body as {
@@ -384,6 +395,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       image_urls?: string[];
       duration_seconds?: number;
       auto_imagem_slideshow?: boolean;
+      music_id?: string;
     } & PostadorIaBody;
 
     const providerRaw = (body?.provider ?? "slideshow").trim().toLowerCase();
@@ -453,6 +465,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
         prompt,
         image_urls: imageUrls,
         duration_seconds: duration,
+        music_id: body.music_id,
       });
       return reply.send(result);
     } catch (err) {

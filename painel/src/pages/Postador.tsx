@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
-import { api, getAuthToken, type AgendadoItem, type ContaInstagramRes, type Config, type PostadorNicheParams, type PostadorNicheRes } from "../api/client";
+import { api, getAuthToken, type AgendadoItem, type ContaInstagramRes, type Config, type PostadorNicheParams, type PostadorNicheRes, type PostadorSlideTemplateId } from "../api/client";
 import { PageShell } from "../components/layout/PageShell";
 
 const STORAGE_KEY = "postador_ia";
@@ -99,7 +99,14 @@ export function Postador() {
   const [templateKey, setTemplateKey] = useState("");
   const [segmento, setSegmento] = useState("");
   const [marcaNome, setMarcaNome] = useState("");
-  const [slideTemplate, setSlideTemplate] = useState<"minimal" | "numerado" | "capa">("capa");
+  const [slideTemplate, setSlideTemplate] = useState<PostadorSlideTemplateId>("capa");
+  const [slideTemplatesCatalog, setSlideTemplatesCatalog] = useState<
+    Array<{ id: PostadorSlideTemplateId; label: string; descricao: string; recomendado?: boolean }>
+  >([]);
+  const [musicTrackId, setMusicTrackId] = useState("serene");
+  const [musicTracks, setMusicTracks] = useState<
+    Array<{ id: string; label: string; mood: string; preview_url?: string }>
+  >([]);
   const [brandKitAtivo, setBrandKitAtivo] = useState(false);
   const [arquivoProduto, setArquivoProduto] = useState<File | null>(null);
   const productFileRef = useRef<HTMLInputElement>(null);
@@ -120,7 +127,8 @@ export function Postador() {
     segmento: segmento || undefined,
     marca_nome: marcaNome || undefined,
     image_mode: modoImagemIA,
-    slide_template: isCarrosselTemplate ? slideTemplate : undefined,
+    slide_template: slideTemplate,
+    music_id: musicTrackId !== "none" ? musicTrackId : undefined,
   });
 
   useEffect(() => {
@@ -140,6 +148,17 @@ export function Postador() {
       });
     }
   }, [previewUrls.length]);
+
+  useEffect(() => {
+    void Promise.all([api.postador.getSlideTemplates(), api.postador.getMusicTracks()])
+      .then(([tplRes, musicRes]) => {
+        setSlideTemplatesCatalog(tplRes.templates);
+        setMusicTracks(musicRes.tracks.filter((t) => t.id !== "none"));
+      })
+      .catch(() => {
+        /* catálogos opcionais */
+      });
+  }, []);
 
   useEffect(() => {
     if (step !== "review" || !caption) {
@@ -1041,6 +1060,34 @@ export function Postador() {
                               {provedorVideo !== "veo" && <option value={12}>12 segundos</option>}
                             </select>
                           </div>
+                          {provedorVideo === "slideshow" && (
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Trilha sonora</label>
+                              <select
+                                value={musicTrackId}
+                                onChange={(e) => setMusicTrackId(e.target.value)}
+                                className="rounded-md border border-gray-300 px-3 py-2 text-sm w-full max-w-md"
+                                disabled={loading}
+                              >
+                                <option value="none">Sem música</option>
+                                {(musicTracks.length
+                                  ? musicTracks
+                                  : [
+                                      { id: "serene", label: "Serene View", mood: "calmo" },
+                                      { id: "dreaming", label: "Dreaming Big", mood: "inspirador" },
+                                      { id: "champion", label: "Spirit of Champion", mood: "energético" },
+                                    ]
+                                ).map((t) => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.label} — {t.mood}
+                                  </option>
+                                ))}
+                              </select>
+                              <p className="mt-1 text-xs text-gray-500">
+                                Músicas royalty-free (Mixkit). Volume já balanceado para Reels.
+                              </p>
+                            </div>
+                          )}
                         </>
                       )}
                       <div>
@@ -1092,28 +1139,45 @@ export function Postador() {
                     </div>
                   )}
 
+                  {criarMidiaIA && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Estilo visual {isCarrosselTemplate && tipoMidiaIA === "imagem" ? "dos slides" : "da moldura"}
+                      </label>
+                      <select
+                        value={slideTemplate}
+                        onChange={(e) => setSlideTemplate(e.target.value as PostadorSlideTemplateId)}
+                        className="rounded-md border border-gray-300 px-3 py-2 text-sm w-full max-w-md"
+                        disabled={loading}
+                      >
+                        {(slideTemplatesCatalog.length
+                          ? slideTemplatesCatalog
+                          : [
+                              { id: "capa" as const, label: "Capa premium", descricao: "destaque slide 1", recomendado: true },
+                              { id: "editorial" as const, label: "Editorial", descricao: "revista" },
+                              { id: "magazine" as const, label: "Magazine", descricao: "publicitário" },
+                              { id: "bold" as const, label: "Bold block", descricao: "alto contraste" },
+                              { id: "glass" as const, label: "Glass card", descricao: "moderno" },
+                              { id: "split" as const, label: "Split", descricao: "metade painel" },
+                              { id: "numerado" as const, label: "Numerado", descricao: "badge 1/N" },
+                              { id: "minimal" as const, label: "Minimal", descricao: "só headline" },
+                            ]
+                        ).map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.label}{t.recomendado ? " ★" : ""}{t.descricao ? ` — ${t.descricao}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                      {brandKitAtivo && (
+                        <p className="mt-1 text-xs text-emerald-700">Brand kit ativo — paleta e logo do Admin serão aplicados.</p>
+                      )}
+                    </div>
+                  )}
+
                   {isCarrosselTemplate && criarMidiaIA && tipoMidiaIA === "imagem" && (
-                    <>
-                      <p className="text-xs text-indigo-800 bg-indigo-50 border border-indigo-200 rounded-md px-3 py-2">
-                        Template de carrossel ({templateSelecionado?.slides} slides): a IA planeja roteiro visual + gera cada slide em modo criativo + aplica moldura com headline. Legenda curta vem pronta na revisão. Tempo estimado: 1–3 min.
-                      </p>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Estilo visual dos slides</label>
-                        <select
-                          value={slideTemplate}
-                          onChange={(e) => setSlideTemplate(e.target.value as "minimal" | "numerado" | "capa")}
-                          className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-                          disabled={loading}
-                        >
-                          <option value="capa">Capa — destaque no slide 1</option>
-                          <option value="numerado">Numerado — badge 1/N em cada slide</option>
-                          <option value="minimal">Minimal — só headline</option>
-                        </select>
-                        {brandKitAtivo && (
-                          <p className="mt-1 text-xs text-emerald-700">Brand kit ativo — paleta e logo do Admin serão aplicados.</p>
-                        )}
-                      </div>
-                    </>
+                    <p className="text-xs text-indigo-800 bg-indigo-50 border border-indigo-200 rounded-md px-3 py-2">
+                      Template de carrossel ({templateSelecionado?.slides} slides): a IA planeja roteiro visual + gera cada slide em modo criativo + aplica moldura com headline. Legenda curta vem pronta na revisão. Tempo estimado: 1–3 min.
+                    </p>
                   )}
 
                   <button
@@ -1303,16 +1367,34 @@ export function Postador() {
                   >
                     {loading ? "Aplicando..." : "Aplicar texto nas imagens"}
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleCarrosselParaReels}
-                    disabled={loading || previewUrls.length < 2}
-                    className="ml-2 px-3 py-1.5 text-sm font-medium rounded-md text-violet-800 bg-violet-50 hover:bg-violet-100 border border-violet-200 disabled:opacity-50"
-                  >
-                    {loading ? "Gerando..." : "Gerar Reels 8s (slideshow)"}
-                  </button>
+                  <div className="mt-3 flex flex-wrap items-end gap-2">
+                    <div className="flex-1 min-w-[180px]">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Trilha do Reels</label>
+                      <select
+                        value={musicTrackId}
+                        onChange={(e) => setMusicTrackId(e.target.value)}
+                        className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                        disabled={loading}
+                      >
+                        <option value="none">Sem música</option>
+                        {musicTracks.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.label} — {t.mood}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCarrosselParaReels}
+                      disabled={loading || previewUrls.length < 2}
+                      className="px-3 py-1.5 text-sm font-medium rounded-md text-violet-800 bg-violet-50 hover:bg-violet-100 border border-violet-200 disabled:opacity-50"
+                    >
+                      {loading ? "Gerando..." : "Gerar Reels 8s"}
+                    </button>
+                  </div>
                   <p className="mt-2 text-xs text-gray-500">
-                    Transforma os slides em vídeo vertical 9:16 com transições suaves (~US$ 0,02).
+                    Transforma os slides em vídeo vertical 9:16 com transições + trilha royalty-free (~US$ 0,02).
                   </p>
                 </div>
               </>

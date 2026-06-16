@@ -243,13 +243,24 @@ function postadorAuthHeaders(): Record<string, string> {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
+export type PostadorSlideTemplateId =
+  | "minimal"
+  | "numerado"
+  | "capa"
+  | "editorial"
+  | "magazine"
+  | "bold"
+  | "split"
+  | "glass";
+
 export type PostadorNicheParams = {
   niche_id?: string;
   template_id?: string;
   segmento?: string;
   marca_nome?: string;
   image_mode?: "criativo" | "produto";
-  slide_template?: "minimal" | "numerado" | "capa";
+  slide_template?: PostadorSlideTemplateId;
+  music_id?: string;
 };
 
 export type PostadorNicheTemplateRes = {
@@ -477,12 +488,32 @@ export const api = {
           custo_ref_8s_usd: number;
         }>;
       }>("/api/postador/video-providers"),
+    getMusicTracks: () =>
+      fetchJson<{
+        tracks: Array<{
+          id: string;
+          label: string;
+          mood: string;
+          volume: number;
+          preview_url?: string;
+        }>;
+      }>("/api/postador/music-tracks"),
+    getSlideTemplates: () =>
+      fetchJson<{
+        templates: Array<{
+          id: PostadorSlideTemplateId;
+          label: string;
+          descricao: string;
+          recomendado?: boolean;
+        }>;
+      }>("/api/postador/slide-templates"),
     gerarVideo: (body: {
       prompt: string;
       provider: "slideshow" | "veo" | "sora";
       image_urls?: string[];
       duration_seconds?: 4 | 8 | 12;
       auto_imagem_slideshow?: boolean;
+      music_id?: string;
     } & PostadorNicheParams) =>
       fetchJson<{
         media_url: string;
@@ -490,6 +521,7 @@ export const api = {
         provider: string;
         duration_seconds: number;
         custo_estimado_usd: number;
+        music_id?: string | null;
       }>("/api/postador/gerar-video", {
         method: "POST",
         body,
