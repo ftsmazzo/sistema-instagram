@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
-import { api, getAuthToken, type AgendadoItem, type ContaInstagramRes, type Config } from "../api/client";
+import { api, getAuthToken, type AgendadoItem, type ContaInstagramRes, type Config, type PostadorNicheParams, type PostadorNicheRes } from "../api/client";
 import { PageShell } from "../components/layout/PageShell";
 
 const STORAGE_KEY = "postador_ia";
@@ -13,7 +13,7 @@ const PROVIDERS = [
 const MODELS_OPENAI = [
   { id: "gpt-4.1", label: "GPT-4.1" },
   { id: "gpt-4o", label: "GPT-4o" },
-  { id: "gpt-5.2", label: "GPT-5.2" },
+  { id: "gpt-4o-mini", label: "GPT-4o mini" },
 ];
 
 const MODELS_CLAUDE = [
@@ -45,7 +45,7 @@ function saveIA(provider: string, model: string) {
 
 type Step = "form" | "review" | "published";
 /** Passos do assistente antes de gerar (só em step === "form") */
-type WizardStep = 1 | 2 | 3;
+type WizardStep = 1 | 2 | 3 | 4;
 type ContentMode = "descricao" | "link";
 
 export function Postador() {
@@ -83,9 +83,25 @@ export function Postador() {
   const [provider, setProvider] = useState(loadSavedIA().provider);
   const [model, setModel] = useState(loadSavedIA().model);
 
+  const [niches, setNiches] = useState<PostadorNicheRes[]>([]);
+  const [nicheId, setNicheId] = useState("");
+  const [templateKey, setTemplateKey] = useState("");
+  const [segmento, setSegmento] = useState("");
+  const [marcaNome, setMarcaNome] = useState("");
+
   const modelsList = provider === "claude" ? MODELS_CLAUDE : MODELS_OPENAI;
   const currentModelInList = modelsList.some((m) => m.id === model);
   const effectiveModel = currentModelInList ? model : modelsList[0]?.id ?? model;
+
+  const nichePack = niches.find((n) => n.id === nicheId);
+  const templatesDoNicho = nichePack?.templates ?? [];
+
+  const nicheParams = (): PostadorNicheParams => ({
+    niche_id: nicheId || undefined,
+    template_id: templateKey || undefined,
+    segmento: segmento || undefined,
+    marca_nome: marcaNome || undefined,
+  });
 
   useEffect(() => {
     saveIA(provider, model);
@@ -112,6 +128,29 @@ export function Postador() {
       const defaultId = c.instagram_default_id ?? contas[0]?.id ?? null;
       setContaPadraoId(defaultId);
       setContaSelecionadaId((prev) => (prev && contas.some((x) => x.id === prev)) ? prev : defaultId);
+      const seg = c.empresa?.segmento?.trim() ?? "";
+      const marca = (c.empresa?.nome_fantasia || c.empresa?.nome || "").trim();
+      setSegmento(seg);
+      setMarcaNome(marca);
+      api.postador
+        .getNiches(seg || undefined)
+        .then((res) => {
+          setNiches(res.niches);
+          const suggested = res.suggested_niche_id ?? res.niches[0]?.id ?? "";
+          setNicheId((prevNiche) => {
+            const id = prevNiche && res.niches.some((n) => n.id === prevNiche) ? prevNiche : suggested;
+            const pack = res.niches.find((n) => n.id === id) ?? res.niches[0];
+            setTemplateKey((tplPrev) =>
+              tplPrev && pack?.templates.some((t) => t.key === tplPrev)
+                ? tplPrev
+                : pack?.templates[0]?.key ?? ""
+            );
+            return id;
+          });
+        })
+        .catch(() => {
+          /* niches opcionais */
+        });
     };
     (async () => {
       try {
@@ -145,7 +184,7 @@ export function Postador() {
       let urlGerada: string | null = null;
       if (criarMidiaIA) {
         const prompt = (instrucoesImagem || descricao).trim();
-        const resImg = await api.postador.gerarImagem(prompt, provedorImagem);
+        const resImg = await api.postador.gerarImagem(prompt, provedorImagem, nicheParams());
         urlGerada = resImg.media_url;
       }
       const files = arquivos.length ? arquivos : undefined;
@@ -153,7 +192,8 @@ export function Postador() {
         descricao.trim(),
         files,
         provider,
-        effectiveModel
+        effectiveModel,
+        nicheParams()
       );
       setCaption(res.caption);
       setMediaUrl(res.media_url ?? urlGerada ?? null);
@@ -189,7 +229,7 @@ export function Postador() {
     setError(null);
     setLoading(true);
     try {
-      const res = await api.postador.refazerCaption(caption, feedback.trim(), undefined, provider, effectiveModel);
+      const res = await api.postador.refazerCaption(caption, feedback.trim(), undefined, provider, effectiveModel, nicheParams());
       setCaption(res.caption);
       setFeedback("");
     } catch (e) {
@@ -295,7 +335,7 @@ export function Postador() {
     setFromUrl(true);
     setLoading(true);
     try {
-      const res = await api.postador.gerarPorUrl(urlImovel.trim(), provider, effectiveModel);
+      const res = await api.postador.gerarPorUrl(urlImovel.trim(), provider, effectiveModel, nicheParams());
       if (res.jornada && res.jornada.length > 0) {
         setJornadaQueue(res.jornada);
         setJornadaIndex(1);
@@ -327,7 +367,7 @@ export function Postador() {
     if (!caption) return;
     setLoading(true);
     try {
-      const res = await api.postador.gerarCTA(caption, provider, effectiveModel);
+      const res = await api.postador.gerarCTA(caption, provider, effectiveModel, nicheParams());
       setTextosCarrossel(prev => {
         const next = [...prev];
         next[index] = res.cta;
@@ -355,7 +395,7 @@ export function Postador() {
     setError(null);
     setLoading(true);
     try {
-      const res = await api.postador.gerarImagem(prompt);
+      const res = await api.postador.gerarImagem(prompt, provedorImagem, nicheParams());
       setMediaUrl(res.media_url);
       setMediaUrls([res.media_url]);
       setPreviewUrls([res.media_url]);
@@ -432,14 +472,15 @@ export function Postador() {
 
   const wizardLabels = [
     { n: 1 as const, title: "Conta", short: "1" },
-    { n: 2 as const, title: "IA da legenda", short: "2" },
-    { n: 3 as const, title: "Conteúdo", short: "3" },
+    { n: 2 as const, title: "Nicho", short: "2" },
+    { n: 3 as const, title: "IA da legenda", short: "3" },
+    { n: 4 as const, title: "Conteúdo", short: "4" },
   ];
 
   return (
     <PageShell
       title="Postador"
-      description="Siga os passos: conta Instagram, modelo de IA e conteúdo do post. Depois revise e publique ou agende."
+      description="Siga os passos: conta, nicho, modelo de IA e conteúdo. Legendas curtas e imagens 4:5 para o feed."
       wide
     >
       {error && <div className="alert-error mb-6">{error}</div>}
@@ -526,8 +567,91 @@ export function Postador() {
             </div>
           )}
 
-          {/* Passo 2 — IA */}
+          {/* Passo 2 — Nicho e template */}
           {wizardStep === 2 && (
+            <div className="card space-y-4">
+              <h2 className="text-lg font-semibold text-gray-900">Estilo do post</h2>
+              <p className="text-sm text-gray-600">
+                Escolha o nicho e o template. A legenda e a imagem seguem tom e formato de social media — não textão genérico.
+              </p>
+              {segmento && (
+                <p className="text-xs text-gray-500">
+                  Segmento da empresa: <strong>{segmento}</strong>
+                  {marcaNome ? <> · Marca: <strong>{marcaNome}</strong></> : null}
+                </p>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="niche" className="block text-sm font-medium text-gray-700 mb-1">
+                    Nicho
+                  </label>
+                  <select
+                    id="niche"
+                    value={nicheId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setNicheId(id);
+                      const pack = niches.find((n) => n.id === id);
+                      setTemplateKey(pack?.templates[0]?.key ?? "");
+                    }}
+                    disabled={loading || niches.length === 0}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  >
+                    {niches.map((n) => (
+                      <option key={n.id} value={n.id}>
+                        {n.label}
+                      </option>
+                    ))}
+                  </select>
+                  {nichePack && <p className="mt-1 text-xs text-gray-500">{nichePack.descricao}</p>}
+                </div>
+                <div>
+                  <label htmlFor="template" className="block text-sm font-medium text-gray-700 mb-1">
+                    Template
+                  </label>
+                  <select
+                    id="template"
+                    value={templateKey}
+                    onChange={(e) => setTemplateKey(e.target.value)}
+                    disabled={loading || templatesDoNicho.length === 0}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  >
+                    {templatesDoNicho.map((t) => (
+                      <option key={t.key} value={t.key}>
+                        {t.label} ({t.formato}, {t.slides} slide{t.slides > 1 ? "s" : ""})
+                      </option>
+                    ))}
+                  </select>
+                  {templatesDoNicho.find((t) => t.key === templateKey) && (
+                    <p className="mt-1 text-xs text-gray-500">
+                      Hook exemplo: «{templatesDoNicho.find((t) => t.key === templateKey)?.hook_exemplo}»
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2 justify-between pt-2">
+                <button
+                  type="button"
+                  onClick={() => setWizardStep(1)}
+                  disabled={loading}
+                  className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setWizardStep(3)}
+                  disabled={loading || !nicheId}
+                  className="px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+                >
+                  Continuar
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Passo 3 — IA */}
+          {wizardStep === 3 && (
             <div className="card space-y-4">
               <h2 className="text-lg font-semibold text-gray-900">Modelo de IA para a legenda</h2>
               <p className="text-sm text-gray-600">Escolha o provedor e o modelo que geram o texto do post (e refinos com «Refazer caption»).</p>
@@ -572,7 +696,7 @@ export function Postador() {
               <div className="flex flex-wrap gap-2 justify-between pt-2">
                 <button
                   type="button"
-                  onClick={() => setWizardStep(1)}
+                  onClick={() => setWizardStep(2)}
                   disabled={loading}
                   className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
                 >
@@ -580,7 +704,7 @@ export function Postador() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => setWizardStep(3)}
+                  onClick={() => setWizardStep(4)}
                   disabled={loading}
                   className="px-4 py-2 rounded-md bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700"
                 >
@@ -590,8 +714,8 @@ export function Postador() {
             </div>
           )}
 
-          {/* Passo 3 — Tipo de conteúdo */}
-          {wizardStep === 3 && (
+          {/* Passo 4 — Tipo de conteúdo */}
+          {wizardStep === 4 && (
             <div className="card space-y-5">
               <h2 className="text-lg font-semibold text-gray-900">Como montar o post?</h2>
               <p className="text-sm text-gray-600">Escolha uma opção. Só as ações da opção selecionada aparecem abaixo.</p>
@@ -641,7 +765,7 @@ export function Postador() {
                       id="descricao"
                       rows={5}
                       className="w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                      placeholder="Ex.: Casa em condomínio, 3 quartos, Ribeirão Preto..."
+                      placeholder="Ex.: Dica de automação para clínicas, lançamento do produto X..."
                       value={descricao}
                       onChange={(e) => setDescricao(e.target.value)}
                       disabled={loading}
@@ -758,7 +882,7 @@ export function Postador() {
               <div className="flex justify-start pt-2">
                 <button
                   type="button"
-                  onClick={() => setWizardStep(2)}
+                  onClick={() => setWizardStep(3)}
                   disabled={loading}
                   className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
                 >

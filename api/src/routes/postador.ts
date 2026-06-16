@@ -9,6 +9,12 @@ import { rasparPaginaImovel, montarDescricaoParaCaption, baixarEEnviarParaCloudi
 import { publishToInstagram, publishCarouselToInstagram } from "../services/instagram.js";
 import { gerarImagemComIA } from "../services/imageGen.js";
 import { adicionarTextoCarrossel } from "../services/carouselTexto.js";
+import {
+  listNichesForApi,
+  suggestNicheFromSegmento,
+  resolveCaptionContext,
+  buildImagePrompt,
+} from "../services/postadorNiches.js";
 import { getContaParaPublicar } from "../store/config.js";
 import { resolveConfigStore, getOrgIdFromRequest, resolveOrgIdForPostador } from "../context/workspaceConfig.js";
 import { upsertPostagemFromPostador } from "../store/crmPostagens.js";
@@ -28,6 +34,28 @@ function extFromMimetype(mimetype: string): string {
 }
 
 const SAFE_FILENAME = /^[a-zA-Z0-9._-]+$/;
+
+type PostadorIaBody = {
+  provider?: string;
+  model?: string;
+  niche_id?: string;
+  template_id?: string;
+  segmento?: string;
+  marca_nome?: string;
+};
+
+function captionOptionsFromBody(body: PostadorIaBody) {
+  const provider = body.provider?.trim();
+  const providerNorm = provider === "claude" ? "claude" : provider === "openai" ? "openai" : undefined;
+  return {
+    provider: providerNorm,
+    model: body.model?.trim() || undefined,
+    nicheId: body.niche_id?.trim() || undefined,
+    templateKey: body.template_id?.trim() || undefined,
+    segmento: body.segmento?.trim() || undefined,
+    marcaNome: body.marca_nome?.trim() || undefined,
+  };
+}
 
 async function recordCrmPostagemAposPublicar(
   fastify: FastifyInstance,
@@ -248,12 +276,19 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
+  // GET /api/postador/niches — pacotes de nicho + templates para o wizard
+  fastify.get<{ Querystring: { segmento?: string } }>("/niches", async (request, reply) => {
+    const segmento = request.query.segmento?.trim();
+    const suggested = segmento ? suggestNicheFromSegmento(segmento) : undefined;
+    return reply.send({ niches: listNichesForApi(), suggested_niche_id: suggested ?? null });
+  });
+
   // POST /api/postador/gerar-cta — gera um CTA curto para imagem baseado no caption
   fastify.post("/gerar-cta", async (request, reply) => {
-    const body = request.body as { caption: string; provider?: string; model?: string };
+    const body = request.body as { caption: string } & PostadorIaBody;
     if (!body.caption) return reply.status(400).send({ error: "Caption é obrigatório." });
     try {
-      const cta = await gerarCTAImagem(body.caption, { provider: body.provider as any, model: body.model });
+      const cta = await gerarCTAImagem(body.caption, captionOptionsFromBody(body));
       return reply.send({ cta });
     } catch (err) {
       return reply.status(500).send({ error: err instanceof Error ? err.message : "Erro ao gerar CTA." });
@@ -287,14 +322,31 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
     return reply.send({ media_url: mediaUrl });
   });
 
-  // POST /api/postador/gerar-imagem — gera imagem com IA (openai = DALL·E, gemini = Imagen) e retorna URL (Cloudinary)
+  // POST /api/postador/gerar-imagem — gera imagem com IA (openai = DALL·E, gemini = Imagen) e retorna URL (4:5 feed)
   fastify.post("/gerar-imagem", async (request, reply) => {
-    const body = request.body as { prompt?: string; provider?: string };
-    const prompt = (body?.prompt ?? "").trim();
-    const provider = (body?.provider === "gemini" ? "gemini" : "openai") as "openai" | "gemini";
-    if (!prompt) {
-      return reply.status(400).send({ error: "Campo 'prompt' é obrigatório (descrição da imagem desejada)." });
+    const body = request.body as {
+      prompt?: string;
+      provider?: string;
+      niche_id?: string;
+      template_id?: string;
+      segmento?: string;
+      marca_nome?: string;
+      brief?: string;
+    };
+    const rawPrompt = (body?.prompt ?? body?.brief ?? "").trim();
+    const provider = (body?.provider === "openai" ? "openai" : "gemini") as "openai" | "gemini";
+    if (!rawPrompt && !body?.niche_id) {
+      return reply.status(400).send({ error: "Campo 'prompt' ou 'brief' é obrigatório (descrição da imagem desejada)." });
     }
+    const ctx = resolveCaptionContext({
+      nicheId: body.niche_id,
+      templateKey: body.template_id,
+      segmento: body.segmento,
+      marcaNome: body.marca_nome,
+    });
+    const prompt = body.niche_id || body.template_id
+      ? buildImagePrompt(rawPrompt || "post para Instagram", ctx)
+      : rawPrompt;
     try {
       const media_url = await gerarImagemComIA(prompt, provider);
       return reply.send({ media_url });
@@ -327,9 +379,9 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // POST /api/postador/por-url — JSON { url, provider?, model? }. Raspa página de produto/serviço, baixa imagem → storage, gera caption.
+  // POST /api/postador/por-url — JSON { url, provider?, model?, niche_id?, template_id?, ... }
   fastify.post("/por-url", async (request, reply) => {
-    const body = request.body as { url?: string; provider?: string; model?: string };
+    const body = request.body as { url?: string } & PostadorIaBody;
     const url = body?.url?.trim();
     if (!url) {
       return reply.status(400).send({ error: "Campo 'url' é obrigatório (link da página de detalhes do produto ou serviço)." });
@@ -337,9 +389,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       return reply.status(400).send({ error: "URL inválida." });
     }
-    const provider = body?.provider?.trim();
-    const model = body?.model?.trim();
-    const providerNorm = provider === "claude" ? "claude" : undefined;
+    const iaOpts = captionOptionsFromBody(body);
 
     try {
       const dados = await rasparPaginaImovel(url);
@@ -362,10 +412,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
         }
       }
 
-      const journey = await gerarJornadaPorLink(descricao, {
-        provider: providerNorm ?? (provider === "openai" ? "openai" : undefined),
-        model: model || undefined,
-      });
+      const journey = await gerarJornadaPorLink(descricao, iaOpts);
 
       const responsePosts = journey.map((post, i) => {
         let postUrls: string[] = [];
@@ -414,6 +461,10 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
     let mediaUrls: string[] | undefined;
     let provider: string | undefined;
     let model: string | undefined;
+    let nicheId: string | undefined;
+    let templateId: string | undefined;
+    let segmento: string | undefined;
+    let marcaNome: string | undefined;
     const uploadedUrls: string[] = [];
 
     if (contentType.includes("multipart/form-data")) {
@@ -424,6 +475,10 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
           if (part.fieldname === "descricao") descricao = v;
           else if (part.fieldname === "provider") provider = v;
           else if (part.fieldname === "model") model = v;
+          else if (part.fieldname === "niche_id") nicheId = v;
+          else if (part.fieldname === "template_id") templateId = v;
+          else if (part.fieldname === "segmento") segmento = v;
+          else if (part.fieldname === "marca_nome") marcaNome = v;
         }
         if (part.type === "file") {
           const mimetype = part.mimetype ?? "application/octet-stream";
@@ -458,24 +513,32 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
         mediaUrl = uploadedUrls[0];
       }
     } else {
-      const body = request.body as { descricao?: string; provider?: string; model?: string };
+      const body = request.body as { descricao?: string } & PostadorIaBody;
       descricao = (body?.descricao ?? "").trim();
       provider = body?.provider?.trim();
       model = body?.model?.trim();
+      nicheId = body?.niche_id?.trim();
+      templateId = body?.template_id?.trim();
+      segmento = body?.segmento?.trim();
+      marcaNome = body?.marca_nome?.trim();
     }
 
     if (!descricao) {
       return reply.status(400).send({ error: "Campo 'descricao' é obrigatório" });
     }
 
-    const providerNorm = provider === "claude" ? "claude" : undefined;
+    const iaOpts = captionOptionsFromBody({
+      provider,
+      model,
+      niche_id: nicheId,
+      template_id: templateId,
+      segmento,
+      marca_nome: marcaNome,
+    });
     try {
       const captionTipo =
         mediaType === "CAROUSEL" ? "CAROUSEL" : mediaType === "REELS" ? "REELS" : "IMAGE";
-      const caption = await gerarCaptionIA(descricao, captionTipo, {
-        provider: providerNorm ?? (provider === "openai" ? "openai" : undefined),
-        model: model || undefined,
-      });
+      const caption = await gerarCaptionIA(descricao, captionTipo, iaOpts);
       const payload: { caption: string; media_url?: string; media_urls?: string[]; media_type?: string } = {
         caption,
         media_type: mediaType,
@@ -496,18 +559,15 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // POST /api/postador/refazer-caption — JSON: { caption_atual, feedback, provider?, model? }
+  // POST /api/postador/refazer-caption — JSON: { caption_atual, feedback, provider?, model?, niche_id?, ... }
   fastify.post("/refazer-caption", async (request, reply) => {
     const body = request.body as {
       caption_atual?: string;
       feedback?: string;
-      provider?: string;
-      model?: string;
-    };
+      refazer_midia?: boolean;
+    } & PostadorIaBody;
     const captionAtual = body?.caption_atual ?? "";
     const feedback = body?.feedback ?? "";
-    const provider = body?.provider?.trim();
-    const model = body?.model?.trim();
 
     if (!captionAtual.trim() || !feedback.trim()) {
       return reply.status(400).send({
@@ -515,12 +575,8 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       });
     }
 
-    const providerNorm = provider === "claude" ? "claude" : provider === "openai" ? "openai" : undefined;
     try {
-      const caption = await refazerCaptionIA(captionAtual, feedback, {
-        provider: providerNorm,
-        model: model || undefined,
-      });
+      const caption = await refazerCaptionIA(captionAtual, feedback, captionOptionsFromBody(body));
       return reply.send({
         caption,
         media_url: undefined,

@@ -233,6 +233,33 @@ function postadorAuthHeaders(): Record<string, string> {
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
+export type PostadorNicheParams = {
+  niche_id?: string;
+  template_id?: string;
+  segmento?: string;
+  marca_nome?: string;
+};
+
+export type PostadorNicheTemplateRes = {
+  key: string;
+  id: string;
+  label: string;
+  formato: string;
+  slides: number;
+  hook_exemplo: string;
+  legenda_max_chars: number;
+  hashtags_max: number;
+};
+
+export type PostadorNicheRes = {
+  id: string;
+  label: string;
+  descricao: string;
+  tom_legenda: string;
+  tom_visual: string;
+  templates: PostadorNicheTemplateRes[];
+};
+
 export const api = {
   getHealth: () => fetchJson<Health>("/health"),
   getAuthStatus: () => fetchJson<AuthStatus>("/api/auth/status"),
@@ -271,11 +298,18 @@ export const api = {
     }),
 
   postador: {
+    getNiches: (segmento?: string) => {
+      const qs = segmento?.trim() ? `?segmento=${encodeURIComponent(segmento.trim())}` : "";
+      return fetchJson<{ niches: PostadorNicheRes[]; suggested_niche_id: string | null }>(
+        `/api/postador/niches${qs}`
+      );
+    },
     gerarCaption: (
       descricao: string,
       file?: File | File[] | null,
       provider?: string | null,
-      model?: string | null
+      model?: string | null,
+      niche?: PostadorNicheParams | null
     ) => {
       const files = file == null ? [] : Array.isArray(file) ? file : [file];
       if (files.length > 0) {
@@ -284,6 +318,10 @@ export const api = {
         for (const f of files) form.append("arquivo", f);
         if (provider) form.set("provider", provider);
         if (model) form.set("model", model);
+        if (niche?.niche_id) form.set("niche_id", niche.niche_id);
+        if (niche?.template_id) form.set("template_id", niche.template_id);
+        if (niche?.segmento) form.set("segmento", niche.segmento);
+        if (niche?.marca_nome) form.set("marca_nome", niche.marca_nome);
         return fetch(`${base}/api/postador/gerar-caption`, {
           method: "POST",
           headers: postadorAuthHeaders(),
@@ -299,10 +337,15 @@ export const api = {
       }
       return fetchJson<{ caption: string; media_url?: string; media_urls?: string[]; media_type?: string }>("/api/postador/gerar-caption", {
         method: "POST",
-        body: { descricao, provider: provider || undefined, model: model || undefined },
+        body: {
+          descricao,
+          provider: provider || undefined,
+          model: model || undefined,
+          ...niche,
+        },
       });
     },
-    gerarPorUrl: (url: string, provider?: string | null, model?: string | null) =>
+    gerarPorUrl: (url: string, provider?: string | null, model?: string | null, niche?: PostadorNicheParams | null) =>
       fetchJson<{
         jornada: Array<{
           post_number: number;
@@ -314,18 +357,19 @@ export const api = {
         }>;
       }>("/api/postador/por-url", {
         method: "POST",
-        body: { url, provider: provider || undefined, model: model || undefined },
+        body: { url, provider: provider || undefined, model: model || undefined, ...niche },
       }),
     refazerCaption: (
       caption_atual: string,
       feedback: string,
       refazer_midia?: boolean,
       provider?: string | null,
-      model?: string | null
+      model?: string | null,
+      niche?: PostadorNicheParams | null
     ) =>
       fetchJson<{ caption: string; media_url?: string; media_type?: string }>("/api/postador/refazer-caption", {
         method: "POST",
-        body: { caption_atual, feedback, refazer_midia, provider: provider || undefined, model: model || undefined },
+        body: { caption_atual, feedback, refazer_midia, provider: provider || undefined, model: model || undefined, ...niche },
       }),
     publicar: (payload: {
       caption: string;
@@ -363,20 +407,24 @@ export const api = {
         `/api/postador/agendados/${id}/publicar`,
         { method: "POST", body: { conta_id: conta_id ?? undefined } }
       ),
-    gerarImagem: (prompt: string, provider?: "openai" | "gemini") =>
+    gerarImagem: (
+      prompt: string,
+      provider?: "openai" | "gemini",
+      niche?: PostadorNicheParams | null
+    ) =>
       fetchJson<{ media_url: string }>("/api/postador/gerar-imagem", {
         method: "POST",
-        body: { prompt, provider: provider ?? "openai" },
+        body: { prompt, provider: provider ?? "gemini", ...niche },
       }),
     carouselAdicionarTexto: (image_urls: string[], texts: string[]) =>
       fetchJson<{ image_urls: string[] }>("/api/postador/carousel-adicionar-texto", {
         method: "POST",
         body: { image_urls, texts },
       }),
-    gerarCTA: (caption: string, provider?: string, model?: string) =>
+    gerarCTA: (caption: string, provider?: string, model?: string, niche?: PostadorNicheParams | null) =>
       fetchJson<{ cta: string }>("/api/postador/gerar-cta", {
         method: "POST",
-        body: { caption, provider, model },
+        body: { caption, provider, model, ...niche },
       }),
     uploadMidia: (file: File) => {
       const form = new FormData();

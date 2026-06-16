@@ -1,5 +1,12 @@
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
+import {
+  resolveCaptionContext,
+  buildCaptionSystemPrompt,
+  buildCtaOverlaySystemPrompt,
+  getNichePack,
+  type PostadorCaptionContext,
+} from "./postadorNiches.js";
 
 // Chaves de API (obrigatórias conforme o provedor usado). Escolha de provedor/modelo vem do painel.
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -10,6 +17,12 @@ const DEFAULT_MODEL_OPENAI = process.env.POSTADOR_IA_MODEL_OPENAI ?? "gpt-4.1";
 const DEFAULT_MODEL_CLAUDE = process.env.POSTADOR_IA_MODEL_CLAUDE ?? "claude-sonnet-4-5-20250929";
 
 export type Provider = "openai" | "claude";
+
+function normalizeOpenAIModel(model?: string | null): string {
+  const m = (model?.trim() || DEFAULT_MODEL_OPENAI).toLowerCase();
+  if (m.startsWith("gpt-5")) return DEFAULT_MODEL_OPENAI;
+  return model?.trim() || DEFAULT_MODEL_OPENAI;
+}
 
 function getOpenAI(): OpenAI {
   if (!OPENAI_API_KEY?.trim()) {
@@ -25,63 +38,39 @@ function getAnthropic(): Anthropic {
   return new Anthropic({ apiKey: ANTHROPIC_API_KEY.trim() });
 }
 
-// Prompt adaptado do seu agente (Postador n8n): estrutura, workflow e regras, sem perder potência.
-// Saída: uma única legenda formatada (pronta para Graph API), com hashtags no final.
-const SYSTEM_GERAR = `Você é um especialista em criação de conteúdo para Instagram com a seguinte configuração:
+// Refazer: mantém tom curto e moderno do nicho quando informado.
+function buildRefazerSystem(ctx?: PostadorCaptionContext): string {
+  const base = `Você ajusta legendas curtas para Instagram (2026) — estilo social media, NÃO textão.
 
-<role>Especialista em Criação de Conteúdo para Instagram</role>
-<expertise>Criação de posts altamente engajadores para o feed do Instagram, utilizando técnicas de Neuromarketing, Storytelling, Copywriting emocional e SEO para redes sociais</expertise>
-<tools>Copywriting persuasivo, estrutura narrativa fluida, uso estratégico de emojis e hashtags otimizadas</tools>
+Regras: use \\n\\n entre parágrafos; no máximo 2 emojis; preserve tom natural; finalize com CTA que convide a comentar; hashtags no final (poucas); resultado limpo, sem aspas ou escapes. Retorne somente a nova legenda.`;
+  if (!ctx) return base;
+  const { template } = ctx;
+  return `${base}
 
-<workflow>
-1. Analisar o conteúdo fornecido (texto-base ou tema) — captar a intenção emocional e temática.
-2. Gerar um texto contínuo, engajador e emocionalmente conectado — despertar empatia e capturar a atenção nos primeiros segundos.
-3. Apresentar mensagem central clara, com storytelling e copywriting — estabelecer conexão emocional e relevância com o público-alvo.
-4. Incluir proposta de valor, reflexão, aprendizado ou informação relevante — estimular compartilhamento, comentários e retenção.
-5. Finalizar com CTA que incentive especialmente a **comentar no post** — assim o agente de comentários pode entrar em ação (ex.: "Comente abaixo o que achou", "Deixe seu comentário", "Responda nos comentários").
-6. Incluir até 10 hashtags relevantes e de alto alcance — ampliar visibilidade e alcance orgânico.
-</workflow>
+Limite: ${template.legenda_max_chars} caracteres. Máximo ${template.hashtags_max} hashtags.
+Template: ${template.label}.`;
+}
 
-<regras>
-- Adaptar o tom e estilo ao tipo de conteúdo recebido, mantendo sempre conexão emocional e valor para o público.
-- Utilizar emojis estrategicamente para intensificar a emoção e facilitar a leitura — nunca excessivo, nunca ausente.
-- Manter naturalidade textual, evitando divisões explícitas como "introdução", "desenvolvimento".
-- Garantir texto visualmente escaneável, fluido e emocionalmente atrativo.
-- Saída: UMA ÚNICA LEGENDA já formatada para Instagram (pronta para ser enviada como caption na Graph API).
-- Use \\n\\n entre parágrafos para legibilidade no feed. Hashtags todas no final, em bloco compacto (uma linha ou bloco único), sem quebra entre cada uma.
-- Nunca use aspas desnecessárias, barras de escape ou marcações. O resultado deve ser limpo e direto.
-- Se o conteúdo contiver versículos bíblicos, reflexões, ideias motivacionais ou mensagens inspiradoras, valorize com boas pausas e espaçamento.
-</regras>
-
-<output>Retorne somente a legenda final formatada, com emojis equilibrados, parágrafos separados por \\n\\n, CTA que convide a comentar no post (para o agente atuar) e hashtags agrupadas no fim. Nada mais.</output>`;
-
-// Refazer: regras do seu "Formatar texto" + aplicar feedback do usuário.
-const SYSTEM_REFAZER = `Você é um especialista em escrita criativa para redes sociais, focado em formatação perfeita de legendas para Instagram, ideais para a Graph API.
-
-Seu objetivo é ajustar a legenda conforme o pedido do usuário, mantendo estrutura visualmente bonita, legível e engajadora.
-
-Regras: use \\n\\n entre parágrafos; distribua emojis de forma natural; preserve o tom emocional; valorize reflexões ou mensagens inspiradoras com boas pausas; finalize com CTA que convide a comentar no post (para o agente atuar); hashtags todas no final, em bloco compacto; resultado limpo, sem aspas ou escapes. Retorne somente a nova legenda formatada, nada mais.`;
-
-async function callOpenAI(system: string, user: string, model: string): Promise<string> {
+async function callOpenAI(system: string, user: string, model: string, maxTokens = 400): Promise<string> {
   const openai = getOpenAI();
   const res = await openai.chat.completions.create({
-    model: model || DEFAULT_MODEL_OPENAI,
+    model: normalizeOpenAIModel(model),
     messages: [
       { role: "system", content: system },
       { role: "user", content: user },
     ],
-    max_tokens: 800,
+    max_tokens: maxTokens,
   });
   const text = res.choices[0]?.message?.content?.trim();
   if (!text) throw new Error("Resposta vazia da IA.");
   return text;
 }
 
-async function callClaude(system: string, user: string, model: string): Promise<string> {
+async function callClaude(system: string, user: string, model: string, maxTokens = 400): Promise<string> {
   const anthropic = getAnthropic();
   const res = await anthropic.messages.create({
     model: model || DEFAULT_MODEL_CLAUDE,
-    max_tokens: 800,
+    max_tokens: maxTokens,
     system,
     messages: [{ role: "user", content: user }],
   });
@@ -99,8 +88,8 @@ async function complete(
 ): Promise<string> {
   const p: Provider = provider === "claude" ? "claude" : "openai";
   const m = (model?.trim() || (p === "openai" ? DEFAULT_MODEL_OPENAI : DEFAULT_MODEL_CLAUDE)) as string;
-  if (p === "claude") return callClaude(system, user, m);
-  return callOpenAI(system, user, m);
+  if (p === "claude") return callClaude(system, user, m, 400);
+  return callOpenAI(system, user, m, 400);
 }
 
 async function completeLong(
@@ -127,7 +116,7 @@ async function completeLong(
   }
   const openai = getOpenAI();
   const res = await openai.chat.completions.create({
-    model: m,
+    model: normalizeOpenAIModel(m),
     messages: [
       { role: "system", content: system },
       { role: "user", content: user },
@@ -142,7 +131,20 @@ async function completeLong(
 export type GerarCaptionOptions = {
   provider?: Provider | null;
   model?: string | null;
+  nicheId?: string | null;
+  templateKey?: string | null;
+  segmento?: string | null;
+  marcaNome?: string | null;
 };
+
+function captionContextFromOptions(options?: GerarCaptionOptions): PostadorCaptionContext {
+  return resolveCaptionContext({
+    nicheId: options?.nicheId,
+    templateKey: options?.templateKey,
+    segmento: options?.segmento,
+    marcaNome: options?.marcaNome,
+  });
+}
 
 /**
  * Gera caption para Instagram a partir da descrição do usuário.
@@ -153,10 +155,12 @@ export async function gerarCaption(
   mediaType?: "IMAGE" | "REELS" | "CAROUSEL",
   options?: GerarCaptionOptions
 ): Promise<string> {
+  const ctx = captionContextFromOptions(options);
+  const system = buildCaptionSystemPrompt(ctx);
   const tipo =
     mediaType === "REELS" ? "Reels (vídeo)" : mediaType === "CAROUSEL" ? "carrossel com várias fotos" : "post de imagem";
-  const user = `Conteúdo de entrada para criação do post:\n\n""" ${descricao} """\n\nCom base nesse conteúdo, gere UMA legenda final para um ${tipo} no Instagram, já formatada (parágrafos com \\n\\n, emojis, CTA que convide a comentar, hashtags no final em bloco). Retorne só a legenda, nada mais.`;
-  return complete(SYSTEM_GERAR, user, options?.provider, options?.model);
+  const user = `Briefing para o post (${tipo}):\n\n""" ${descricao} """\n\nGere UMA legenda final curta e moderna. Retorne só a legenda.`;
+  return complete(system, user, options?.provider, options?.model);
 }
 
 /**
@@ -168,46 +172,32 @@ export async function refazerCaption(
   feedback: string,
   options?: GerarCaptionOptions
 ): Promise<string> {
+  const ctx = captionContextFromOptions(options);
+  const system = buildRefazerSystem(ctx);
   const user = `Legenda atual:\n\n${captionAtual}\n\nPedido do usuário: ${feedback}\n\nNova legenda (só o texto formatado):`;
-  return complete(SYSTEM_REFAZER, user, options?.provider, options?.model);
+  return complete(system, user, options?.provider, options?.model);
 }
 
-const SYSTEM_JORNADA = `Você é um estrategista de conteúdo para Instagram.
-O usuário enviará dados extraídos de uma página de produto, serviço ou oferta.
-Sua tarefa é criar uma JORNADA DE CONTEÚDO com EXATAMENTE 3 posts distintos e sequenciais sobre o mesmo assunto para serem postados ao longo de uma semana.
+function buildJornadaSystem(ctx: PostadorCaptionContext): string {
+  const { template } = ctx;
+  return `Você é estrategista de conteúdo para Instagram (${ctx.nicheId}).
+Crie uma JORNADA com EXATAMENTE 3 posts sequenciais sobre o mesmo assunto.
 
-<workflow>
-1. Post 1: Teaser/Atenção - Focar na dor do cliente ou no maior diferencial da oferta.
-2. Post 2: Detalhes/Desejo - Explorar benefícios, características e valor percebido.
-3. Post 3: Urgência/Call to Action - Convite para próximo passo, condições (se houver) e gatilho de escassez.
-</workflow>
+Cada legenda: hook + 2 linhas + CTA para comentar + até ${template.hashtags_max} hashtags.
+Máximo ${template.legenda_max_chars} caracteres por legenda. Tom: ${getNichePack(ctx.nicheId).tom_legenda}
 
-<regras>
-- Cada post deve ter sua própria legenda formatada perfeitamente para o Instagram (com emojis bem distribuídos e parágrafos separados por \\n\\n).
-- Cada legenda DEVE finalizar com um Call to Action forte convidando para COMENTAR na foto.
-- Inclua até 10 hashtags no final de cada legenda.
-- A saída DEVE SER EXCLUSIVAMENTE UM ARRAY JSON válido (sem markdown de blocos de código tipo \`\`\`json). Não escreva NADA além do JSON.
-</regras>
+Posts:
+1. Teaser/Atenção — dor ou diferencial
+2. Detalhes/Desejo — benefícios concretos
+3. Urgência/CTA — próximo passo
 
-<formato_json>
+Saída: APENAS array JSON válido (sem markdown):
 [
-  {
-    "post_number": 1,
-    "estrategia": "Teaser/Atenção",
-    "caption": "texto da legenda 1 aqui..."
-  },
-  {
-    "post_number": 2,
-    "estrategia": "Detalhes/Desejo",
-    "caption": "texto da legenda 2 aqui..."
-  },
-  {
-    "post_number": 3,
-    "estrategia": "Urgência/Call to Action",
-    "caption": "texto da legenda 3 aqui..."
-  }
-]
-</formato_json>`;
+  { "post_number": 1, "estrategia": "...", "caption": "..." },
+  { "post_number": 2, "estrategia": "...", "caption": "..." },
+  { "post_number": 3, "estrategia": "...", "caption": "..." }
+]`;
+}
 
 /**
  * Gera 3 captions em sequência (Jornada) a partir de dados de uma página de produto/serviço.
@@ -216,8 +206,10 @@ export async function gerarJornadaPorLink(
   descricao: string,
   options?: GerarCaptionOptions
 ): Promise<Array<{ post_number: number; estrategia: string; caption: string }>> {
+  const ctx = captionContextFromOptions(options);
+  const system = buildJornadaSystem(ctx);
   const user = `Dados extraídos da página:\n\n""" ${descricao} """\n\nGere o ARRAY JSON estrito com as 3 legendas:`;
-  const resText = await completeLong(SYSTEM_JORNADA, user, options?.provider, options?.model);
+  const resText = await completeLong(system, user, options?.provider, options?.model);
   
   try {
     const match = resText.match(/\[\s*\{[\s\S]*\}\s*\]/);
@@ -240,31 +232,8 @@ export async function gerarCTAImagem(
   captionContext: string,
   options?: GerarCaptionOptions
 ): Promise<string> {
-  const exemplos = [
-    "Seu próximo lar te espera",
-    "Vista e se apaixone",
-    "Localização privilegiada",
-    "Realize o seu sonho",
-    "Oportunidade única",
-    "Agende sua visita",
-    "Conforto e sofisticação",
-    "Viva bem, viva aqui",
-  ];
-  const exemploStr = exemplos.map((e, i) => `${i + 1}. "${e}"`).join("\n");
-
-  const system = `Você é um copywriter especialista em marketing digital para Instagram.
-Crie UMA frase curta (4 a 7 palavras, máximo 45 caracteres) para ser escrita em destaque SOBRE a foto do post.
-
-REGRAS OBRIGATÓRIAS:
-- Frase única, não genérica
-- Reflita o ângulo emocional desta imagem específica (qualidade de vida, sonho, exclusividade, localização)
-- Nunca repita frases óbvias como "Casa dos sonhos", "Venha conferir" ou "Entre em contato"
-- Sem hashtags, aspas, emojis ou pontuação excessiva
-- Retorne APENAS a frase, nada mais
-
-Exemplos de bom nível (use como inspiração, não copie):
-${exemploStr}`;
-
-  const user = `Legenda deste post:\n\n${captionContext}\n\nCrie uma frase impactante e diferente das anteriores para sobrepor nesta foto:`;
+  const ctx = captionContextFromOptions(options);
+  const system = buildCtaOverlaySystemPrompt(ctx);
+  const user = `Legenda deste post:\n\n${captionContext}\n\nCrie uma frase impactante para sobrepor nesta foto:`;
   return complete(system, user, options?.provider, options?.model);
 }
