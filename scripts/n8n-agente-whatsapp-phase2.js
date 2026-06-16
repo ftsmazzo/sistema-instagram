@@ -184,10 +184,10 @@ const cancelaAgendaInbound = node({
     parameters: {
       operation: 'executeQuery',
       query: `=UPDATE leads SET whatsapp_ia_agendada_em = NULL, status = CASE WHEN status = 'novo' THEN 'em_conversa' ELSE status END, updated_at = NOW()
-WHERE organization_id = '{{ $('HTTP Config WA').item.json.organization.id }}'::uuid
-  AND whatsapp_digits = '{{ $('Prep Agente WA').item.json.telefone }}'
+WHERE organization_id = '{{ $('Prep Agente WA').itemMatching($itemIndex).json.organization_id }}'::uuid
+  AND whatsapp_digits = '{{ $('Prep Agente WA').itemMatching($itemIndex).json.telefone }}'
   AND whatsapp_primeira_ia_enviada = false
-  AND '{{ $('Prep Agente WA').item.json.modo }}' = 'inbound'`,
+  AND '{{ $('Prep Agente WA').itemMatching($itemIndex).json.modo }}' = 'inbound'`,
       options: {},
     },
     credentials: { postgres: { id: '7XLmPrmB0innRVr5', name: 'Maquina-Instagram' } },
@@ -433,8 +433,8 @@ const gravaInbound = node({
     parameters: {
       operation: 'executeQuery',
       query: `=INSERT INTO whatsapp_messages (organization_id, lead_id, telefone, direction, message_text, message_id_ext, instance_name)
-SELECT '{{ $('Prep Agente WA').item.json.organization_id }}'::uuid, NULLIF('{{ $('Prep Agente WA').item.json.lead_id }}','')::int, '{{ $('Prep Agente WA').item.json.telefone }}', 'inbound', '{{ $('Prep Agente WA').item.json.message_text }}', '{{ $('Prep Agente WA').item.json.message_id_ext || '' }}', '{{ $('Prep Agente WA').item.json.config.whatsapp_instance.instance_name }}'
-WHERE '{{ $('Prep Agente WA').item.json.modo }}' = 'inbound' AND '{{ $('Prep Agente WA').item.json.message_text }}' <> ''`,
+SELECT '{{ $json.organization_id }}'::uuid, NULLIF('{{ $json.lead_id }}','')::int, '{{ $json.telefone }}', 'inbound', '{{ $json.message_text }}', '{{ $json.message_id_ext || '' }}', '{{ $json.config.whatsapp_instance.instance_name }}'
+WHERE '{{ $json.modo }}' = 'inbound' AND '{{ $json.message_text }}' <> ''`,
       options: {},
     },
     credentials: { postgres: { id: '7XLmPrmB0innRVr5', name: 'Maquina-Instagram' } },
@@ -481,8 +481,8 @@ export default workflow('agente-whatsapp-mv', 'Agente-WhatsApp')
   .to(httpConfigWa)
   .to(prontoWa.onTrue(
     prepAgenteWa
-      .to(cancelaAgendaInbound)
       .to(gravaInbound)
+      .to(cancelaAgendaInbound)
       .to(agenteWa)
       .to(limpaTexto)
       .to(enviarResposta)
