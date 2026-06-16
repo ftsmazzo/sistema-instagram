@@ -101,6 +101,8 @@ export type WhatsappAgentRuntime = {
   timezone: string;
   locale: string;
   delay_primeira_msg_minutos: number;
+  /** ISO8601 no fuso da API — âncora temporal para o agente (equivalente ao currdate no prompt). */
+  hoje_iso: string;
   calendario_resumo: string;
 };
 
@@ -570,6 +572,7 @@ function assembleConfig(args: {
       timezone: AGENT_TIMEZONE,
       locale: AGENT_LOCALE,
       delay_primeira_msg_minutos: clampDelayPrimeiraMsg(instance?.delay_primeira_msg_minutos),
+      hoje_iso: new Date().toISOString(),
       calendario_resumo: buildCalendarioContext(AGENT_TIMEZONE),
     },
   };

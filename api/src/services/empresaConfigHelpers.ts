@@ -266,7 +266,9 @@ export function buildCalendarioContext(timezone: string): string {
   const hoje = formatDateInTz(now, tz);
   const lines = [
     `Fuso horário: ${tz}.`,
+    `Referência ISO (servidor): ${now.toISOString()}`,
     `HOJE: ${hoje.diaSemana}, ${hoje.data} às ${hoje.hora}.`,
+    "Use esta data como âncora — o ano/mês atuais são os do HOJE acima.",
     "Próximos 14 dias (copie a data exata — NUNCA invente mês/ano):",
   ];
   const proximaPorDow = new Map<number, string>();
@@ -294,8 +296,9 @@ export function buildWhatsappRuntimeRules(): string {
     "- LINK: NUNCA envie na 1ª mensagem nem em resposta a ok/perfeito/obrigado. Só após discovery + pedido explícito ou interesse confirmado no assunto do Instagram.",
     "- enviar_link_produto: a ferramenta JÁ envia o link — NÃO repita URL na resposta final.",
     "- AGENDAMENTO: NUNCA diga \"está agendado\" sem chamar agendar_compromisso e receber ok:true.",
-    "- Toda confirmação ao lead DEVE incluir data DD/MM/AAAA (ex.: 19/06/2026) copiada da ferramenta.",
-    "- Se o lead perguntar \"que dia é quinta/terça\", chame consultar_data_agenda ANTES de responder — NUNCA invente mês ou ano.",
+    "- ANCORAGEM: HOJE + ISO estão no CALENDÁRIO (e no bloco AGORA do n8n). Nunca contradiga — ex.: outubro se HOJE é junho.",
+    "- Date_and_Time (n8n): pode chamar para confirmar data/hora atual, se precisar.",
+    "- Para \"que dia é quinta/terça\": chame consultar_data_agenda — NUNCA calcule o mês sozinho.",
     "- Use dia_semana + horario em agendar_compromisso (ex.: quinta, 09:00) — o servidor calcula a data correta.",
     "- Na confirmação ao lead, use EXATAMENTE data_visita_formatada retornada pela ferramenta.",
     "- Se agendar_compromisso falhar, diga que vai confirmar com a equipe — não invente data.",
