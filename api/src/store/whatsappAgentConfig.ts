@@ -7,7 +7,7 @@ import {
   WHATSAPP_DEFAULT_OBJETIVOS,
   type WhatsappObjetivo,
 } from "../services/whatsappAgentDefaults.js";
-import { parseAgendaConfig, buildCalendarioContext, type AgendaConfig } from "../services/empresaConfigHelpers.js";
+import { parseAgendaConfig, buildCalendarioContext, type AgendaConfig, buildWhatsappPromptRuntime, formatLeadContextLine } from "../services/empresaConfigHelpers.js";
 import { normalizePhoneDigits } from "../util/phone.js";
 import { clampDelayPrimeiraMsg } from "./whatsappInstance.js";
 
@@ -53,6 +53,10 @@ export type WhatsappAgentPrompts = {
   agent_nome: string;
   whatsapp: string;
   whatsapp_used_default: boolean;
+  /** Prompt completo para o agente (base + contexto + calendário + regras). */
+  prompt_runtime: string;
+  /** Linha segura de identificação do lead para a mensagem do usuário no n8n. */
+  agent_context_line: string;
 };
 
 export type WhatsappAgentEvolution = {
@@ -334,10 +338,13 @@ function buildInstagramContextResumo(args: {
   }
 
   if (lead?.nome?.trim()) {
-    lines.push(`Nome do lead: ${lead.nome.trim()}`);
+    lines.push(`Nome confirmado do lead: ${lead.nome.trim()} (use SEMPRE este nome — não varie).`);
   }
   if (lead?.username_instagram?.trim()) {
     lines.push(`Instagram: @${lead.username_instagram.trim()}`);
+  }
+  if (lead?.url_interesse?.trim()) {
+    lines.push(`Produto/link de interesse no Instagram: ${lead.url_interesse.trim()}`);
   }
   if (instagramContext.ultimo_comentario?.trim()) {
     lines.push(`Comentário no post: "${instagramContext.ultimo_comentario.trim()}"`);
@@ -451,6 +458,17 @@ function assembleConfig(args: {
     });
   }
 
+  const whatsappBase = mergePromptWithRefinements(buildDefaultPromptWhatsapp(empresa, agentNome), rawPrompt);
+  const calendarioResumo = buildCalendarioContext(AGENT_TIMEZONE);
+  const instagramResumo =
+    args.instagramContext
+      ? buildInstagramContextResumo({
+          instagramContext: args.instagramContext,
+          lead: args.lead,
+          postContext: args.postContext,
+        })
+      : null;
+
   const objetivos = parseObjetivos(instance?.objetivos);
   if (objetivos.includes("handoff_humano") && !organization.handoff_whatsapp?.trim()) {
     issues.push({
@@ -509,8 +527,16 @@ function assembleConfig(args: {
       : null,
     prompts: {
       agent_nome: agentNome,
-      whatsapp: mergePromptWithRefinements(buildDefaultPromptWhatsapp(empresa, agentNome), rawPrompt),
+      whatsapp: whatsappBase,
       whatsapp_used_default,
+      prompt_runtime: buildWhatsappPromptRuntime({
+        basePrompt: whatsappBase,
+        instagramResumo,
+        calendarioResumo,
+        urlInteresse: args.lead?.url_interesse,
+        linkPadrao: organization.link_produto_servico,
+      }),
+      agent_context_line: formatLeadContextLine(args.lead?.nome, args.lead?.username_instagram),
     },
     objetivos,
     lead: args.lead

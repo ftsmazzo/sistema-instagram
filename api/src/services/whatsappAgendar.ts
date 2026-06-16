@@ -1,6 +1,12 @@
 import { ensureTables, getPool } from "../db/index.js";
 import { AGENT_TIMEZONE } from "./agentConfigDefaults.js";
-import { formatDataVisitaParaAlerta } from "./empresaConfigHelpers.js";
+import {
+  formatDataVisitaParaAlerta,
+  parseAgendaConfig,
+  resolveAgendamentoDateTime,
+  validateDataVisitaAgenda,
+  type AgendaConfig,
+} from "./empresaConfigHelpers.js";
 import { isEvolutionConfigured, resolveEvolutionBaseUrl, sendEvolutionText } from "./evolution.js";
 import { getWhatsappInstanceForOrg } from "../store/whatsappInstance.js";
 import { normalizePhoneDigits } from "../util/phone.js";
@@ -9,6 +15,8 @@ export type AgendarCompromissoInput = {
   organizationId: string;
   leadPhone: string;
   dataVisita: string;
+  diaSemana?: string | null;
+  horario?: string | null;
   assunto?: string | null;
   observacoes?: string | null;
   idPostOrigem?: string | null;
@@ -21,6 +29,8 @@ export type AgendarCompromissoResult = {
   alert_sent: boolean;
   handoff_whatsapp: string | null;
   data_visita: string | null;
+  data_visita_formatada: string | null;
+  confirmacao_sugerida: string | null;
   local: string | null;
   message?: string;
   error?: string;
@@ -72,58 +82,64 @@ function buildAgendaAlert(args: {
 export async function agendarCompromisso(input: AgendarCompromissoInput): Promise<AgendarCompromissoResult> {
   const organizationId = input.organizationId.trim();
   const leadPhone = normalizePhoneDigits(input.leadPhone);
-  const dataVisitaRaw = input.dataVisita.trim();
+  const timezone = AGENT_TIMEZONE;
+
+  const fail = (error: string, partial?: Partial<AgendarCompromissoResult>): AgendarCompromissoResult => ({
+    ok: false,
+    visita_id: null,
+    lead_updated: false,
+    alert_sent: false,
+    handoff_whatsapp: null,
+    data_visita: null,
+    data_visita_formatada: null,
+    confirmacao_sugerida: null,
+    local: null,
+    error,
+    ...partial,
+  });
 
   if (!organizationId) {
-    return {
-      ok: false,
-      visita_id: null,
-      lead_updated: false,
-      alert_sent: false,
-      handoff_whatsapp: null,
-      data_visita: null,
-      local: null,
-      error: "organization_id obrigatório.",
-    };
+    return fail("organization_id obrigatório.");
   }
   if (!leadPhone) {
-    return {
-      ok: false,
-      visita_id: null,
-      lead_updated: false,
-      alert_sent: false,
-      handoff_whatsapp: null,
-      data_visita: null,
-      local: null,
-      error: "Telefone do lead inválido.",
-    };
-  }
-  const dataVisita = new Date(dataVisitaRaw);
-  if (!dataVisitaRaw || Number.isNaN(dataVisita.getTime())) {
-    return {
-      ok: false,
-      visita_id: null,
-      lead_updated: false,
-      alert_sent: false,
-      handoff_whatsapp: null,
-      data_visita: null,
-      local: null,
-      error: "data_visita inválida — use formato ISO8601 (ex.: 2026-06-18T10:00:00-03:00).",
-    };
+    return fail("Telefone do lead inválido.");
   }
 
   await ensureTables();
   const pool = getPool();
 
-  const orgRes = await pool.query<{ handoff_whatsapp: string; agenda_local: string }>(
+  const orgRes = await pool.query<{
+    handoff_whatsapp: string;
+    agenda_local: string;
+    agenda_config: unknown;
+  }>(
     `SELECT COALESCE(handoff_whatsapp, '') AS handoff_whatsapp,
-            COALESCE(agenda_local, '') AS agenda_local
+            COALESCE(agenda_local, '') AS agenda_local,
+            COALESCE(agenda_config, '{"dias_semana":[1,2,3,4,5],"horario_inicio":"09:00","horario_fim":"18:00","duracao_minutos":60}'::jsonb) AS agenda_config
      FROM organizations WHERE id = $1::uuid LIMIT 1`,
     [organizationId]
   );
   const handoffWhatsapp = normalizePhoneDigits(orgRes.rows[0]?.handoff_whatsapp ?? null);
   const local =
     (orgRes.rows[0]?.agenda_local ?? "").trim() || "A combinar com o consultor";
+  const agenda: AgendaConfig = parseAgendaConfig(orgRes.rows[0]?.agenda_config);
+
+  const resolved = resolveAgendamentoDateTime({
+    dataVisitaRaw: input.dataVisita,
+    diaSemana: input.diaSemana,
+    horario: input.horario,
+    timezone,
+  });
+  if (!resolved.date) {
+    return fail(resolved.error ?? "Data/hora do compromisso inválida.");
+  }
+
+  const validation = validateDataVisitaAgenda(resolved.date, timezone, agenda);
+  if (!validation.ok) {
+    return fail(validation.error ?? "Data fora da disponibilidade.");
+  }
+
+  const dataVisita = resolved.date;
 
   const leadRes = await pool.query<LeadRow>(
     `SELECT id, nome, whatsapp, username_instagram, id_post_origem
@@ -162,8 +178,8 @@ export async function agendarCompromisso(input: AgendarCompromissoInput): Promis
   );
   const leadUpdated = (updateRes.rowCount ?? 0) > 0;
 
-  const timezone = AGENT_TIMEZONE;
   const dataVisitaFmt = formatDataVisitaParaAlerta(dataVisita.toISOString(), timezone);
+  const confirmacaoSugerida = `Compromisso confirmado: ${dataVisitaFmt}. Local: ${local}.`;
 
   if (!handoffWhatsapp) {
     return {
@@ -173,6 +189,8 @@ export async function agendarCompromisso(input: AgendarCompromissoInput): Promis
       alert_sent: false,
       handoff_whatsapp: null,
       data_visita: dataVisita.toISOString(),
+      data_visita_formatada: dataVisitaFmt,
+      confirmacao_sugerida: confirmacaoSugerida,
       local,
       message: "Compromisso registrado, mas nenhum WhatsApp de consultor está configurado para alerta.",
     };
@@ -186,6 +204,8 @@ export async function agendarCompromisso(input: AgendarCompromissoInput): Promis
       alert_sent: false,
       handoff_whatsapp: handoffWhatsapp,
       data_visita: dataVisita.toISOString(),
+      data_visita_formatada: dataVisitaFmt,
+      confirmacao_sugerida: confirmacaoSugerida,
       local,
       message: "Compromisso registrado, mas Evolution não está configurada para enviar o alerta.",
     };
@@ -200,6 +220,8 @@ export async function agendarCompromisso(input: AgendarCompromissoInput): Promis
       alert_sent: false,
       handoff_whatsapp: handoffWhatsapp,
       data_visita: dataVisita.toISOString(),
+      data_visita_formatada: dataVisitaFmt,
+      confirmacao_sugerida: confirmacaoSugerida,
       local,
       message: "Compromisso registrado, mas não há instância WhatsApp para enviar o alerta.",
     };
@@ -224,6 +246,8 @@ export async function agendarCompromisso(input: AgendarCompromissoInput): Promis
       alert_sent: true,
       handoff_whatsapp: handoffWhatsapp,
       data_visita: dataVisita.toISOString(),
+      data_visita_formatada: dataVisitaFmt,
+      confirmacao_sugerida: confirmacaoSugerida,
       local,
       message: "Compromisso registrado e consultor alertado no WhatsApp.",
     };
@@ -236,6 +260,8 @@ export async function agendarCompromisso(input: AgendarCompromissoInput): Promis
       alert_sent: false,
       handoff_whatsapp: handoffWhatsapp,
       data_visita: dataVisita.toISOString(),
+      data_visita_formatada: dataVisitaFmt,
+      confirmacao_sugerida: confirmacaoSugerida,
       local,
       error,
     };

@@ -210,7 +210,8 @@ const prepAgenteWa = node({
           { id: 'a2', name: 'telefone', value: expr("={{ $('Prep Proativo').isExecuted ? $('Prep Proativo').item.json.telefone_raw : $('Normaliza Inbound').item.json.telefone_raw }}"), type: 'string' },
           { id: 'a3', name: 'message_text', value: expr("={{ $('Prep Proativo').isExecuted ? ($('Prep Proativo').item.json.message_text || '') : ($('Normaliza Inbound').item.json.message_text || '') }}"), type: 'string' },
           { id: 'a4', name: 'modo', value: expr("={{ $('Prep Proativo').isExecuted ? $('Prep Proativo').item.json.modo : $('Normaliza Inbound').item.json.modo }}"), type: 'string' },
-          { id: 'a5', name: 'prompt_runtime', value: expr("={{ $('HTTP Config WA').item.json.prompts.whatsapp + '\\n\\n--- CONTEXTO INSTAGRAM ---\\n' + ($('HTTP Config WA').item.json.instagram_context?.resumo || 'Sem historico Instagram registrado para este lead.') + '\\n\\n--- CALENDARIO ---\\n' + ($('HTTP Config WA').item.json.runtime?.calendario_resumo || '') + '\\n\\n--- REGRAS FIXAS ---\\n- Maximo 400 caracteres.\\n- Uma ideia + no maximo uma pergunta.\\n- Se ha historico Direct acima: CONTINUE a conversa.\\n- enviar_link_produto: a ferramenta JA envia o link — NAO repita URL na resposta final.\\n- agendar_compromisso: use data ISO; confirme ao lead dia da semana + DD/MM/AAAA + horario + local.\\n- qualificar_acionar_humano: quando lead qualificado ou pedir humano.' }}"), type: 'string' },
+          { id: 'a5', name: 'prompt_runtime', value: expr("={{ $('HTTP Config WA').item.json.prompts.prompt_runtime || ($('HTTP Config WA').item.json.prompts.whatsapp + '\\n\\n--- CONTEXTO INSTAGRAM ---\\n' + ($('HTTP Config WA').item.json.instagram_context?.resumo || 'Sem historico Instagram registrado para este lead.') + '\\n\\n--- CALENDARIO ---\\n' + ($('HTTP Config WA').item.json.runtime?.calendario_resumo || '')) }}"), type: 'string' },
+          { id: 'a5b', name: 'agent_context_line', value: expr("={{ $('HTTP Config WA').item.json.prompts.agent_context_line || 'Lead: contato' }}"), type: 'string' },
           { id: 'a6', name: 'organization_id', value: expr('={{ $('HTTP Config WA').item.json.organization.id }}'), type: 'string' },
           { id: 'a7', name: 'send_text_path', value: expr('={{ $('HTTP Config WA').item.json.evolution.send_text_path }}'), type: 'string' },
           { id: 'a8', name: 'session_key', value: expr("={{ $('HTTP Config WA').item.json.runtime.redis_key_prefix }}"), type: 'string' },
@@ -229,7 +230,7 @@ const openAiModel = languageModel({
   config: {
     name: 'Model WA',
     position: [1200, 620],
-    parameters: { model: expr('={{ "gpt-4o-mini" }}'), options: { temperature: 0.4 } },
+    parameters: { model: expr('={{ "gpt-4o-mini" }}'), options: { temperature: 0.3 } },
     credentials: { openAiApi: { id: 'h16ESiG18xo2Y7O7', name: 'OpenAI account' } },
   },
 });
@@ -259,7 +260,7 @@ const agendarCompromisso = tool({
     parameters: {
       descriptionType: 'manual',
       toolDescription:
-        'Registra compromisso (visita/reunião) e alerta o consultor. Params: data_visita ISO8601 (obrigatório), assunto (opcional), observacoes (opcional). Use após confirmar dia/hora com o lead.',
+        'Registra compromisso e alerta consultor. OBRIGATÓRIO antes de dizer "está agendado". Params: dia_semana (ex.: terça), horario (ex.: 10:00) — preferir estes; data_visita ISO opcional; assunto/observacoes opcionais. Use confirmacao_sugerida da resposta na mensagem ao lead.',
       method: 'POST',
       url: 'https://plataforma-instagram-instagram-backend.kxryyk.easypanel.host/api/internal/whatsapp/agendar-compromisso',
       sendHeaders: true,
@@ -272,7 +273,7 @@ const agendarCompromisso = tool({
       sendBody: true,
       specifyBody: 'json',
       jsonBody: expr(
-        '={\n  "organization_id": {{ JSON.stringify($(\'Prep Agente WA\').item.json.organization_id) }},\n  "phone": {{ JSON.stringify($(\'Prep Agente WA\').item.json.telefone) }},\n  "data_visita": {{ JSON.stringify($fromAI(\'data_visita\', \'Data/hora do compromisso em ISO8601\', \'string\')) }},\n  "assunto": {{ JSON.stringify($fromAI(\'assunto\', \'Assunto da reunião\', \'string\')) }},\n  "observacoes": {{ JSON.stringify($fromAI(\'observacoes\', \'Observações\', \'string\')) }}\n}'
+        '={\n  "organization_id": {{ JSON.stringify($(\'Prep Agente WA\').item.json.organization_id) }},\n  "phone": {{ JSON.stringify($(\'Prep Agente WA\').item.json.telefone) }},\n  "dia_semana": {{ JSON.stringify($fromAI(\'dia_semana\', \'Dia da semana em português (ex.: terça)\', \'string\')) }},\n  "horario": {{ JSON.stringify($fromAI(\'horario\', \'Horário HH:MM (ex.: 10:00)\', \'string\')) }},\n  "data_visita": {{ JSON.stringify($fromAI(\'data_visita\', \'Data/hora ISO8601 (opcional se dia_semana+horario)\', \'string\')) }},\n  "assunto": {{ JSON.stringify($fromAI(\'assunto\', \'Assunto da reunião\', \'string\')) }},\n  "observacoes": {{ JSON.stringify($fromAI(\'observacoes\', \'Observações\', \'string\')) }}\n}'
       ),
       optimizeResponse: true,
       options: { response: { response: { neverError: true } } },
@@ -318,7 +319,7 @@ const enviarLink = tool({
     position: [1840, 620],
     parameters: {
       descriptionType: 'manual',
-      toolDescription: 'Envia UMA mensagem WhatsApp com link de produto/serviço. Param url obrigatorio, texto opcional. Nao inclua o link de novo na resposta do agente.',
+      toolDescription: 'Envia UMA mensagem com link. SOMENTE quando lead pedir link/detalhes OU após discovery + interesse confirmado. NUNCA em ok/perfeito/obrigado nem na 1ª msg proativa. Param url obrigatorio, texto opcional. Nao repita link na resposta do agente.',
       method: 'POST',
       url: expr("={{ $('Prep Agente WA').item.json.send_text_path }}"),
       authentication: 'genericCredentialType',
@@ -341,7 +342,7 @@ const agenteWa = node({
     position: [1440, 400],
     parameters: {
       promptType: 'define',
-      text: expr("=Modo: {{ $('Prep Agente WA').item.json.modo }}\nLead: {{ $('Prep Agente WA').item.json.config.lead?.nome || 'desconhecido' }} (@{{ $('Prep Agente WA').item.json.config.lead?.username_instagram || 'n/a' }})\nOrigem: {{ $('Prep Agente WA').item.json.config.lead?.origem_interacao || 'n/a' }}\n\nMensagem WhatsApp agora:\n{{ $('Prep Agente WA').item.json.message_text || '[INICIAR CONVERSA PROATIVA - retome contexto do Instagram Direct no system prompt]' }}"),
+      text: expr("=Modo: {{ $('Prep Agente WA').item.json.modo }}\n{{ $('Prep Agente WA').item.json.agent_context_line }}\nOrigem: {{ $('Prep Agente WA').item.json.config.lead?.origem_interacao || 'n/a' }}\n\nMensagem WhatsApp agora:\n{{ $('Prep Agente WA').item.json.message_text || '[INICIAR CONVERSA PROATIVA - retome contexto do Instagram Direct. SEM link. UMA pergunta natural.]' }}"),
       options: { systemMessage: expr('={{ $('Prep Agente WA').item.json.prompt_runtime }}') },
     },
     subnodes: {

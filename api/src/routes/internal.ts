@@ -278,6 +278,8 @@ export async function internalRoutes(app: FastifyInstance, _opts: FastifyPluginO
       phone?: string;
       telefone?: string;
       data_visita?: string;
+      dia_semana?: string;
+      horario?: string;
       assunto?: string;
       observacoes?: string;
       id_post_origem?: string;
@@ -286,11 +288,19 @@ export async function internalRoutes(app: FastifyInstance, _opts: FastifyPluginO
     const organizationId = String(body.organization_id ?? "").trim();
     const phone = String(body.phone ?? body.telefone ?? "").trim();
     const dataVisita = String(body.data_visita ?? "").trim();
+    const diaSemana = String(body.dia_semana ?? "").trim();
+    const horario = String(body.horario ?? "").trim();
 
-    if (!organizationId || !phone || !dataVisita) {
+    if (!organizationId || !phone) {
       return reply.status(400).send({
         ok: false,
-        error: "Informe organization_id, phone/telefone e data_visita (ISO8601).",
+        error: "Informe organization_id e phone/telefone do lead.",
+      });
+    }
+    if (!dataVisita && !(diaSemana && horario)) {
+      return reply.status(400).send({
+        ok: false,
+        error: "Informe data_visita (ISO) ou dia_semana + horario (ex.: terça, 10:00).",
       });
     }
 
@@ -298,6 +308,8 @@ export async function internalRoutes(app: FastifyInstance, _opts: FastifyPluginO
       organizationId,
       leadPhone: phone,
       dataVisita,
+      diaSemana: diaSemana || null,
+      horario: horario || null,
       assunto: body.assunto ?? null,
       observacoes: body.observacoes ?? null,
       idPostOrigem: body.id_post_origem ?? null,
