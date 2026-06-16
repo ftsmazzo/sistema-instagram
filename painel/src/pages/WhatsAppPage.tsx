@@ -1,11 +1,12 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { PageShell } from "../components/layout/PageShell";
 import {
   api,
   getAuthToken,
   type LeadListItemRes,
-  type WhatsappInstanceRes,
+  type WhatsappConnectionRes,
+  type WhatsappConnectionState,
   type WhatsappObjetivo,
 } from "../api/client";
 
@@ -15,33 +16,45 @@ const OBJETIVOS: { id: WhatsappObjetivo; label: string }[] = [
   { id: "handoff_humano", label: "Encaminhar para humano" },
 ];
 
-function emptyForm() {
+const DEFAULT_OBJETIVOS: WhatsappObjetivo[] = ["link_produto", "agendar_visita", "handoff_humano"];
+
+type AgentForm = {
+  agent_ativo: boolean;
+  agent_nome: string;
+  agent_prompt: string;
+  objetivos: WhatsappObjetivo[];
+  delay_primeira_msg_minutos: number;
+};
+
+function emptyAgentForm(): AgentForm {
   return {
-    instance_name: "",
-    evolution_base_url: "",
     agent_ativo: false,
     agent_nome: "",
     agent_prompt: "",
-    objetivos: ["link_produto", "agendar_visita", "handoff_humano"] as WhatsappObjetivo[],
-    status: "pending",
+    objetivos: [...DEFAULT_OBJETIVOS],
     delay_primeira_msg_minutos: 20,
   };
 }
 
-function instanceToForm(instance: WhatsappInstanceRes | null) {
-  if (!instance) return emptyForm();
-  return {
-    instance_name: instance.instance_name,
-    evolution_base_url: instance.evolution_base_url,
-    agent_ativo: instance.agent_ativo,
-    agent_nome: instance.agent_nome,
-    agent_prompt: instance.agent_prompt,
-    objetivos: instance.objetivos?.length
-      ? instance.objetivos
-      : (["link_produto", "agendar_visita", "handoff_humano"] as WhatsappObjetivo[]),
-    status: instance.status,
-    delay_primeira_msg_minutos: instance.delay_primeira_msg_minutos ?? 20,
-  };
+function connectionLabel(state: WhatsappConnectionState | undefined): string {
+  if (state === "open") return "Conectado";
+  if (state === "connecting") return "Aguardando leitura do QR";
+  return "Desconectado";
+}
+
+function connectionBadgeClass(state: WhatsappConnectionState | undefined): string {
+  if (state === "open") return "bg-emerald-100 text-emerald-800";
+  if (state === "connecting") return "bg-amber-100 text-amber-900";
+  return "bg-gray-100 text-gray-700";
+}
+
+function qrImageSrc(conn: WhatsappConnectionRes | null): string | null {
+  if (!conn) return null;
+  if (conn.qr_base64) return conn.qr_base64;
+  if (conn.qr_code) {
+    return `https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=${encodeURIComponent(conn.qr_code)}`;
+  }
+  return null;
 }
 
 function statusLabel(status: string): string {
@@ -59,14 +72,67 @@ function statusLabel(status: string): string {
 export function WhatsAppPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [needLogin, setNeedLogin] = useState(false);
-  const [form, setForm] = useState(emptyForm);
+
+  const [instanceName, setInstanceName] = useState("");
+  const [connection, setConnection] = useState<WhatsappConnectionRes | null>(null);
+  const [evolutionConfigured, setEvolutionConfigured] = useState(true);
+  const [agentForm, setAgentForm] = useState<AgentForm>(emptyAgentForm);
   const [leads, setLeads] = useState<LeadListItemRes[]>([]);
   const [leadsTotal, setLeadsTotal] = useState(0);
-  const [webhookSyncing, setWebhookSyncing] = useState(false);
-  const [webhookInfo, setWebhookInfo] = useState<string | null>(null);
+
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const applyConnection = useCallback((conn: WhatsappConnectionRes) => {
+    setConnection(conn);
+    if (conn.instance_name) setInstanceName(conn.instance_name);
+  }, []);
+
+  const refreshConnection = useCallback(
+    async (refreshQr = false) => {
+      const conn = await api.agentes.getWhatsappConnection(refreshQr);
+      if (!conn.ok) throw new Error(conn.error ?? "Falha ao consultar conexão.");
+      applyConnection(conn);
+      return conn;
+    },
+    [applyConnection]
+  );
+
+  const loadPage = useCallback(async () => {
+    const [wa, leadsRes] = await Promise.all([
+      api.agentes.getWhatsapp(),
+      api.agentes.getLeads({ limit: 20, with_whatsapp: true }),
+    ]);
+    setEvolutionConfigured(wa.evolution_configured);
+    setInstanceName(wa.instance?.instance_name ?? "");
+    setAgentForm({
+      agent_ativo: wa.instance?.agent_ativo ?? false,
+      agent_nome: wa.instance?.agent_nome ?? "",
+      agent_prompt: wa.instance?.agent_prompt ?? "",
+      objetivos: wa.instance?.objetivos?.length ? wa.instance.objetivos : [...DEFAULT_OBJETIVOS],
+      delay_primeira_msg_minutos: wa.instance?.delay_primeira_msg_minutos ?? 20,
+    });
+    setLeads(leadsRes.leads);
+    setLeadsTotal(leadsRes.total);
+
+    if (wa.connection) {
+      applyConnection({
+        ok: true,
+        configured: true,
+        instance_name: wa.instance?.instance_name ?? null,
+        connection_state: wa.connection.state,
+        profile_name: wa.connection.profile_name,
+        phone_number: wa.connection.phone_number,
+        profile_picture_url: wa.connection.profile_picture_url,
+        webhook_ok: wa.connection.webhook_ok,
+      });
+    } else if (wa.instance?.instance_name) {
+      await refreshConnection(false);
+    }
+  }, [applyConnection, refreshConnection]);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,14 +145,7 @@ export function WhatsAppPage() {
         return;
       }
       try {
-        const [wa, leadsRes] = await Promise.all([
-          api.agentes.getWhatsapp(),
-          api.agentes.getLeads({ limit: 20, with_whatsapp: true }),
-        ]);
-        if (cancelled) return;
-        setForm(instanceToForm(wa.instance));
-        setLeads(leadsRes.leads);
-        setLeadsTotal(leadsRes.total);
+        await loadPage();
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "Erro ao carregar WhatsApp.");
       } finally {
@@ -96,14 +155,66 @@ export function WhatsAppPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [loadPage]);
+
+  useEffect(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+    if (connection?.connection_state !== "connecting") return;
+
+    pollRef.current = setInterval(async () => {
+      try {
+        const conn = await refreshConnection(true);
+        if (conn.connection_state === "open") {
+          if (pollRef.current) clearInterval(pollRef.current);
+        }
+      } catch {
+        /* ignora erro transitório no poll */
+      }
+    }, 4000);
+
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [connection?.connection_state, refreshConnection]);
 
   const toggleObjetivo = (id: WhatsappObjetivo) => {
-    setForm((f) => {
+    setAgentForm((f) => {
       const has = f.objetivos.includes(id);
       const next = has ? f.objetivos.filter((o) => o !== id) : [...f.objetivos, id];
       return { ...f, objetivos: next.length ? next : f.objetivos };
     });
+  };
+
+  const handleConnect = async () => {
+    const name = instanceName.trim();
+    if (!name) {
+      setError("Informe o nome da instância.");
+      return;
+    }
+    setConnecting(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const res = await api.agentes.connectWhatsapp(name);
+      if (!res.ok) throw new Error(res.error ?? "Falha ao conectar.");
+      applyConnection(res);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao conectar WhatsApp.");
+    } finally {
+      setConnecting(false);
+    }
+  };
+
+  const handleRefreshQr = async () => {
+    setError(null);
+    try {
+      await refreshConnection(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao atualizar QR.");
+    }
   };
 
   const handleSave = async () => {
@@ -111,7 +222,10 @@ export function WhatsAppPage() {
     setError(null);
     setSaved(false);
     try {
-      await api.agentes.putWhatsapp(form);
+      await api.agentes.putWhatsapp({
+        instance_name: instanceName.trim() || undefined,
+        ...agentForm,
+      });
       setSaved(true);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao salvar.");
@@ -120,28 +234,9 @@ export function WhatsAppPage() {
     }
   };
 
-  const handleSyncWebhook = async () => {
-    setWebhookSyncing(true);
-    setError(null);
-    setWebhookInfo(null);
-    try {
-      const res = await api.agentes.syncWhatsappWebhook();
-      if (!res.ok) throw new Error(res.error ?? "Falha ao sincronizar webhook.");
-      const url = res.current?.url ?? res.webhook_url_expected ?? "—";
-      const events = res.current?.events?.join(", ") ?? "MESSAGES_UPSERT, CONNECTION_UPDATE";
-      setWebhookInfo(`Webhook OK → ${url} (eventos: ${events})`);
-    } catch (e) {
-      const msg =
-        e instanceof Error
-          ? e.message
-          : typeof e === "string"
-            ? e
-            : "Erro ao sincronizar webhook.";
-      setError(msg === "Failed to fetch" ? "Falha de rede ao chamar a API. Verifique se a API está no ar." : msg);
-    } finally {
-      setWebhookSyncing(false);
-    }
-  };
+  const isConnected = connection?.connection_state === "open";
+  const isConnecting = connection?.connection_state === "connecting";
+  const qrSrc = !isConnected ? qrImageSrc(connection) : null;
 
   if (needLogin) {
     return (
@@ -159,7 +254,7 @@ export function WhatsAppPage() {
   return (
     <PageShell
       title="WhatsApp"
-      description="Instância Evolution, objetivos do agente e leads com WhatsApp capturados pelo Instagram."
+      description="Conecte seu número e configure o agente de atendimento."
     >
       {loading ? (
         <p className="text-sm text-gray-600">Carregando…</p>
@@ -170,65 +265,144 @@ export function WhatsAppPage() {
           )}
           {saved && (
             <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-              Configuração salva. Na Fase 2 conectaremos o workflow n8n a{" "}
-              <code className="rounded bg-white/80 px-1">GET /api/internal/whatsapp-agent-config</code>.
+              Configuração do agente salva.
+            </div>
+          )}
+
+          {!evolutionConfigured && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+              Evolution não configurada no servidor. Peça para definir{" "}
+              <code className="rounded bg-white/80 px-1">EVOLUTION_BASE_URL</code> e{" "}
+              <code className="rounded bg-white/80 px-1">EVOLUTION_GLOBAL_API_KEY</code> na API.
             </div>
           )}
 
           <section className="card space-y-4">
-            <div>
-              <h2 className="text-lg font-semibold text-gray-900">Instância Evolution</h2>
-              <p className="mt-1 text-sm text-gray-600">
-                Evolution central: a URL base pode vir de <code className="rounded bg-gray-100 px-1">EVOLUTION_BASE_URL</code> na API.
-                Use o botão abaixo para registrar o webhook no n8n automaticamente.
-              </p>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="block text-sm">
-                <span className="font-medium text-gray-700">Nome da instância</span>
-                <input
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  value={form.instance_name}
-                  onChange={(e) => setForm((f) => ({ ...f, instance_name: e.target.value }))}
-                  placeholder="ex.: maquina-vendas"
-                />
-              </label>
-              <label className="block text-sm">
-                <span className="font-medium text-gray-700">URL base Evolution</span>
-                <input
-                  className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                  value={form.evolution_base_url}
-                  onChange={(e) => setForm((f) => ({ ...f, evolution_base_url: e.target.value }))}
-                  placeholder="https://infra-core-whatsapp-core.kxryyk.easypanel.host"
-                />
-              </label>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-3">
-              <button
-                type="button"
-                onClick={handleSyncWebhook}
-                disabled={webhookSyncing || !form.instance_name.trim()}
-                className="rounded-lg border border-emerald-600 px-4 py-2 text-sm font-semibold text-emerald-700 hover:bg-emerald-50 disabled:opacity-60"
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Conexão WhatsApp</h2>
+                <p className="mt-1 text-sm text-gray-600">
+                  Escolha o nome da instância. O servidor cria tudo na Evolution e exibe o QR aqui.
+                </p>
+              </div>
+              <span
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${connectionBadgeClass(connection?.connection_state)}`}
               >
-                {webhookSyncing ? "Sincronizando webhook…" : "Sincronizar webhook na Evolution"}
-              </button>
-              <span className="text-xs text-gray-500">
-                Aponta para o n8n (<code className="rounded bg-gray-100 px-1">whatsapp-evolution</code>). Salve o nome da instância antes.
+                {connectionLabel(connection?.connection_state)}
               </span>
             </div>
-            {webhookInfo && (
-              <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                {webhookInfo}
+
+            {isConnected ? (
+              <div className="flex flex-wrap items-center gap-4 rounded-xl border border-emerald-200 bg-emerald-50/50 p-4">
+                {connection?.profile_picture_url ? (
+                  <img
+                    src={connection.profile_picture_url}
+                    alt=""
+                    className="h-14 w-14 rounded-full border border-emerald-200 object-cover"
+                  />
+                ) : (
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-xl font-bold text-emerald-700">
+                    WA
+                  </div>
+                )}
+                <div>
+                  <p className="font-semibold text-gray-900">
+                    {connection?.profile_name ?? connection?.instance_name ?? "WhatsApp conectado"}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Instância: <span className="font-mono">{connection?.instance_name}</span>
+                  </p>
+                  {connection?.phone_number && (
+                    <p className="text-sm text-gray-600">
+                      Número: <span className="font-mono">+{connection.phone_number}</span>
+                    </p>
+                  )}
+                  {connection?.webhook_ok && (
+                    <p className="mt-1 text-xs text-emerald-700">Webhook do agente configurado automaticamente.</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={handleConnect}
+                  disabled={connecting || !evolutionConfigured}
+                  className="ml-auto rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-white disabled:opacity-60"
+                >
+                  Reconectar
+                </button>
+              </div>
+            ) : (
+              <div className="grid gap-6 md:grid-cols-[1fr_auto]">
+                <div className="space-y-4">
+                  <label className="block text-sm">
+                    <span className="font-medium text-gray-700">Nome da instância</span>
+                    <input
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm md:max-w-sm"
+                      value={instanceName}
+                      onChange={(e) => setInstanceName(e.target.value)}
+                      placeholder="ex.: Agente"
+                      disabled={isConnecting && Boolean(connection?.instance_name)}
+                    />
+                    <span className="mt-1 block text-xs text-gray-500">
+                      Letras, números, hífen e underscore. Ex.: Agente, maquina-vendas
+                    </span>
+                  </label>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={handleConnect}
+                      disabled={connecting || !evolutionConfigured || !instanceName.trim()}
+                      className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                    >
+                      {connecting ? "Gerando QR…" : isConnecting ? "Atualizar conexão" : "Gerar QR Code"}
+                    </button>
+                    {isConnecting && (
+                      <button
+                        type="button"
+                        onClick={handleRefreshQr}
+                        className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        Novo QR
+                      </button>
+                    )}
+                  </div>
+
+                  {isConnecting && (
+                    <p className="text-sm text-amber-800">
+                      Abra o WhatsApp no celular → Dispositivos conectados → Conectar dispositivo → escaneie o QR.
+                      O código expira em ~30 segundos; use &quot;Novo QR&quot; se precisar.
+                    </p>
+                  )}
+                </div>
+
+                {qrSrc && (
+                  <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-white p-4">
+                    <img src={qrSrc} alt="QR Code WhatsApp" className="h-[280px] w-[280px]" />
+                    {connection?.pairing_code && (
+                      <p className="mt-3 text-center text-sm text-gray-600">
+                        Código de pareamento:{" "}
+                        <span className="font-mono font-semibold">{connection.pairing_code}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
             )}
+          </section>
+
+          <section className="card space-y-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Agente WhatsApp</h2>
+              <p className="mt-1 text-sm text-gray-600">
+                Comportamento do assistente após a conexão. Salve quando quiser — não precisa reconectar.
+              </p>
+            </div>
 
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
-                checked={form.agent_ativo}
-                onChange={(e) => setForm((f) => ({ ...f, agent_ativo: e.target.checked }))}
+                checked={agentForm.agent_ativo}
+                onChange={(e) => setAgentForm((f) => ({ ...f, agent_ativo: e.target.checked }))}
               />
               <span className="font-medium text-gray-800">Agente WhatsApp ativo</span>
             </label>
@@ -240,16 +414,16 @@ export function WhatsAppPage() {
                 min={0}
                 max={1440}
                 className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                value={form.delay_primeira_msg_minutos}
+                value={agentForm.delay_primeira_msg_minutos}
                 onChange={(e) =>
-                  setForm((f) => ({
+                  setAgentForm((f) => ({
                     ...f,
                     delay_primeira_msg_minutos: Math.min(1440, Math.max(0, Number(e.target.value) || 0)),
                   }))
                 }
               />
               <span className="mt-1 block text-xs text-gray-500">
-                Após a boas-vindas no Zap. Se o lead responder antes, a IA entra na hora (Fase 2). 0 = imediato.
+                Após a boas-vindas no Zap. Se o lead responder antes, a IA entra na hora. 0 = imediato.
               </span>
             </label>
 
@@ -257,8 +431,8 @@ export function WhatsAppPage() {
               <span className="font-medium text-gray-700">Nome do agente (opcional)</span>
               <input
                 className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                value={form.agent_nome}
-                onChange={(e) => setForm((f) => ({ ...f, agent_nome: e.target.value }))}
+                value={agentForm.agent_nome}
+                onChange={(e) => setAgentForm((f) => ({ ...f, agent_nome: e.target.value }))}
                 placeholder="Usa nome da empresa se vazio"
               />
             </label>
@@ -267,8 +441,8 @@ export function WhatsAppPage() {
               <span className="font-medium text-gray-700">Prompt do agente WhatsApp (opcional)</span>
               <textarea
                 className="mt-1 min-h-[120px] w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-                value={form.agent_prompt}
-                onChange={(e) => setForm((f) => ({ ...f, agent_prompt: e.target.value }))}
+                value={agentForm.agent_prompt}
+                onChange={(e) => setAgentForm((f) => ({ ...f, agent_prompt: e.target.value }))}
                 placeholder="Vazio = template padrão com tom da empresa (Administração)"
               />
             </label>
@@ -280,7 +454,7 @@ export function WhatsAppPage() {
                   <label key={o.id} className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm">
                     <input
                       type="checkbox"
-                      checked={form.objetivos.includes(o.id)}
+                      checked={agentForm.objetivos.includes(o.id)}
                       onChange={() => toggleObjetivo(o.id)}
                     />
                     {o.label}
@@ -292,7 +466,7 @@ export function WhatsAppPage() {
             <button
               type="button"
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || !instanceName.trim()}
               className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
             >
               {saving ? "Salvando…" : "Salvar configuração"}
@@ -337,17 +511,6 @@ export function WhatsAppPage() {
                 </table>
               </div>
             )}
-          </section>
-
-          <section className="rounded-lg border border-dashed border-gray-300 bg-gray-50/80 px-4 py-3 text-sm text-gray-700">
-            <p className="font-medium text-gray-900">Teste da Fase 1 (API)</p>
-            <p className="mt-1">
-              Após salvar acima, o n8n pode chamar:{" "}
-              <code className="rounded bg-white px-1">
-                GET /api/internal/whatsapp-agent-config?instance=NOME&phone=5516999998888
-              </code>{" "}
-              com header <code className="rounded bg-white px-1">X-Internal-Secret</code>.
-            </p>
           </section>
         </div>
       )}

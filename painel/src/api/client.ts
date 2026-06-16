@@ -135,6 +135,35 @@ export type AgendadoItem = {
 
 export type WhatsappObjetivo = "link_produto" | "agendar_visita" | "handoff_humano";
 
+export type WhatsappConnectionState = "open" | "connecting" | "close";
+
+export type WhatsappConnectionRes = {
+  ok: boolean;
+  configured?: boolean;
+  instance_name?: string | null;
+  connection_state?: WhatsappConnectionState;
+  profile_name?: string | null;
+  phone_number?: string | null;
+  profile_picture_url?: string | null;
+  webhook_ok?: boolean;
+  qr_base64?: string | null;
+  qr_code?: string | null;
+  pairing_code?: string | null;
+  error?: string;
+};
+
+export type WhatsappGetRes = {
+  instance: WhatsappInstanceRes | null;
+  evolution_configured: boolean;
+  connection: {
+    state: WhatsappConnectionState;
+    profile_name: string | null;
+    phone_number: string | null;
+    profile_picture_url: string | null;
+    webhook_ok: boolean;
+  } | null;
+};
+
 export type WhatsappInstanceRes = {
   id: string;
   instance_name: string;
@@ -355,21 +384,28 @@ export const api = {
         `/api/agentes/leads${q ? `?${q}` : ""}`
       );
     },
-    getWhatsapp: () => fetchJson<{ instance: WhatsappInstanceRes | null }>("/api/agentes/whatsapp"),
+    getWhatsapp: () => fetchJson<WhatsappGetRes>("/api/agentes/whatsapp"),
     putWhatsapp: (body: {
-      instance_name: string;
-      evolution_base_url: string;
+      instance_name?: string;
       agent_ativo?: boolean;
       agent_nome?: string;
       agent_prompt?: string;
       objetivos?: WhatsappObjetivo[];
-      status?: string;
       delay_primeira_msg_minutos?: number;
     }) =>
       fetchJson<{ saved: boolean; instance: WhatsappInstanceRes }>("/api/agentes/whatsapp", {
         method: "PUT",
         body,
       }),
+    connectWhatsapp: (instance_name: string) =>
+      fetchJson<WhatsappConnectionRes>("/api/agentes/whatsapp/connect", {
+        method: "POST",
+        body: { instance_name },
+      }),
+    getWhatsappConnection: (refreshQr?: boolean) =>
+      fetchJson<WhatsappConnectionRes>(
+        `/api/agentes/whatsapp/connection${refreshQr ? "?refresh_qr=1" : ""}`
+      ),
     syncWhatsappWebhook: () =>
       fetchJson<{
         ok: boolean;

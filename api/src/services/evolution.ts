@@ -23,6 +23,22 @@ export type EvolutionWebhookConfig = {
   events: string[];
 };
 
+export type EvolutionConnectionState = "open" | "connecting" | "close";
+
+export type EvolutionConnectQr = {
+  qr_base64: string | null;
+  qr_code: string | null;
+  pairing_code: string | null;
+};
+
+export type EvolutionInstanceStatus = {
+  instance_name: string;
+  state: EvolutionConnectionState;
+  profile_name: string | null;
+  phone_number: string | null;
+  profile_picture_url: string | null;
+};
+
 type EvolutionErrorJson = {
   status?: number;
   error?: string | { message?: string };
@@ -102,6 +118,87 @@ async function evolutionFetch<T>(
     throw new Error(parseEvolutionError(json, res.status));
   }
   return json;
+}
+
+function pickString(...values: unknown[]): string | null {
+  for (const v of values) {
+    if (typeof v === "string" && v.trim()) return v.trim();
+  }
+  return null;
+}
+
+function normalizeQrPayload(raw: unknown): EvolutionConnectQr {
+  const empty: EvolutionConnectQr = { qr_base64: null, qr_code: null, pairing_code: null };
+  if (!raw || typeof raw !== "object") return empty;
+  const o = raw as Record<string, unknown>;
+  const nested =
+    o.qrcode && typeof o.qrcode === "object" ? (o.qrcode as Record<string, unknown>) : o;
+  const base64 = pickString(nested.base64, nested.qrcode, o.base64);
+  const qrCode = pickString(nested.code, o.code);
+  const pairing = pickString(nested.pairingCode, o.pairingCode);
+  let qr_base64 = base64;
+  if (qr_base64 && !qr_base64.startsWith("data:")) {
+    qr_base64 = `data:image/png;base64,${qr_base64}`;
+  }
+  return { qr_base64, qr_code: qrCode, pairing_code: pairing };
+}
+
+function normalizeConnectionState(raw: unknown): EvolutionConnectionState {
+  if (!raw || typeof raw !== "object") return "close";
+  const o = raw as Record<string, unknown>;
+  const nested =
+    o.instance && typeof o.instance === "object" ? (o.instance as Record<string, unknown>) : o;
+  const state = pickString(nested.state, o.state)?.toLowerCase();
+  if (state === "open" || state === "connecting" || state === "close") return state;
+  return "close";
+}
+
+function normalizeInstanceProfile(raw: unknown, instanceName: string): EvolutionInstanceStatus {
+  const state = normalizeConnectionState(raw);
+  if (!raw || typeof raw !== "object") {
+    return {
+      instance_name: instanceName,
+      state,
+      profile_name: null,
+      phone_number: null,
+      profile_picture_url: null,
+    };
+  }
+  const o = raw as Record<string, unknown>;
+  const row = Array.isArray(raw)
+    ? (raw.find(
+        (item) =>
+          item &&
+          typeof item === "object" &&
+          pickString(
+            (item as Record<string, unknown>).instanceName,
+            (item as Record<string, unknown>).name
+          ) === instanceName
+      ) as Record<string, unknown> | undefined) ?? (raw[0] as Record<string, unknown>)
+    : o.instance && typeof o.instance === "object"
+      ? (o.instance as Record<string, unknown>)
+      : o;
+
+  const phone = pickString(
+    row.owner,
+    row.number,
+    row.phone,
+    row.wuid,
+    typeof row.remoteJid === "string" ? row.remoteJid.split("@")[0] : null
+  );
+  const digits = phone?.replace(/\D/g, "") || null;
+
+  return {
+    instance_name: pickString(row.instanceName, row.name, instanceName) ?? instanceName,
+    state: pickString(row.state, row.connectionStatus)?.toLowerCase() === "open"
+      ? "open"
+      : pickString(row.state, row.connectionStatus)?.toLowerCase() === "connecting"
+        ? "connecting"
+        : state,
+    profile_name: pickString(row.profileName, row.profile_name, row.pushName, row.name),
+    phone_number: digits,
+    profile_picture_url: pickString(row.profilePicUrl, row.profilePictureUrl, row.profile_picture_url),
+  };
 }
 
 function normalizeWebhookConfig(raw: unknown): EvolutionWebhookConfig | null {
@@ -184,6 +281,91 @@ export async function setInstanceWebhook(
   return {
     instanceName: json.webhook?.instanceName ?? name,
     webhook: nested ?? { enabled: true, url: webhookUrl, events: [...EVOLUTION_WEBHOOK_EVENTS] },
+  };
+}
+
+/** Cria instância Baileys na Evolution (idempotente se já existir). */
+export async function createEvolutionInstance(
+  instanceName: string,
+  baseUrl?: string
+): Promise<void> {
+  const env = getEvolutionEnv();
+  if (!env) {
+    throw new Error(
+      "Evolution não configurada na API. Defina EVOLUTION_BASE_URL e EVOLUTION_GLOBAL_API_KEY."
+    );
+  }
+  const name = instanceName.trim();
+  if (!name) throw new Error("instance_name obrigatório.");
+  const url = baseUrl?.trim() || env.baseUrl;
+
+  const exists = await evolutionInstanceExists(name, url);
+  if (exists) return;
+
+  await evolutionFetch<{ instance?: { instanceName?: string } }>(url, env.apiKey, "POST", "/instance/create", {
+    instanceName: name,
+    qrcode: false,
+    integration: "WHATSAPP-BAILEYS",
+  });
+}
+
+/** Gera QR / pairing code para conectar WhatsApp. */
+export async function getEvolutionConnectQr(
+  instanceName: string,
+  baseUrl?: string
+): Promise<EvolutionConnectQr> {
+  const env = getEvolutionEnv();
+  if (!env) {
+    throw new Error(
+      "Evolution não configurada na API. Defina EVOLUTION_BASE_URL e EVOLUTION_GLOBAL_API_KEY."
+    );
+  }
+  const name = instanceName.trim();
+  if (!name) throw new Error("instance_name obrigatório.");
+  const url = baseUrl?.trim() || env.baseUrl;
+
+  const json = await evolutionFetch<unknown>(url, env.apiKey, "GET", `/instance/connect/${encodeURIComponent(name)}`);
+  return normalizeQrPayload(json);
+}
+
+/** Estado da conexão + dados básicos do perfil (quando disponível). */
+export async function getEvolutionInstanceStatus(
+  instanceName: string,
+  baseUrl?: string
+): Promise<EvolutionInstanceStatus> {
+  const env = getEvolutionEnv();
+  if (!env) {
+    throw new Error(
+      "Evolution não configurada na API. Defina EVOLUTION_BASE_URL e EVOLUTION_GLOBAL_API_KEY."
+    );
+  }
+  const name = instanceName.trim();
+  if (!name) throw new Error("instance_name obrigatório.");
+  const url = baseUrl?.trim() || env.baseUrl;
+
+  const [stateJson, listJson] = await Promise.all([
+    evolutionFetch<unknown>(url, env.apiKey, "GET", `/instance/connectionState/${encodeURIComponent(name)}`).catch(
+      () => null
+    ),
+    evolutionFetch<unknown>(
+      url,
+      env.apiKey,
+      "GET",
+      `/instance/fetchInstances?instanceName=${encodeURIComponent(name)}`
+    ).catch(() => null),
+  ]);
+
+  const fromState = normalizeInstanceProfile(stateJson ?? {}, name);
+  const fromList = listJson ? normalizeInstanceProfile(listJson, name) : null;
+
+  const state = fromState.state !== "close" ? fromState.state : fromList?.state ?? "close";
+
+  return {
+    instance_name: name,
+    state,
+    profile_name: fromList?.profile_name ?? fromState.profile_name,
+    phone_number: fromList?.phone_number ?? fromState.phone_number,
+    profile_picture_url: fromList?.profile_picture_url ?? fromState.profile_picture_url,
   };
 }
 
