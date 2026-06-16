@@ -1,8 +1,15 @@
 import sharp from "sharp";
 import { uploadMedia, isStorageConfigured } from "./storage.js";
 import { toInstagramFeedImage } from "./instagramImage.js";
+import type { PostadorOverlayStyle } from "./postadorNiches.js";
 
 const INSTAGRAM_MAX_SIDE = 1080;
+
+const DEFAULT_OVERLAY: PostadorOverlayStyle = {
+  accentStart: "#7c3aed",
+  accentMid: "#4f46e5",
+  accentEnd: "#0ea5e9",
+};
 
 /**
  * Quebra o texto em linhas dinamicamente baseado no comprimento máximo estimado
@@ -33,10 +40,14 @@ function escapeXml(t: string): string {
 }
 
 /**
- * Template premium para overlay de texto em imagens de imóveis.
- * Design ousado: faixa diagonal de cor sólida com logo accent + texto bold grande.
+ * Template premium para overlay de texto em imagens de post Instagram.
+ * Cores do accent seguem a paleta do nicho quando informada.
  */
-async function addTextToImage(imageUrl: string, text: string): Promise<string> {
+async function addTextToImage(
+  imageUrl: string,
+  text: string,
+  style: PostadorOverlayStyle = DEFAULT_OVERLAY
+): Promise<string> {
   if (!isStorageConfigured()) {
     throw new Error("Configure um armazenamento para salvar as imagens com texto.");
   }
@@ -101,9 +112,9 @@ async function addTextToImage(imageUrl: string, text: string): Promise<string> {
     </linearGradient>
     <!-- Brilho lateral esquerdo (accent) -->
     <linearGradient id="accentGrad" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%"   stop-color="#7c3aed"/>
-      <stop offset="50%"  stop-color="#4f46e5"/>
-      <stop offset="100%" stop-color="#0ea5e9"/>
+      <stop offset="0%"   stop-color="${style.accentStart}"/>
+      <stop offset="50%"  stop-color="${style.accentMid}"/>
+      <stop offset="100%" stop-color="${style.accentEnd}"/>
     </linearGradient>
     <filter id="glow">
       <feGaussianBlur stdDeviation="6" result="blur"/>
@@ -118,7 +129,7 @@ async function addTextToImage(imageUrl: string, text: string): Promise<string> {
   <rect x="0" y="${panelY}" width="${W}" height="${accentH}" fill="url(#accentGrad)"/>
 
   <!-- Ponto de brilho no lado esquerdo da barra -->
-  <circle cx="60" cy="${panelY + accentH / 2}" r="18" fill="rgba(124,58,237,0.30)" filter="url(#glow)"/>
+  <circle cx="60" cy="${panelY + accentH / 2}" r="18" fill="${style.accentStart}4D" filter="url(#glow)"/>
 
   <!-- Decoração: pequeno traço vertical colorido antes do texto -->
   <rect x="${W / 2 - 130}" y="${startY - fontSize * 0.65}" width="4" height="${textBlockH}" fill="url(#accentGrad)" rx="2"/>
@@ -144,8 +155,10 @@ async function addTextToImage(imageUrl: string, text: string): Promise<string> {
  */
 export async function adicionarTextoCarrossel(
   imageUrls: string[],
-  texts: string[]
+  texts: string[],
+  style?: PostadorOverlayStyle
 ): Promise<string[]> {
+  const overlayStyle = style ?? DEFAULT_OVERLAY;
   const results: string[] = [];
   for (let i = 0; i < imageUrls.length; i++) {
     const url = imageUrls[i];
@@ -154,7 +167,7 @@ export async function adicionarTextoCarrossel(
       results.push(url);
       continue;
     }
-    const newUrl = await addTextToImage(url, text);
+    const newUrl = await addTextToImage(url, text, overlayStyle);
     results.push(newUrl);
   }
   return results;

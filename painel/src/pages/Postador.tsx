@@ -407,12 +407,38 @@ export function Postador() {
     }
   };
 
+  const handleAplicarMolduraFeed = async () => {
+    const text = textosCarrossel[0]?.trim();
+    if (!mediaUrl && !mediaUrls[0]) {
+      setError("Nenhuma imagem para aplicar moldura.");
+      return;
+    }
+    if (!text) {
+      setError("Digite ou gere um texto para a moldura visual.");
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      const url = mediaUrl ?? mediaUrls[0];
+      const res = await api.postador.carouselAdicionarTexto([url], [text], nicheParams());
+      const newUrl = res.image_urls[0] ?? url;
+      setMediaUrl(newUrl);
+      setMediaUrls([newUrl]);
+      setPreviewUrls([newUrl]);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Falha ao aplicar moldura.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleAplicarTextoCarrossel = async () => {
     if (mediaUrls.length < 2) return;
     setError(null);
     setLoading(true);
     try {
-      const res = await api.postador.carouselAdicionarTexto(mediaUrls, textosCarrossel);
+      const res = await api.postador.carouselAdicionarTexto(mediaUrls, textosCarrossel, nicheParams());
       const urls = res.image_urls ?? [];
       setMediaUrls(urls);
       setPreviewUrls(urls);
@@ -993,9 +1019,50 @@ export function Postador() {
               </>
             )}
             {previewUrls.length === 1 && mediaType !== "REELS" && (
-              <img src={previewUrls[0]} alt="Preview" className="max-h-48 rounded-md border border-gray-200" />
+              <>
+                <img src={previewUrls[0]} alt="Preview" className="max-h-64 rounded-md border border-gray-200" />
+                <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
+                  <p className="text-sm font-medium text-gray-700">Moldura visual (opcional)</p>
+                  <p className="text-xs text-gray-500">
+                    Deixa o post com cara de social media: gradiente + headline na paleta do nicho.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={textosCarrossel[0] ?? ""}
+                      onChange={(e) =>
+                        setTextosCarrossel((prev) => {
+                          const next = [...prev];
+                          next[0] = e.target.value;
+                          return next;
+                        })
+                      }
+                      placeholder="Headline curta na imagem"
+                      className="flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                      disabled={loading}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleGerarCTAParaImagem(0)}
+                      disabled={loading || !caption}
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
+                      title="Gerar headline com IA"
+                    >
+                      ⚡
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAplicarMolduraFeed}
+                    disabled={loading || !(textosCarrossel[0]?.trim())}
+                    className="px-3 py-1.5 text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 disabled:opacity-50"
+                  >
+                    {loading ? "Aplicando..." : "Aplicar moldura na imagem"}
+                  </button>
+                </div>
+              </>
             )}
-            {fromUrl && mediaType === "IMAGE" && previewUrls.length === 1 && (
+            {previewUrls.length === 1 && mediaType === "IMAGE" && (
               <div className="mt-2 flex flex-wrap gap-2">
                 <button
                   type="button"

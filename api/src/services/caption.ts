@@ -4,6 +4,8 @@ import {
   resolveCaptionContext,
   buildCaptionSystemPrompt,
   buildCtaOverlaySystemPrompt,
+  buildImagePrompt,
+  buildImageEnrichSystemPrompt,
   getNichePack,
   type PostadorCaptionContext,
 } from "./postadorNiches.js";
@@ -236,4 +238,19 @@ export async function gerarCTAImagem(
   const system = buildCtaOverlaySystemPrompt(ctx);
   const user = `Legenda deste post:\n\n${captionContext}\n\nCrie uma frase impactante para sobrepor nesta foto:`;
   return complete(system, user, options?.provider, options?.model);
+}
+
+/**
+ * Expande brief + nicho em prompt cinematográfico em inglês para Imagen/DALL·E.
+ */
+export async function enriquecerPromptImagem(
+  userBrief: string,
+  ctx: PostadorCaptionContext,
+  options?: GerarCaptionOptions
+): Promise<string> {
+  const base = buildImagePrompt(userBrief, ctx);
+  const system = buildImageEnrichSystemPrompt(ctx);
+  const user = `Brief estruturado:\n${base}\n\nPrompt cinematográfico em inglês:`;
+  const enriched = await complete(system, user, options?.provider, options?.model ?? "gpt-4o-mini");
+  return enriched.replace(/^["'`]|["'`]$/g, "").replace(/\s+/g, " ").trim().slice(0, 1200);
 }

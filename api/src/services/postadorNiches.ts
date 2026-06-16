@@ -468,9 +468,52 @@ export function buildImagePrompt(userBrief: string, ctx: PostadorCaptionContext)
     `Brief do usuário: ${userBrief.trim()}`,
     `Estilo visual do nicho: ${pack.tom_visual}`,
     `Paleta sugerida: ${paleta}`,
-    "Formato vertical 4:5 para feed Instagram, alta nitidez, composição profissional",
-    "Sem texto escrito na imagem, sem logos falsos, sem marcas d'água",
+    "Vertical 4:5 Instagram feed, editorial social media 2026",
+    "Iluminação cinematográfica (golden hour, rim light ou soft studio), profundidade de campo, textura realista",
+    "Composição com respiro visual no terço superior ou inferior para eventual overlay de texto",
+    "Sem texto escrito na imagem, sem logos falsos, sem marcas d'água, sem rostos distorcidos",
   ].join(". ");
+}
+
+export function buildImageEnrichSystemPrompt(ctx: PostadorCaptionContext): string {
+  const pack = getNichePack(ctx.nicheId);
+  const paleta = pack.paleta_sugerida.join(", ");
+  return `Você é diretor de arte para posts de Instagram (2026) — especialista em prompts para Imagen/DALL·E.
+
+NICHO: ${pack.label}
+TEMPLATE: ${ctx.template.label}
+TOM VISUAL: ${pack.tom_visual}
+PALETA: ${paleta}
+
+Transforme o brief em UM único prompt em INGLÊS (máx. 900 caracteres) para gerador de imagens.
+
+OBRIGATÓRIO no prompt:
+- Sujeito/cena concreta e específica (não genérica)
+- Ambiente detalhado (materiais, contexto, época do dia)
+- Iluminação nomeada (ex.: golden hour, soft window light, neon accent, high-key studio)
+- Ângulo de câmera e lente (ex.: 35mm, slight low angle, shallow depth of field)
+- Color grading alinhado à paleta
+- Mood emocional (aspiracional, urgente, acolhedor, premium)
+- Espaço negativo no terço superior ou inferior para overlay futuro
+- "no text, no logos, no watermark, photorealistic, ultra sharp"
+
+PROIBIDO: prompt vago ("beautiful image", "professional photo"), listas com bullets, aspas, explicações.
+Retorne SOMENTE o prompt em inglês, uma linha contínua.`;
+}
+
+export type PostadorOverlayStyle = {
+  accentStart: string;
+  accentMid: string;
+  accentEnd: string;
+};
+
+export function overlayStyleFromContext(ctx: PostadorCaptionContext): PostadorOverlayStyle {
+  const pal = getNichePack(ctx.nicheId).paleta_sugerida;
+  return {
+    accentStart: pal[1] ?? "#7c3aed",
+    accentMid: pal[2] ?? pal[1] ?? "#4f46e5",
+    accentEnd: pal[0] ?? "#0ea5e9",
+  };
 }
 
 export function buildCtaOverlaySystemPrompt(ctx: PostadorCaptionContext): string {

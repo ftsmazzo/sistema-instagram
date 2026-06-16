@@ -3,7 +3,7 @@ import { createReadStream } from "fs";
 import { stat } from "fs/promises";
 import { join } from "path";
 import multipart from "@fastify/multipart";
-import { gerarCaption as gerarCaptionIA, refazerCaption as refazerCaptionIA, gerarJornadaPorLink, gerarCTAImagem, type GerarCaptionOptions } from "../services/caption.js";
+import { gerarCaption as gerarCaptionIA, refazerCaption as refazerCaptionIA, gerarJornadaPorLink, gerarCTAImagem, enriquecerPromptImagem, type GerarCaptionOptions } from "../services/caption.js";
 import { uploadMedia, getUploadsDir, isStorageConfigured } from "../services/storage.js";
 import { rasparPaginaImovel, montarDescricaoParaCaption, baixarEEnviarParaCloudinary } from "../services/imovel.js";
 import { publishToInstagram, publishCarouselToInstagram } from "../services/instagram.js";
@@ -14,6 +14,7 @@ import {
   suggestNicheFromSegmento,
   resolveCaptionContext,
   buildImagePrompt,
+  overlayStyleFromContext,
 } from "../services/postadorNiches.js";
 import { getContaParaPublicar } from "../store/config.js";
 import { resolveConfigStore, getOrgIdFromRequest, resolveOrgIdForPostador } from "../context/workspaceConfig.js";
@@ -328,11 +329,13 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
     const body = request.body as {
       prompt?: string;
       provider?: string;
+      model?: string;
       niche_id?: string;
       template_id?: string;
       segmento?: string;
       marca_nome?: string;
       brief?: string;
+      enrich_prompt?: boolean;
     };
     const rawPrompt = (body?.prompt ?? body?.brief ?? "").trim();
     const provider = (body?.provider === "openai" ? "openai" : "gemini") as "openai" | "gemini";
@@ -345,9 +348,15 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       segmento: body.segmento,
       marcaNome: body.marca_nome,
     });
-    const prompt = body.niche_id || body.template_id
-      ? buildImagePrompt(rawPrompt || "post para Instagram", ctx)
-      : rawPrompt;
+    const iaOpts = captionOptionsFromBody(body);
+    let prompt = buildImagePrompt(rawPrompt || "post para Instagram", ctx);
+    if (body.enrich_prompt !== false) {
+      try {
+        prompt = await enriquecerPromptImagem(rawPrompt || "post para Instagram", ctx, iaOpts);
+      } catch (err) {
+        fastify.log.warn({ err }, "gerar-imagem: enrich prompt fallback");
+      }
+    }
     try {
       const media_url = await gerarImagemComIA(prompt, provider);
       return reply.send({ media_url });
@@ -363,14 +372,28 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
 
   // POST /api/postador/carousel-adicionar-texto — overlay de texto em cada imagem usando template SVG
   fastify.post("/carousel-adicionar-texto", async (request, reply) => {
-    const body = request.body as { image_urls?: string[]; texts?: string[] };
+    const body = request.body as {
+      image_urls?: string[];
+      texts?: string[];
+      niche_id?: string;
+      template_id?: string;
+      segmento?: string;
+      marca_nome?: string;
+    };
     const imageUrls = Array.isArray(body?.image_urls) ? body.image_urls.filter((u) => typeof u === "string" && u.trim()) : [];
     const texts = Array.isArray(body?.texts) ? body.texts.map((t) => (typeof t === "string" ? t : "")) : [];
     if (!imageUrls.length) {
       return reply.status(400).send({ error: "Campo 'image_urls' (array) é obrigatório." });
     }
     try {
-      const newUrls = await adicionarTextoCarrossel(imageUrls, texts);
+      const ctx = resolveCaptionContext({
+        nicheId: body.niche_id,
+        templateKey: body.template_id,
+        segmento: body.segmento,
+        marcaNome: body.marca_nome,
+      });
+      const style = overlayStyleFromContext(ctx);
+      const newUrls = await adicionarTextoCarrossel(imageUrls, texts, style);
       return reply.send({ image_urls: newUrls });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao adicionar texto nas imagens.";

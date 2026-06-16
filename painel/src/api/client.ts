@@ -416,10 +416,10 @@ export const api = {
         method: "POST",
         body: { prompt, provider: provider ?? "gemini", ...niche },
       }),
-    carouselAdicionarTexto: (image_urls: string[], texts: string[]) =>
+    carouselAdicionarTexto: (image_urls: string[], texts: string[], niche?: PostadorNicheParams | null) =>
       fetchJson<{ image_urls: string[] }>("/api/postador/carousel-adicionar-texto", {
         method: "POST",
-        body: { image_urls, texts },
+        body: { image_urls, texts, ...niche },
       }),
     gerarCTA: (caption: string, provider?: string, model?: string, niche?: PostadorNicheParams | null) =>
       fetchJson<{ cta: string }>("/api/postador/gerar-cta", {
