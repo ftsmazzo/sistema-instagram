@@ -238,6 +238,7 @@ export type PostadorNicheParams = {
   template_id?: string;
   segmento?: string;
   marca_nome?: string;
+  image_mode?: "criativo" | "produto";
 };
 
 export type PostadorNicheTemplateRes = {
@@ -410,11 +411,12 @@ export const api = {
     gerarImagem: (
       prompt: string,
       provider?: "openai" | "gemini",
-      niche?: PostadorNicheParams | null
+      niche?: PostadorNicheParams | null,
+      image_mode?: "criativo" | "produto"
     ) =>
       fetchJson<{ media_url: string }>("/api/postador/gerar-imagem", {
         method: "POST",
-        body: { prompt, provider: provider ?? "gemini", ...niche },
+        body: { prompt, provider: provider ?? "gemini", image_mode, ...niche },
       }),
     getVideoProviders: () =>
       fetchJson<{

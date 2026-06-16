@@ -124,7 +124,7 @@ export const POSTADOR_NICHES: PostadorNichePack[] = [
       "produto",
     ],
     tom_legenda: "desejo + clareza; benefício antes de feature; urgência sem gritaria",
-    tom_visual: "produto em destaque, fundo limpo ou lifestyle, luz de estúdio",
+    tom_visual: "editorial lifestyle que evoca a categoria — texturas, luz, ambiente; foto real do produto vem do upload",
     paleta_sugerida: ["#ffffff", "#111827", "#ef4444"],
     aspect_ratio_padrao: "4:5",
     templates: [
@@ -291,7 +291,7 @@ export const POSTADOR_NICHES: PostadorNichePack[] = [
       "startup",
     ],
     tom_legenda: "storytelling curto, propósito da marca, prova social leve",
-    tom_visual: "unboxing, bastidor, produto em contexto de uso real",
+    tom_visual: "bastidor, mood de marca, texturas e contexto de uso — produto físico real vem do upload",
     paleta_sugerida: ["#18181b", "#a855f7", "#fafafa"],
     aspect_ratio_padrao: "4:5",
     templates: [
@@ -484,12 +484,107 @@ export function extractVisualBrief(userBrief: string, ctx: PostadorCaptionContex
   return text;
 }
 
-export function buildImagePrompt(userBrief: string, ctx: PostadorCaptionContext): string {
+export type PostadorImageMode = "criativo" | "produto";
+
+export function isProductLedNiche(nicheId: PostadorNicheId): boolean {
+  return nicheId === "ecommerce" || nicheId === "beleza_estetica" || nicheId === "produtos_marcas";
+}
+
+export function resolveImageMode(mode: string | undefined | null, nicheId: PostadorNicheId): PostadorImageMode {
+  if (mode === "produto") return "produto";
+  return "criativo";
+}
+
+const CREATIVE_IMAGE_BASE: Partial<Record<PostadorNicheId, string>> = {
+  ecommerce:
+    "Arte editorial Instagram 4:5, still life ou lifestyle aspiracional que EVOCA a categoria pelo sensorial (texturas, ingredientes abstratos, luz, ambiente) — nunca packshot, nunca embalagem, nunca tentar recriar o produto físico",
+  beleza_estetica:
+    "Beauty editorial 4:5, macro de textura (cabelo, pele, água, luz), mood spa ou glam — composição artística variada, sem frasco ou embalagem",
+  produtos_marcas:
+    "Campanha D2C editorial 4:5, mood de marca e contexto de uso real ou still life de ingredientes/texturas — produto real não aparece (virá do upload)",
+};
+
+const MOOD_KEYWORD_CUES: Array<{ pattern: RegExp; cue: string }> = [
+  { pattern: /\b(honey|mel|mel\b|&honey)/i, cue: "gotas de mel dourado, luz âmbar quente, textura orgânica luxuosa" },
+  { pattern: /\b(hair|cabelo|capilar|moist|hidrata|frizz|frizzy|strands)/i, cue: "cabelo sedoso com brilho, gotículas de água, movimento fluido, luz spa" },
+  { pattern: /\b(skin|pele|skincare|facial|serum|creme|hyaluronic)/i, cue: "pele luminosa, névoa de água, luz matinal suave, minimalismo clean" },
+  { pattern: /\b(japanese|jap[aã]o|jap[aã]nes)/i, cue: "estética japonesa minimalista, madeira clara, cerâmica, luz difusa zen" },
+  { pattern: /\b(argan|oil|[óo]leo|keratin|silk|protein)/i, cue: "óleo dourado em movimento, reflexos sedosos, macro de textura líquida" },
+  { pattern: /\b(spa|sal[aã]o|tratamento|treatment|ritual)/i, cue: "ambiente spa premium, vapor suave, toalhas brancas, luz acolhedora" },
+  { pattern: /\b(mod[aã]|fashion|roupa|vestido|look)/i, cue: "editorial de moda, tecido em movimento, styling aspiracional, luz de estúdio fashion" },
+  { pattern: /\b(cosm[eé]tico|makeup|maquiagem|beauty)/i, cue: "flat lay beauty artístico, pincéis e texturas, paleta harmoniosa, sem embalagens legíveis" },
+  { pattern: /\b(unbox|lan[cç]amento|launch|d2c|marca)/i, cue: "bastidor de marca, mesa criativa, materiais premium, storytelling visual" },
+];
+
+function inferMoodCues(text: string): string[] {
+  const cues: string[] = [];
+  for (const { pattern, cue } of MOOD_KEYWORD_CUES) {
+    if (pattern.test(text) && !cues.includes(cue)) cues.push(cue);
+  }
+  return cues.slice(0, 4);
+}
+
+/** Brief visual criativo: evoca o produto pelo mood, nunca recria embalagem. */
+export function extractCreativeMoodBrief(userBrief: string, ctx: PostadorCaptionContext): string {
+  const text = userBrief.trim();
+  if (!text) {
+    return "Cena editorial aspiracional alinhada ao nicho, composição artística variada, mood premium.";
+  }
+
+  const cues = inferMoodCues(text);
+  const tituloMatch = text.match(/^Título:\s*(.+)$/im) ?? text.match(/^Title:\s*(.+)$/im);
+  if (tituloMatch && cues.length === 0) {
+    cues.push(...inferMoodCues(tituloMatch[1]));
+  }
+
+  const benefitMatch = text.match(/\b(dry|seco|damaged|danificado|frizz|dull|opaco|hydrat|hidrata|soft|sedoso|shine|brilho)\b/gi);
+  if (benefitMatch) {
+    const wantsHydration = benefitMatch.some((w) => /dry|seco|hydrat|hidrata|damaged|danificado/i.test(w));
+    const wantsShine = benefitMatch.some((w) => /dull|opaco|shine|brilho|soft|sedoso/i.test(w));
+    if (wantsHydration && !cues.some((c) => c.includes("água"))) {
+      cues.push("sensação de hidratação profunda, gotas e vapor suave");
+    }
+    if (wantsShine && !cues.some((c) => c.includes("brilho") || c.includes("sedoso"))) {
+      cues.push("brilho saudável, reflexos de luz em superfície sedosa");
+    }
+  }
+
+  const moodPart =
+    cues.length > 0
+      ? `Elementos sensoriais: ${cues.join("; ")}.`
+      : "Ambiente lifestyle premium que remete à categoria do briefing.";
+
+  const variety = [
+    "Varie a composição a cada geração (macro textura, still life de ingredientes, ambiente spa, ou detalhe artístico).",
+    "PROIBIDO: embalagem, frasco, pote, caixa, rótulo legível, packshot, produto centralizado tentando copiar referência.",
+    "A foto real do produto, se necessária, será enviada separadamente pelo usuário.",
+  ].join(" ");
+
+  return `${moodPart} ${variety}`;
+}
+
+export function buildImagePrompt(
+  userBrief: string,
+  ctx: PostadorCaptionContext,
+  mode: PostadorImageMode = "criativo"
+): string {
   const pack = getNichePack(ctx.nicheId);
   const paleta = pack.paleta_sugerida.join(", ");
-  const visualBrief = extractVisualBrief(userBrief, ctx);
+  const useCreative = mode === "criativo";
+  const imageBase =
+    useCreative && CREATIVE_IMAGE_BASE[ctx.nicheId]
+      ? CREATIVE_IMAGE_BASE[ctx.nicheId]!
+      : ctx.template.prompt_imagem_base;
+  const visualBrief = useCreative
+    ? extractCreativeMoodBrief(userBrief, ctx)
+    : extractVisualBrief(userBrief, ctx);
+
+  const antiRepeat = useCreative
+    ? "Evite composições genéricas repetidas (frasco no centro, fundo branco). Prefira arte editorial memorável."
+    : "";
+
   return [
-    ctx.template.prompt_imagem_base,
+    imageBase,
     `Cena visual: ${visualBrief}`,
     `Estilo visual do nicho: ${pack.tom_visual}`,
     `Paleta sugerida: ${paleta}`,
@@ -497,22 +592,44 @@ export function buildImagePrompt(userBrief: string, ctx: PostadorCaptionContext)
     "Iluminação cinematográfica (golden hour, rim light ou soft studio), profundidade de campo, textura realista",
     "Composição com respiro visual no terço superior ou inferior para eventual overlay de texto",
     "Sem texto escrito na imagem, sem logos falsos, sem marcas d'água, sem rostos distorcidos",
-  ].join(". ");
+    antiRepeat,
+  ]
+    .filter(Boolean)
+    .join(". ");
 }
 
-export function buildImageEnrichSystemPrompt(ctx: PostadorCaptionContext): string {
+export function buildImageEnrichSystemPrompt(
+  ctx: PostadorCaptionContext,
+  mode: PostadorImageMode = "criativo"
+): string {
   const pack = getNichePack(ctx.nicheId);
   const paleta = pack.paleta_sugerida.join(", ");
+  const creativeBlock =
+    mode === "criativo"
+      ? `
+MODO CRIATIVO (obrigatório — o usuário NÃO quer recriar o produto):
+- NÃO gere packshot, product photo, bottle, jar, tube, box, packaging, label, barcode, ou qualquer tentativa de reproduzir embalagem específica.
+- Crie cena editorial/lifestyle que EVOCA a categoria: texturas, ingredientes como elementos artísticos (mel escorrendo, splash de água, macro de cabelo/pele), ambiente, luz, mood.
+- Varie o conceito: macro, flat lay de ingredientes, ambiente spa/sala/banheiro, detalhe abstrato — evite sempre a mesma composição.
+- Se o brief mencionar nome de produto, use só para inferir CATEGORIA e MOOD — nunca desenhe o produto.
+- O usuário envia a foto real do produto separadamente quando precisar; sua imagem é o criativo de apoio.
+
+PROIBIDO: "product on white background", "centered bottle", "e-commerce product shot", imagens repetitivas e sem alma.`
+      : `
+MODO PRODUTO (usuário pediu explicitamente):
+- Pode incluir representação genérica de produto/embalagem, mas sem logos legíveis nem cópia fiel de marca específica.`;
+
   return `Você é diretor de arte para posts de Instagram (2026) — especialista em prompts para Imagen/DALL·E.
 
 NICHO: ${pack.label}
 TEMPLATE: ${ctx.template.label}
 TOM VISUAL: ${pack.tom_visual}
 PALETA: ${paleta}
+${creativeBlock}
 
 Transforme o brief em UM único prompt em INGLÊS (máx. 900 caracteres) para gerador de imagens.
 
-IMPORTANTE: se o brief contiver descrição longa de marketing, ficha técnica ou parágrafo de vendas, IGNORE o texto promocional e foque só no VISUAL: produto/cena, ambiente, luz, materiais, mood. Para e-commerce/beleza: product hero shot, packshot ou lifestyle aspiracional — nunca ilustre bullet points ou claims.
+IMPORTANTE: se o brief contiver descrição longa de marketing ou ficha técnica, IGNORE claims e extraia só mood, texturas, ambiente e sensação.
 
 OBRIGATÓRIO no prompt:
 - Sujeito/cena concreta e específica (não genérica)

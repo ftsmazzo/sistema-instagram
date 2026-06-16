@@ -7,7 +7,9 @@ import {
   buildImagePrompt,
   buildImageEnrichSystemPrompt,
   getNichePack,
+  resolveImageMode,
   type PostadorCaptionContext,
+  type PostadorImageMode,
 } from "./postadorNiches.js";
 
 // Chaves de API (obrigatórias conforme o provedor usado). Escolha de provedor/modelo vem do painel.
@@ -137,6 +139,7 @@ export type GerarCaptionOptions = {
   templateKey?: string | null;
   segmento?: string | null;
   marcaNome?: string | null;
+  imageMode?: PostadorImageMode | null;
 };
 
 function captionContextFromOptions(options?: GerarCaptionOptions): PostadorCaptionContext {
@@ -262,8 +265,9 @@ export async function enriquecerPromptImagem(
   ctx: PostadorCaptionContext,
   options?: GerarCaptionOptions
 ): Promise<string> {
-  const base = buildImagePrompt(userBrief, ctx);
-  const system = buildImageEnrichSystemPrompt(ctx);
+  const mode = resolveImageMode(options?.imageMode ?? null, ctx.nicheId);
+  const base = buildImagePrompt(userBrief, ctx, mode);
+  const system = buildImageEnrichSystemPrompt(ctx, mode);
   const user = `Brief estruturado:\n${base}\n\nPrompt cinematográfico em inglês:`;
   const enriched = await complete(system, user, options?.provider, options?.model ?? "gpt-4o-mini");
   return enriched.replace(/^["'`]|["'`]$/g, "").replace(/\s+/g, " ").trim().slice(0, 1200);

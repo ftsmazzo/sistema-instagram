@@ -16,6 +16,7 @@ import {
   resolveCaptionContext,
   buildImagePrompt,
   overlayStyleFromContext,
+  resolveImageMode,
 } from "../services/postadorNiches.js";
 import { getContaParaPublicar } from "../store/config.js";
 import { resolveConfigStore, getOrgIdFromRequest, resolveOrgIdForPostador } from "../context/workspaceConfig.js";
@@ -51,12 +52,19 @@ type PostadorIaBody = {
   template_id?: string;
   segmento?: string;
   marca_nome?: string;
+  image_mode?: string;
 };
 
 function captionOptionsFromBody(body: PostadorIaBody): GerarCaptionOptions {
   const provider = body.provider?.trim();
   const providerNorm: GerarCaptionOptions["provider"] =
     provider === "claude" ? "claude" : provider === "openai" ? "openai" : undefined;
+  const ctx = resolveCaptionContext({
+    nicheId: body.niche_id,
+    templateKey: body.template_id,
+    segmento: body.segmento,
+    marcaNome: body.marca_nome,
+  });
   return {
     provider: providerNorm,
     model: body.model?.trim() || undefined,
@@ -64,6 +72,7 @@ function captionOptionsFromBody(body: PostadorIaBody): GerarCaptionOptions {
     templateKey: body.template_id?.trim() || undefined,
     segmento: body.segmento?.trim() || undefined,
     marcaNome: body.marca_nome?.trim() || undefined,
+    imageMode: resolveImageMode(body.image_mode, ctx.nicheId),
   };
 }
 
@@ -382,7 +391,8 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       }
       try {
         const iaOpts = captionOptionsFromBody(body);
-        let imgPrompt = buildImagePrompt(prompt, ctx);
+        const imgMode = resolveImageMode(body.image_mode, ctx.nicheId);
+        let imgPrompt = buildImagePrompt(prompt, ctx, imgMode);
         try {
           imgPrompt = await enriquecerPromptImagem(prompt, ctx, iaOpts);
         } catch {
@@ -439,6 +449,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       marca_nome?: string;
       brief?: string;
       enrich_prompt?: boolean;
+      image_mode?: string;
     };
     const rawPrompt = (body?.prompt ?? body?.brief ?? "").trim();
     const provider = (body?.provider === "openai" ? "openai" : "gemini") as "openai" | "gemini";
@@ -452,7 +463,8 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       marcaNome: body.marca_nome,
     });
     const iaOpts = captionOptionsFromBody(body);
-    let prompt = buildImagePrompt(rawPrompt || "post para Instagram", ctx);
+    const imgMode = resolveImageMode(body.image_mode, ctx.nicheId);
+    let prompt = buildImagePrompt(rawPrompt || "post para Instagram", ctx, imgMode);
     if (body.enrich_prompt !== false) {
       try {
         prompt = await enriquecerPromptImagem(rawPrompt || "post para Instagram", ctx, iaOpts);

@@ -75,6 +75,7 @@ export function Postador() {
   const [agendadoSuccess, setAgendadoSuccess] = useState<string | null>(null);
   const [dataAgendamento, setDataAgendamento] = useState("");
   const [promptImagemIA, setPromptImagemIA] = useState("");
+  const [modoImagemIA, setModoImagemIA] = useState<"criativo" | "produto">("criativo");
   const [jornadaQueue, setJornadaQueue] = useState<any[]>([]);
   const [jornadaIndex, setJornadaIndex] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -104,6 +105,7 @@ export function Postador() {
     template_id: templateKey || undefined,
     segmento: segmento || undefined,
     marca_nome: marcaNome || undefined,
+    image_mode: modoImagemIA,
   });
 
   useEffect(() => {
@@ -413,9 +415,9 @@ export function Postador() {
   };
 
   const handleGerarImagemIA = async () => {
-    const prompt = promptImagemIA.trim();
+    const prompt = promptImagemIA.trim() || descricao.trim();
     if (!prompt) {
-      setError("Descreva a CENA visual (produto + ambiente + luz), não a ficha técnica inteira.");
+      setError("Informe um mood visual ou a descrição do post (a IA cria arte editorial, não recria o produto).");
       return;
     }
     setError(null);
@@ -848,6 +850,7 @@ export function Postador() {
                         </select>
                       </div>
                       {tipoMidiaIA === "imagem" ? (
+                        <>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">Provedor de imagem</label>
                           <select
@@ -859,6 +862,23 @@ export function Postador() {
                             <option value="openai">DALL·E / GPT Image (OpenAI)</option>
                           </select>
                         </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Estilo da imagem IA</label>
+                          <select
+                            value={modoImagemIA}
+                            onChange={(e) => setModoImagemIA(e.target.value as "criativo" | "produto")}
+                            className="rounded-md border border-gray-300 px-3 py-2 text-sm w-full max-w-md"
+                          >
+                            <option value="criativo">Criativo / mood (recomendado)</option>
+                            <option value="produto">Tentar recriar produto (não recomendado)</option>
+                          </select>
+                          <p className="mt-1 text-xs text-gray-500">
+                            {modoImagemIA === "criativo"
+                              ? "A IA gera arte editorial que remete ao produto (texturas, luz, ambiente). Para foto fiel do produto, envie a imagem abaixo em vez de gerar."
+                              : "A IA tentará desenhar o produto — em geral fica genérico. Prefira enviar a foto real do produto."}
+                          </p>
+                        </div>
+                        </>
                       ) : (
                         <>
                           <div>
@@ -896,13 +916,17 @@ export function Postador() {
                       )}
                       <div>
                         <label htmlFor="instrucoes" className="block text-sm font-medium text-gray-700 mb-1">
-                          {tipoMidiaIA === "video" ? "Brief do vídeo" : "Instruções para a imagem"} (opcional)
+                          {tipoMidiaIA === "video" ? "Brief do vídeo" : "Mood visual"} (opcional)
                         </label>
                         <textarea
                           id="instrucoes"
                           rows={2}
                           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                          placeholder="Se vazio, usa a descrição do post"
+                          placeholder={
+                            tipoMidiaIA === "video"
+                              ? "Ex.: transição suave, luz dourada, movimento de câmera lento"
+                              : "Ex.: mel dourado, cabelo sedoso, luz spa — ou deixe vazio para inferir da descrição"
+                          }
                           value={instrucoesImagem}
                           onChange={(e) => setInstrucoesImagem(e.target.value)}
                           disabled={loading}
@@ -919,7 +943,7 @@ export function Postador() {
                   {!criarMidiaIA && (
                     <div>
                       <label htmlFor="arquivo" className="block text-sm font-medium text-gray-700 mb-1">
-                        Imagem(ns) ou vídeo (opcional — várias imagens = carrossel)
+                        Imagem(ns) ou vídeo (recomendado para foto real do produto)
                       </label>
                       <input
                         id="arquivo"
@@ -1167,12 +1191,22 @@ export function Postador() {
                 <div className="flex flex-wrap items-center gap-2">
                   <input
                     type="text"
-                    placeholder="Prompt visual curto (ex.: frasco honey em mármore, luz dourada)"
+                    placeholder="Mood visual (ex.: mel dourado, cabelo sedoso, luz spa)"
                     className="rounded-md border border-gray-300 px-2 py-1.5 text-sm flex-1 min-w-[160px]"
                     value={promptImagemIA}
                     onChange={(e) => setPromptImagemIA(e.target.value)}
                     disabled={loading}
                   />
+                  <select
+                    value={modoImagemIA}
+                    onChange={(e) => setModoImagemIA(e.target.value as "criativo" | "produto")}
+                    className="rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                    title="Estilo da imagem IA"
+                    disabled={loading}
+                  >
+                    <option value="criativo">Criativo</option>
+                    <option value="produto">Produto</option>
+                  </select>
                   <button
                     type="button"
                     onClick={handleGerarImagemIA}
