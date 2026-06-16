@@ -61,7 +61,6 @@ export function Postador() {
   const [mediaUrls, setMediaUrls] = useState<string[]>([]);
   const [mediaType, setMediaType] = useState<"IMAGE" | "REELS" | "CAROUSEL" | undefined>(undefined);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
-  const [fromUrl, setFromUrl] = useState(false);
   const [contentMode, setContentMode] = useState<ContentMode>("descricao");
   const [wizardStep, setWizardStep] = useState<WizardStep>(1);
   const [step, setStep] = useState<Step>("form");
@@ -178,7 +177,6 @@ export function Postador() {
       return;
     }
     setError(null);
-    setFromUrl(false);
     setLoading(true);
     try {
       let urlGerada: string | null = null;
@@ -332,7 +330,6 @@ export function Postador() {
       return;
     }
     setError(null);
-    setFromUrl(true);
     setLoading(true);
     try {
       const res = await api.postador.gerarPorUrl(urlImovel.trim(), provider, effectiveModel, nicheParams());
@@ -482,7 +479,6 @@ export function Postador() {
     setMediaUrls([]);
     setMediaType(undefined);
     setPreviewUrls([]);
-    setFromUrl(false);
     setContentMode("descricao");
     setWizardStep(1);
     setFeedback("");
@@ -751,7 +747,6 @@ export function Postador() {
                   type="button"
                   onClick={() => {
                     setContentMode("descricao");
-                    setFromUrl(false);
                   }}
                   disabled={loading}
                   className={`rounded-xl border-2 p-4 text-left transition-all ${
@@ -767,7 +762,6 @@ export function Postador() {
                   type="button"
                   onClick={() => {
                     setContentMode("link");
-                    setFromUrl(true);
                   }}
                   disabled={loading}
                   className={`rounded-xl border-2 p-4 text-left transition-all ${
