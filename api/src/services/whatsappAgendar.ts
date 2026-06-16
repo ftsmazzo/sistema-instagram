@@ -197,22 +197,6 @@ export async function agendarCompromisso(input: AgendarCompromissoInput): Promis
     };
   }
 
-  if (!canSendEvolutionAlert(instance.evolution_base_url)) {
-    return {
-      ok: true,
-      visita_id: visitaId,
-      lead_updated: leadUpdated,
-      alert_sent: false,
-      handoff_whatsapp: handoffWhatsapp,
-      data_visita: dataVisita.toISOString(),
-      data_visita_formatada: dataVisitaFmt,
-      confirmacao_sugerida: confirmacaoSugerida,
-      local,
-      message:
-        "Compromisso registrado, mas Evolution não está configurada (EVOLUTION_BASE_URL + EVOLUTION_GLOBAL_API_KEY) para enviar o alerta.",
-    };
-  }
-
   const instance = await getWhatsappInstanceForOrg(organizationId);
   if (!instance?.instance_name?.trim()) {
     return {
@@ -226,6 +210,22 @@ export async function agendarCompromisso(input: AgendarCompromissoInput): Promis
       confirmacao_sugerida: confirmacaoSugerida,
       local,
       message: "Compromisso registrado, mas não há instância WhatsApp para enviar o alerta.",
+    };
+  }
+
+  if (!canSendEvolutionAlert(instance.evolution_base_url)) {
+    return {
+      ok: true,
+      visita_id: visitaId,
+      lead_updated: leadUpdated,
+      alert_sent: false,
+      handoff_whatsapp: handoffWhatsapp,
+      data_visita: dataVisita.toISOString(),
+      data_visita_formatada: dataVisitaFmt,
+      confirmacao_sugerida: confirmacaoSugerida,
+      local,
+      message:
+        "Compromisso registrado, mas Evolution não está configurada (EVOLUTION_BASE_URL + EVOLUTION_GLOBAL_API_KEY) para enviar o alerta.",
     };
   }
 

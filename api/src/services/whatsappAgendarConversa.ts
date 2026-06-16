@@ -114,6 +114,9 @@ export async function tentarAgendarDaConversa(
   const agenda = parseAgendaConfig(orgRes.rows[0]?.agenda_config);
   const horario = extrairHorarioDoTexto(combinado) ?? agenda.horario_inicio;
   const phoneDigits = normalizePhoneDigits(input.leadPhone);
+  if (!phoneDigits) {
+    return { skipped: true, reason: "telefone_invalido" };
+  }
 
   const resolved = resolveAgendamentoDateTime({
     dataVisitaRaw: "",
