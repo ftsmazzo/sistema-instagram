@@ -467,8 +467,17 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       if (msg.includes("OPENAI_API_KEY") || msg.includes("ANTHROPIC_API_KEY")) {
         return reply.status(503).send({ error: msg });
       }
-      if (msg.includes("Cloudinary")) {
+      if (msg.includes("Cloudinary") || msg.includes("armazenamento")) {
         return reply.status(503).send({ error: msg });
+      }
+      if (
+        msg.includes("Não foi possível acessar") ||
+        msg.includes("extrair dados") ||
+        msg.includes("JSON") ||
+        msg.includes("DNS") ||
+        msg.includes("resolve o host")
+      ) {
+        return reply.status(400).send({ error: msg });
       }
       fastify.log.error({ err }, "por-url");
       return reply.status(500).send({ error: msg });

@@ -5,6 +5,7 @@ import { toInstagramFeedImage } from "./instagramImage.js";
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GEMINI_API_KEY;
+const OPENAI_IMAGE_MODEL = (process.env.OPENAI_IMAGE_MODEL ?? "dall-e-3").trim();
 
 function getOpenAI(): OpenAI {
   if (!OPENAI_API_KEY?.trim()) {
@@ -25,25 +26,46 @@ async function uploadFeedImage(buffer: Buffer): Promise<string> {
   return uploadMedia(normalized, "image/jpeg", ".jpg");
 }
 
+async function bufferFromOpenAIImageItem(
+  item: { b64_json?: string | null; url?: string | null } | undefined
+): Promise<Buffer> {
+  if (!item) throw new Error("OpenAI não retornou imagem.");
+  if (item.b64_json) return Buffer.from(item.b64_json, "base64");
+  if (item.url) {
+    const res = await fetch(item.url);
+    if (!res.ok) throw new Error(`Falha ao baixar imagem da OpenAI: HTTP ${res.status}`);
+    return Buffer.from(await res.arrayBuffer());
+  }
+  throw new Error("OpenAI não retornou imagem (sem b64_json nem url).");
+}
+
+function isGptImageModel(model: string): boolean {
+  return model.toLowerCase().includes("gpt-image");
+}
+
 /**
- * Gera imagem com DALL·E 3 (OpenAI) em retrato ~4:5.
+ * Gera imagem com OpenAI (DALL·E 3 ou gpt-image-*).
+ * gpt-image não aceita response_format — retorna b64 por padrão.
  */
 export async function gerarImagemOpenAI(prompt: string): Promise<string> {
   if (!isStorageConfigured()) {
     throw new Error("Configure um armazenamento (Cloudinary, local ou MinIO) para salvar a imagem gerada.");
   }
   const openai = getOpenAI();
+  const model = OPENAI_IMAGE_MODEL;
+  const gptImage = isGptImageModel(model);
+
   const res = await openai.images.generate({
-    model: "dall-e-3",
+    model,
     prompt: prompt.slice(0, 4000),
     n: 1,
-    size: "1024x1792",
-    quality: "standard",
-    response_format: "b64_json",
+    size: gptImage ? "1024x1536" : "1024x1792",
+    ...(gptImage
+      ? { quality: "high" as const }
+      : { quality: "standard" as const }),
   });
-  const b64 = res.data?.[0]?.b64_json;
-  if (!b64) throw new Error("DALL·E não retornou imagem.");
-  const buffer = Buffer.from(b64, "base64");
+
+  const buffer = await bufferFromOpenAIImageItem(res.data?.[0]);
   return uploadFeedImage(buffer);
 }
 

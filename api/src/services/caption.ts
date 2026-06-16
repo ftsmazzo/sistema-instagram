@@ -215,14 +215,28 @@ export async function gerarJornadaPorLink(
   
   try {
     const match = resText.match(/\[\s*\{[\s\S]*\}\s*\]/);
-    if (match) {
-      return JSON.parse(match[0]);
-    }
-    const limpo = resText.replace(/```json/gi, '').replace(/```/g, '').trim();
-    return JSON.parse(limpo);
+    const raw = match ? match[0] : resText.replace(/```json/gi, "").replace(/```/g, "").trim();
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) throw new Error("Resposta não é um array.");
+    const posts = parsed
+      .filter((p): p is { post_number: number; estrategia: string; caption: string } =>
+        Boolean(p && typeof p === "object" && typeof (p as { caption?: string }).caption === "string")
+      )
+      .slice(0, 3);
+    if (posts.length < 3) throw new Error(`Esperados 3 posts, recebidos ${posts.length}.`);
+    return posts.map((p, i) => ({
+      post_number: p.post_number ?? i + 1,
+      estrategia: p.estrategia ?? `Post ${i + 1}`,
+      caption: p.caption.trim(),
+    }));
   } catch (err) {
     console.error("Erro ao fazer parse da Jornada JSON. Retorno da IA:", resText);
-    throw new Error("A Inteligência Artificial não retornou o formato JSON corretamente.");
+    const detail = err instanceof Error ? err.message : "";
+    throw new Error(
+      detail
+        ? `A IA não retornou a jornada em JSON válido: ${detail}`
+        : "A Inteligência Artificial não retornou o formato JSON corretamente."
+    );
   }
 }
 

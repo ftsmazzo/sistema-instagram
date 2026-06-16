@@ -62,17 +62,37 @@ function resolveUrl(base: string, path: string): string {
 
 const MAX_IMAGENS_IMOVEL = 10;
 
-/** Extrai URLs de imagem do objeto imóvel (Next.js pageProps). */
-function coletarImagensNext(imovel: Record<string, unknown>, pageBaseUrl: string): string[] {
+function formatPreco(val: unknown): string {
+  if (val == null || val === "") return "";
+  if (typeof val === "string") {
+    const s = val.trim();
+    if (/R\$|\$|€|preço|price/i.test(s)) return s;
+  }
+  const n =
+    typeof val === "number"
+      ? val
+      : parseFloat(
+          String(val)
+            .replace(/[^\d.,]/g, "")
+            .replace(/\.(?=.*\.)/g, "")
+            .replace(",", ".")
+        );
+  if (!Number.isFinite(n)) return String(val).trim();
+  return `R$ ${n.toLocaleString("pt-BR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
+}
+
+function coletarImagensDeObjeto(obj: Record<string, unknown>, pageBaseUrl: string): string[] {
   const fields: unknown[] = [
-    imovel.imagens,
-    imovel.fotos,
-    imovel.galeria,
-    imovel.images,
-    imovel.fotosUrls,
-    imovel.imagem,
-    imovel.foto,
-    imovel.image,
+    obj.imagens,
+    obj.fotos,
+    obj.galeria,
+    obj.images,
+    obj.fotosUrls,
+    obj.imagem,
+    obj.foto,
+    obj.image,
+    obj.media,
+    obj.pictures,
   ];
   const out: string[] = [];
   const seen = new Set<string>();
@@ -92,7 +112,7 @@ function coletarImagensNext(imovel: Record<string, unknown>, pageBaseUrl: string
         if (typeof item === "string") addAbs(item);
         else if (item && typeof item === "object") {
           const o = item as Record<string, unknown>;
-          const u = o.url ?? o.src ?? o.path ?? o.uri;
+          const u = o.url ?? o.src ?? o.path ?? o.uri ?? o.image;
           if (typeof u === "string") addAbs(u);
         }
       }
@@ -101,6 +121,102 @@ function coletarImagensNext(imovel: Record<string, unknown>, pageBaseUrl: string
     }
   }
   return out.slice(0, MAX_IMAGENS_IMOVEL);
+}
+
+/** Extrai Product/Offer de JSON-LD (e-commerce, Shopify, WooCommerce, etc.). */
+function extrairJsonLdProduto(html: string, pageUrl: string): Partial<ImovelDados> | null {
+  const re = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+  let m: RegExpExecArray | null;
+  const candidatos: unknown[] = [];
+  while ((m = re.exec(html)) !== null) {
+    try {
+      const parsed = JSON.parse(m[1]) as unknown;
+      if (Array.isArray(parsed)) candidatos.push(...parsed);
+      else if (parsed && typeof parsed === "object") {
+        const o = parsed as Record<string, unknown>;
+        if (Array.isArray(o["@graph"])) candidatos.push(...(o["@graph"] as unknown[]));
+        else candidatos.push(parsed);
+      }
+    } catch {
+      /* ignore bloco inválido */
+    }
+  }
+
+  for (const raw of candidatos) {
+    if (!raw || typeof raw !== "object") continue;
+    const item = raw as Record<string, unknown>;
+    const type = String(item["@type"] ?? "");
+    if (!/product/i.test(type)) continue;
+
+    const titulo = String(item.name ?? item.title ?? "").trim();
+    const descricao = String(item.description ?? "").trim().slice(0, 800);
+    const offers = item.offers;
+    let venda = "";
+    if (offers && typeof offers === "object") {
+      const o = Array.isArray(offers) ? (offers[0] as Record<string, unknown>) : (offers as Record<string, unknown>);
+      if (o?.price != null) {
+        const moeda = String(o.priceCurrency ?? "BRL");
+        venda = moeda === "BRL" ? formatPreco(o.price) : `${moeda} ${o.price}`;
+      }
+    }
+    const imgField = item.image;
+    const imageUrls: string[] = [];
+    if (typeof imgField === "string") imageUrls.push(urlParaFetchImovel(resolveUrl(pageUrl, imgField)));
+    else if (Array.isArray(imgField)) {
+      for (const img of imgField) {
+        if (typeof img === "string") imageUrls.push(urlParaFetchImovel(resolveUrl(pageUrl, img)));
+        else if (img && typeof img === "object" && typeof (img as { url?: string }).url === "string") {
+          imageUrls.push(urlParaFetchImovel(resolveUrl(pageUrl, (img as { url: string }).url)));
+        }
+      }
+    }
+    return {
+      titulo,
+      codigo: "",
+      localizacao: "",
+      venda,
+      iptu: "",
+      condominio: "",
+      resumo: [],
+      caracteristicas: [],
+      descricao,
+      imageUrl: imageUrls[0] ?? null,
+      imageUrls: imageUrls.slice(0, MAX_IMAGENS_IMOVEL),
+    };
+  }
+  return null;
+}
+
+function mesclarDados(base: ImovelDados, extra: Partial<ImovelDados>): ImovelDados {
+  const imageUrls =
+    base.imageUrls.length > 0
+      ? base.imageUrls
+      : extra.imageUrls?.length
+        ? extra.imageUrls
+        : [];
+  return {
+    titulo: base.titulo || extra.titulo || "",
+    codigo: base.codigo || extra.codigo || "",
+    localizacao: base.localizacao || extra.localizacao || "",
+    venda: base.venda || extra.venda || "",
+    iptu: base.iptu || extra.iptu || "",
+    condominio: base.condominio || extra.condominio || "",
+    resumo: base.resumo.length ? base.resumo : extra.resumo ?? [],
+    caracteristicas: base.caracteristicas.length ? base.caracteristicas : extra.caracteristicas ?? [],
+    descricao: base.descricao || extra.descricao || "",
+    imageUrl: base.imageUrl ?? extra.imageUrl ?? imageUrls[0] ?? null,
+    imageUrls: imageUrls.length ? imageUrls : base.imageUrls,
+  };
+}
+
+function dadosTemConteudo(d: ImovelDados): boolean {
+  return Boolean(
+    d.titulo.trim() ||
+      d.descricao.trim() ||
+      d.venda.trim() ||
+      d.resumo.length ||
+      d.caracteristicas.length
+  );
 }
 
 function coletarImagensHtml(root: ReturnType<typeof parse>, pageUrl: string): string[] {
@@ -117,6 +233,12 @@ function coletarImagensHtml(root: ReturnType<typeof parse>, pageUrl: string): st
     out.push(internal);
   };
   root.querySelectorAll("img[src]").forEach((img) => add(img.getAttribute("src")));
+  root
+    .querySelectorAll(".product img, [class*='product'] img, [class*='gallery'] img, picture source[srcset]")
+    .forEach((el) => {
+      const src = el.getAttribute("src") ?? el.getAttribute("srcset")?.split(/\s+/)[0];
+      add(src);
+    });
   return out.slice(0, MAX_IMAGENS_IMOVEL);
 }
 
@@ -157,23 +279,49 @@ export async function rasparPaginaImovel(url: string): Promise<ImovelDados> {
       const nextData = JSON.parse(nextDataMatch[1]) as { props?: { pageProps?: Record<string, unknown> } };
       const pageProps = nextData?.props?.pageProps;
       if (pageProps && typeof pageProps === "object") {
-        const imovel = (pageProps.imovel ?? pageProps.imovelData ?? pageProps) as Record<string, unknown>;
-        const titulo = String(imovel.titulo ?? imovel.nome ?? imovel.title ?? "");
-        const codigo = String(imovel.codigo ?? imovel.referencia ?? "");
-        const localizacao = String(imovel.localizacao ?? imovel.bairro ?? imovel.cidade ?? "");
-        const valorVenda = imovel.valorVenda ?? imovel.preco ?? imovel.venda;
-        const venda = valorVenda != null ? `Venda R$ ${Number(valorVenda).toLocaleString("pt-BR")}` : "";
-        const iptu = imovel.iptu != null ? `IPTU R$ ${Number(imovel.iptu).toLocaleString("pt-BR")}` : "";
-        const cond = imovel.condominio ?? imovel.condominioValor;
-        const condominio = cond != null ? `Condomínio R$ ${Number(cond).toLocaleString("pt-BR")}` : "";
-        const descricao = String(imovel.descricao ?? imovel.descricaoCompleta ?? "");
-        const resumoArr = Array.isArray(imovel.resumo) ? imovel.resumo : Array.isArray(imovel.caracteristicas) ? imovel.caracteristicas : [];
+        const entidade = (pageProps.imovel ??
+          pageProps.produto ??
+          pageProps.product ??
+          pageProps.item ??
+          pageProps) as Record<string, unknown>;
+        const titulo = String(entidade.titulo ?? entidade.nome ?? entidade.name ?? entidade.title ?? "");
+        const codigo = String(entidade.codigo ?? entidade.referencia ?? entidade.sku ?? entidade.id ?? "");
+        const localizacao = String(
+          entidade.localizacao ?? entidade.bairro ?? entidade.cidade ?? entidade.location ?? ""
+        );
+        const valorVenda =
+          entidade.valorVenda ??
+          entidade.preco ??
+          entidade.price ??
+          entidade.valor ??
+          entidade.salePrice ??
+          entidade.precoVenda;
+        const venda = valorVenda != null ? formatPreco(valorVenda) : "";
+        const iptu = entidade.iptu != null ? `IPTU ${formatPreco(entidade.iptu)}` : "";
+        const cond = entidade.condominio ?? entidade.condominioValor;
+        const condominio = cond != null ? `Condomínio ${formatPreco(cond)}` : "";
+        const descricao = String(
+          entidade.descricao ?? entidade.descricaoCompleta ?? entidade.description ?? entidade.resumo ?? ""
+        );
+        const resumoArr = Array.isArray(entidade.resumo)
+          ? entidade.resumo
+          : Array.isArray(entidade.caracteristicas)
+            ? entidade.caracteristicas
+            : Array.isArray(entidade.features)
+              ? entidade.features
+              : [];
         const resumo = resumoArr.map(String);
-        const caracArr = Array.isArray(imovel.caracteristicas) ? imovel.caracteristicas : Array.isArray(imovel.extras) ? imovel.extras : [];
+        const caracArr = Array.isArray(entidade.caracteristicas)
+          ? entidade.caracteristicas
+          : Array.isArray(entidade.extras)
+            ? entidade.extras
+            : Array.isArray(entidade.features)
+              ? entidade.features
+              : [];
         const caracteristicas = caracArr.map(String);
-        const imageUrls = coletarImagensNext(imovel, baseUrl);
+        const imageUrls = coletarImagensDeObjeto(entidade, baseUrl);
         const imageUrl = imageUrls[0] ?? null;
-        return {
+        const fromNext: ImovelDados = {
           titulo,
           codigo,
           localizacao,
@@ -186,6 +334,9 @@ export async function rasparPaginaImovel(url: string): Promise<ImovelDados> {
           imageUrl,
           imageUrls,
         };
+        const jsonLd = extrairJsonLdProduto(html, url);
+        const merged = jsonLd ? mesclarDados(fromNext, jsonLd) : fromNext;
+        if (dadosTemConteudo(merged)) return merged;
       }
     } catch {
       // fallback para parsing HTML
@@ -204,7 +355,7 @@ export async function rasparPaginaImovel(url: string): Promise<ImovelDados> {
 
   const ogImage =
     getMeta("og:image") ||
-    root.querySelector("img[src*='imoveis'], img[src*='upload'], .gallery img, [data-imagem]")?.getAttribute("src") ||
+    root.querySelector("img[src*='imoveis'], img[src*='upload'], img[src*='product'], img[src*='cdn'], .gallery img, .product img, [data-imagem]")?.getAttribute("src") ||
     root.querySelector("img")?.getAttribute("src") ||
     null;
   let absoluteOg: string | null = ogImage ? resolveUrl(url, ogImage) : null;
@@ -240,9 +391,17 @@ export async function rasparPaginaImovel(url: string): Promise<ImovelDados> {
   const locFromTitle = getMeta("og:title")?.match(/\s[-–]\s*(.+?)(?:\s*[-|]|$)/);
   if (locFromTitle) localizacao = locFromTitle[1].trim();
 
-  // Valores: Venda, IPTU, Condomínio
+  // Valores: imóvel ou e-commerce
   const vendaMatch = html.match(/Venda\s*R\$\s*[\d.,]+/i);
-  const venda = vendaMatch ? vendaMatch[0].replace(/\s+/g, " ").trim() : "";
+  let venda = vendaMatch ? vendaMatch[0].replace(/\s+/g, " ").trim() : "";
+  if (!venda) {
+    const precoMeta = getMeta("product:price:amount") ?? getMeta("og:price:amount");
+    if (precoMeta) venda = formatPreco(precoMeta);
+  }
+  if (!venda) {
+    const precoHtml = html.match(/R\$\s*[\d]{1,3}(?:\.[\d]{3})*(?:,[\d]{2})?/);
+    if (precoHtml) venda = precoHtml[0].trim();
+  }
   const iptuMatch = html.match(/IPTU\s*R\$\s*[\d.,]+/i);
   const iptu = iptuMatch ? iptuMatch[0].replace(/\s+/g, " ").trim() : "";
   const condMatch = html.match(/Condomínio\s*R\$\s*[\d.,]+/i);
@@ -271,18 +430,24 @@ export async function rasparPaginaImovel(url: string): Promise<ImovelDados> {
   });
   const caracteristicas = caracList.length ? caracList : [];
 
-  // Descrição
-  const descSection = root.querySelector("[class*='descricao'], .description, section");
-  let descricao = "";
-  if (descSection) {
-    const h = descSection.querySelector("h2, h3");
-    if (h?.textContent?.toLowerCase().includes("descri")) {
-      descricao = descSection.textContent?.trim().replace(/\s+/g, " ").trim().slice(0, 500) ?? "";
+  // Descrição: meta og primeiro, depois HTML
+  let descricao =
+    getMeta("og:description")?.trim() ||
+    getMeta("description")?.trim() ||
+    "";
+  if (!descricao) {
+    const descSection = root.querySelector("[class*='descricao'], .description, .product-description, section");
+    if (descSection) {
+      const h = descSection.querySelector("h2, h3");
+      if (!h || h.textContent?.toLowerCase().includes("descri")) {
+        descricao = descSection.textContent?.trim().replace(/\s+/g, " ").trim().slice(0, 800) ?? "";
+      }
     }
   }
   if (!descricao) descricao = getText("p") || "";
+  descricao = descricao.slice(0, 800);
 
-  return {
+  const fromHtml: ImovelDados = {
     titulo,
     codigo,
     localizacao,
@@ -295,17 +460,19 @@ export async function rasparPaginaImovel(url: string): Promise<ImovelDados> {
     imageUrl: absoluteImageUrl,
     imageUrls,
   };
+  const jsonLd = extrairJsonLdProduto(html, url);
+  return jsonLd ? mesclarDados(fromHtml, jsonLd) : fromHtml;
 }
 
 /**
- * Monta um texto único para a IA gerar a legenda do post a partir dos dados do imóvel.
+ * Monta um texto único para a IA gerar a legenda a partir dos dados raspados da página.
  */
 export function montarDescricaoParaCaption(d: ImovelDados): string {
   const parts: string[] = [];
   if (d.titulo) parts.push(`Título: ${d.titulo}`);
-  if (d.codigo) parts.push(`Código: ${d.codigo}`);
+  if (d.codigo) parts.push(`Código/SKU: ${d.codigo}`);
   if (d.localizacao) parts.push(`Localização: ${d.localizacao}`);
-  if (d.venda) parts.push(d.venda);
+  if (d.venda) parts.push(`Preço: ${d.venda}`);
   if (d.iptu) parts.push(d.iptu);
   if (d.condominio) parts.push(d.condominio);
   if (d.resumo.length) parts.push(`Resumo: ${d.resumo.join(", ")}`);
