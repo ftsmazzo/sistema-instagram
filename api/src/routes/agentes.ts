@@ -21,6 +21,7 @@ import {
   WhatsappInstanceNameTakenError,
 } from "../store/whatsappInstance.js";
 import type { WhatsappObjetivo } from "../services/whatsappAgentDefaults.js";
+import { parseAgendaConfig } from "../services/empresaConfigHelpers.js";
 import type { EmpresaPerfil } from "../store/config.js";
 import { loadWorkspaceConfigStore, saveWorkspaceConfig } from "../store/workspace.js";
 
@@ -157,7 +158,7 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
       }
       const empresaPatch: Partial<EmpresaPerfil> = {};
       if (body.link_produto_servico !== undefined) empresaPatch.link_produto_servico = body.link_produto_servico;
-      if (body.agenda_config !== undefined) empresaPatch.agenda_config = body.agenda_config;
+      if (body.agenda_config !== undefined) empresaPatch.agenda_config = parseAgendaConfig(body.agenda_config);
       if (body.criterios_qualificacao !== undefined) empresaPatch.criterios_qualificacao = body.criterios_qualificacao;
       if (Object.keys(empresaPatch).length > 0) {
         await saveWorkspaceConfig(u.orgId, { empresa: empresaPatch });
