@@ -190,3 +190,11 @@ export async function syncLeadWhatsappDigits(leadId: number, whatsapp: string | 
     [leadId, digits]
   );
 }
+
+/** Remove registro da instância WhatsApp do workspace (permite cadastrar outra). */
+export async function removeWhatsappInstanceForOrg(orgId: string): Promise<boolean> {
+  await ensureTables();
+  const pool = getPool();
+  const r = await pool.query(`DELETE FROM whatsapp_instances WHERE organization_id = $1::uuid`, [orgId]);
+  return (r.rowCount ?? 0) > 0;
+}

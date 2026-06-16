@@ -80,7 +80,7 @@ function parseEvolutionError(json: EvolutionErrorJson, httpStatus: number): stri
 async function evolutionFetch<T>(
   baseUrl: string,
   apiKey: string,
-  method: "GET" | "POST",
+  method: "GET" | "POST" | "DELETE",
   path: string,
   body?: Record<string, unknown>,
   opts?: { notFoundOk?: boolean }
@@ -148,61 +148,79 @@ function normalizeQrPayload(raw: unknown): EvolutionConnectQr {
   return { qr_base64, qr_code: qrCode, pairing_code: pairing };
 }
 
+function jidToPhone(jid: string | null | undefined): string | null {
+  if (!jid) return null;
+  const digits = jid.split("@")[0]?.replace(/\D/g, "") ?? "";
+  return digits.length >= 8 ? digits : null;
+}
+
+function mapEvolutionState(raw: string | null | undefined): EvolutionConnectionState | null {
+  const s = (raw ?? "").trim().toLowerCase();
+  if (s === "open") return "open";
+  if (s === "connecting") return "connecting";
+  if (s === "close" || s === "closed") return "close";
+  return null;
+}
+
+function findInstanceRow(raw: unknown, instanceName: string): Record<string, unknown> | null {
+  if (!raw || typeof raw !== "object") return null;
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      if (!item || typeof item !== "object") continue;
+      const row = item as Record<string, unknown>;
+      const n = pickString(row.instanceName, row.name);
+      if (n === instanceName) return row;
+    }
+    const first = raw[0];
+    return first && typeof first === "object" ? (first as Record<string, unknown>) : null;
+  }
+  const o = raw as Record<string, unknown>;
+  if (o.instance && typeof o.instance === "object") return o.instance as Record<string, unknown>;
+  return o;
+}
+
 function normalizeConnectionState(raw: unknown): EvolutionConnectionState {
   if (!raw || typeof raw !== "object") return "close";
   const o = raw as Record<string, unknown>;
   const nested =
     o.instance && typeof o.instance === "object" ? (o.instance as Record<string, unknown>) : o;
-  const state = pickString(nested.state, o.state)?.toLowerCase();
-  if (state === "open" || state === "connecting" || state === "close") return state;
-  return "close";
+  const mapped = mapEvolutionState(
+    pickString(nested.state, nested.connectionStatus, nested.status, o.state, o.connectionStatus)
+  );
+  return mapped ?? "close";
 }
 
 function normalizeInstanceProfile(raw: unknown, instanceName: string): EvolutionInstanceStatus {
-  const state = normalizeConnectionState(raw);
-  if (!raw || typeof raw !== "object") {
+  const row = findInstanceRow(raw, instanceName);
+  if (!row) {
     return {
       instance_name: instanceName,
-      state,
+      state: normalizeConnectionState(raw),
       profile_name: null,
       phone_number: null,
       profile_picture_url: null,
     };
   }
-  const o = raw as Record<string, unknown>;
-  const row = Array.isArray(raw)
-    ? (raw.find(
-        (item) =>
-          item &&
-          typeof item === "object" &&
-          pickString(
-            (item as Record<string, unknown>).instanceName,
-            (item as Record<string, unknown>).name
-          ) === instanceName
-      ) as Record<string, unknown> | undefined) ?? (raw[0] as Record<string, unknown>)
-    : o.instance && typeof o.instance === "object"
-      ? (o.instance as Record<string, unknown>)
-      : o;
 
-  const phone = pickString(
-    row.owner,
-    row.number,
-    row.phone,
-    row.wuid,
-    typeof row.remoteJid === "string" ? row.remoteJid.split("@")[0] : null
-  );
-  const digits = phone?.replace(/\D/g, "") || null;
+  const phone =
+    pickString(row.number, row.owner, row.phone, row.wuid) ??
+    jidToPhone(pickString(row.ownerJid, row.owner_jid, row.remoteJid));
+
+  const mappedState =
+    mapEvolutionState(pickString(row.connectionStatus, row.state, row.status)) ??
+    normalizeConnectionState(raw);
 
   return {
     instance_name: pickString(row.instanceName, row.name, instanceName) ?? instanceName,
-    state: pickString(row.state, row.connectionStatus)?.toLowerCase() === "open"
-      ? "open"
-      : pickString(row.state, row.connectionStatus)?.toLowerCase() === "connecting"
-        ? "connecting"
-        : state,
-    profile_name: pickString(row.profileName, row.profile_name, row.pushName, row.name),
-    phone_number: digits,
-    profile_picture_url: pickString(row.profilePicUrl, row.profilePictureUrl, row.profile_picture_url),
+    state: mappedState,
+    profile_name: pickString(row.profileName, row.profile_name, row.pushName),
+    phone_number: phone,
+    profile_picture_url: pickString(
+      row.profilePicUrl,
+      row.profilePictureUrl,
+      row.profile_picture_url,
+      row.pictureUrl
+    ),
   };
 }
 
@@ -388,7 +406,12 @@ export async function getEvolutionInstanceStatus(
   const fromState = normalizeInstanceProfile(stateJson ?? {}, name);
   const fromList = listJson ? normalizeInstanceProfile(listJson, name) : null;
 
-  const state = fromState.state !== "close" ? fromState.state : fromList?.state ?? "close";
+  const state =
+    fromList?.state && fromList.state !== "close"
+      ? fromList.state
+      : fromState.state !== "close"
+        ? fromState.state
+        : fromList?.state ?? "close";
 
   return {
     instance_name: name,
@@ -397,6 +420,30 @@ export async function getEvolutionInstanceStatus(
     phone_number: fromList?.phone_number ?? fromState.phone_number,
     profile_picture_url: fromList?.profile_picture_url ?? fromState.profile_picture_url,
   };
+}
+
+/** Desconecta WhatsApp (logout) mantendo a instância na Evolution. */
+export async function logoutEvolutionInstance(instanceName: string, baseUrl?: string): Promise<void> {
+  const env = getEvolutionEnv();
+  if (!env) throw new Error("Evolution não configurada na API.");
+  const name = instanceName.trim();
+  if (!name) throw new Error("instance_name obrigatório.");
+  const url = baseUrl?.trim() || env.baseUrl;
+  await evolutionFetch(url, env.apiKey, "DELETE", `/instance/logout/${encodeURIComponent(name)}`, undefined, {
+    notFoundOk: true,
+  });
+}
+
+/** Remove instância da Evolution (irreversível na Evolution). */
+export async function deleteEvolutionInstance(instanceName: string, baseUrl?: string): Promise<void> {
+  const env = getEvolutionEnv();
+  if (!env) throw new Error("Evolution não configurada na API.");
+  const name = instanceName.trim();
+  if (!name) throw new Error("instance_name obrigatório.");
+  const url = baseUrl?.trim() || env.baseUrl;
+  await evolutionFetch(url, env.apiKey, "DELETE", `/instance/delete/${encodeURIComponent(name)}`, undefined, {
+    notFoundOk: true,
+  });
 }
 
 export async function findInstanceWebhook(

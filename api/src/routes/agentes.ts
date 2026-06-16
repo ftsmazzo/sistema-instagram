@@ -2,11 +2,13 @@ import type { FastifyInstance, FastifyPluginOptions } from "fastify";
 import { isDbConfigured } from "../db/index.js";
 import {
   createEvolutionInstance,
+  deleteEvolutionInstance,
   findInstanceWebhook,
   getEvolutionConnectQr,
   getEvolutionEnv,
   getEvolutionInstanceStatus,
   isEvolutionConfigured,
+  logoutEvolutionInstance,
   resolveEvolutionBaseUrl,
   setInstanceWebhook,
 } from "../services/evolution.js";
@@ -14,6 +16,7 @@ import { listLeads } from "../store/leads.js";
 import {
   backfillLeadWhatsappDigits,
   getWhatsappInstanceForOrg,
+  removeWhatsappInstanceForOrg,
   upsertWhatsappInstance,
   WhatsappInstanceNameTakenError,
 } from "../store/whatsappInstance.js";
@@ -276,6 +279,74 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Falha ao consultar conexão.";
+      return reply.status(502).send({ ok: false, error: message });
+    }
+  });
+
+  /** Desconecta WhatsApp (logout na Evolution) sem apagar a instância. */
+  app.post("/whatsapp/disconnect", async (request, reply) => {
+    const u = request.user as { orgId: string };
+    if (!isEvolutionConfigured()) {
+      return reply.status(503).send({ ok: false, error: "Evolution não configurada no servidor." });
+    }
+
+    const instance = await getWhatsappInstanceForOrg(u.orgId);
+    if (!instance?.instance_name?.trim()) {
+      return reply.status(400).send({ ok: false, error: "Nenhuma instância WhatsApp configurada." });
+    }
+
+    const baseUrl = resolveEvolutionBaseUrl(instance.evolution_base_url);
+    try {
+      await logoutEvolutionInstance(instance.instance_name, baseUrl);
+      await upsertWhatsappInstance(u.orgId, {
+        instance_name: instance.instance_name,
+        evolution_base_url: baseUrl,
+        agent_ativo: instance.agent_ativo,
+        agent_nome: instance.agent_nome,
+        agent_prompt: instance.agent_prompt,
+        objetivos: instance.objetivos,
+        status: "disconnected",
+        delay_primeira_msg_minutos: instance.delay_primeira_msg_minutos,
+      });
+
+      return reply.send({
+        ok: true,
+        instance_name: instance.instance_name,
+        connection_state: "close" as const,
+        message: "WhatsApp desconectado. Use Reconectar para gerar novo QR.",
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Falha ao desconectar WhatsApp.";
+      request.log.warn({ err, instance_name: instance.instance_name }, "whatsapp/disconnect falhou");
+      return reply.status(502).send({ ok: false, error: message });
+    }
+  });
+
+  /** Exclui instância (Evolution + banco) para permitir cadastrar outra. */
+  app.delete("/whatsapp/instance", async (request, reply) => {
+    const u = request.user as { orgId: string };
+    const instance = await getWhatsappInstanceForOrg(u.orgId);
+    if (!instance?.instance_name?.trim()) {
+      return reply.status(400).send({ ok: false, error: "Nenhuma instância WhatsApp para excluir." });
+    }
+
+    const baseUrl = resolveEvolutionBaseUrl(instance.evolution_base_url);
+    const name = instance.instance_name;
+
+    try {
+      if (isEvolutionConfigured()) {
+        await deleteEvolutionInstance(name, baseUrl);
+      }
+      await removeWhatsappInstanceForOrg(u.orgId);
+      return reply.send({
+        ok: true,
+        deleted: true,
+        instance_name: name,
+        message: "Instância removida. Você pode criar uma nova com outro nome.",
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Falha ao excluir instância.";
+      request.log.warn({ err, instance_name: name }, "whatsapp/instance DELETE falhou");
       return reply.status(502).send({ ok: false, error: message });
     }
   });

@@ -57,6 +57,12 @@ function qrImageSrc(conn: WhatsappConnectionRes | null): string | null {
   return null;
 }
 
+function formatPhone(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, "");
+  return digits ? `+${digits}` : null;
+}
+
 function statusLabel(status: string): string {
   const map: Record<string, string> = {
     novo: "Novo",
@@ -73,6 +79,8 @@ export function WhatsAppPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [connecting, setConnecting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [needLogin, setNeedLogin] = useState(false);
@@ -108,6 +116,7 @@ export function WhatsAppPage() {
     ]);
     setEvolutionConfigured(wa.evolution_configured);
     setInstanceName(wa.instance?.instance_name ?? "");
+    setConnection(null);
     setAgentForm({
       agent_ativo: wa.instance?.agent_ativo ?? false,
       agent_nome: wa.instance?.agent_nome ?? "",
@@ -218,6 +227,41 @@ export function WhatsAppPage() {
     }
   };
 
+  const handleDisconnect = async () => {
+    setDisconnecting(true);
+    setError(null);
+    try {
+      const res = await api.agentes.disconnectWhatsapp();
+      if (!res.ok) throw new Error(res.error ?? "Falha ao desconectar.");
+      await refreshConnection(false);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao desconectar WhatsApp.");
+    } finally {
+      setDisconnecting(false);
+    }
+  };
+
+  const handleDeleteInstance = async () => {
+    const name = instanceName.trim();
+    if (!name) return;
+    const ok = window.confirm(
+      `Excluir a instância WhatsApp "${name}"?\n\nIsso desconecta e remove a instância no servidor, para você poder cadastrar outra.`
+    );
+    if (!ok) return;
+
+    setDeleting(true);
+    setError(null);
+    try {
+      const res = await api.agentes.deleteWhatsappInstance();
+      if (!res.ok) throw new Error(res.error ?? "Falha ao excluir instância.");
+      await loadPage();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao excluir instância.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError(null);
@@ -235,8 +279,10 @@ export function WhatsAppPage() {
     }
   };
 
-  const isConnected = connection?.connection_state === "open";
-  const isConnecting = connection?.connection_state === "connecting";
+  const connectionState = connection?.connection_state ?? "close";
+  const isConnected = connectionState === "open";
+  const isConnecting = connectionState === "connecting";
+  const hasInstanceName = Boolean(instanceName.trim());
   const qrSrc = !isConnected ? qrImageSrc(connection) : null;
 
   if (needLogin) {
@@ -287,9 +333,9 @@ export function WhatsAppPage() {
                 </p>
               </div>
               <span
-                className={`rounded-full px-3 py-1 text-xs font-semibold ${connectionBadgeClass(connection?.connection_state)}`}
+                className={`rounded-full px-3 py-1 text-xs font-semibold ${connectionBadgeClass(connectionState)}`}
               >
-                {connectionLabel(connection?.connection_state)}
+                {connectionLabel(connectionState)}
               </span>
             </div>
 
@@ -313,25 +359,35 @@ export function WhatsAppPage() {
                   <p className="text-sm text-gray-600">
                     Instância: <span className="font-mono">{connection?.instance_name}</span>
                   </p>
-                  {connection?.phone_number && (
+                  {formatPhone(connection?.phone_number) && (
                     <p className="text-sm text-gray-600">
-                      Número: <span className="font-mono">+{connection.phone_number}</span>
+                      Número: <span className="font-mono">{formatPhone(connection?.phone_number)}</span>
                     </p>
                   )}
                   {connection?.webhook_ok && (
                     <p className="mt-1 text-xs text-emerald-700">Webhook do agente configurado automaticamente.</p>
                   )}
                 </div>
-                <button
-                  type="button"
-                  onClick={handleConnect}
-                  disabled={connecting || !evolutionConfigured}
-                  className="ml-auto rounded-lg border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-white disabled:opacity-60"
-                >
-                  Reconectar
-                </button>
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleDisconnect}
+                    disabled={disconnecting || !evolutionConfigured}
+                    className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-60"
+                  >
+                    {disconnecting ? "Desconectando…" : "Desconectar"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteInstance}
+                    disabled={deleting}
+                    className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+                  >
+                    {deleting ? "Excluindo…" : "Excluir"}
+                  </button>
+                </div>
               </div>
-            ) : (
+            ) : isConnecting ? (
               <div className="grid gap-6 md:grid-cols-[1fr_auto]">
                 <div className="space-y-4">
                   <label className="block text-sm">
@@ -341,7 +397,7 @@ export function WhatsAppPage() {
                       value={instanceName}
                       onChange={(e) => setInstanceName(e.target.value)}
                       placeholder="ex.: Agente"
-                      disabled={isConnecting && Boolean(connection?.instance_name)}
+                      disabled={hasInstanceName}
                     />
                     <span className="mt-1 block text-xs text-gray-500">
                       Letras, números, hífen e underscore. Ex.: Agente, maquina-vendas
@@ -374,6 +430,93 @@ export function WhatsAppPage() {
                       O código expira em ~30 segundos; use &quot;Novo QR&quot; se precisar.
                     </p>
                   )}
+                </div>
+
+                {qrSrc && (
+                  <div className="flex flex-col items-center justify-center rounded-xl border border-gray-200 bg-white p-4">
+                    <img src={qrSrc} alt="QR Code WhatsApp" className="h-[280px] w-[280px]" />
+                    {connection?.pairing_code && (
+                      <p className="mt-3 text-center text-sm text-gray-600">
+                        Código de pareamento:{" "}
+                        <span className="font-mono font-semibold">{connection.pairing_code}</span>
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : hasInstanceName ? (
+              <div className="flex flex-wrap items-center gap-4 rounded-xl border border-amber-200 bg-amber-50/50 p-4">
+                {connection?.profile_picture_url ? (
+                  <img
+                    src={connection.profile_picture_url}
+                    alt=""
+                    className="h-14 w-14 rounded-full border border-amber-200 object-cover"
+                  />
+                ) : (
+                  <div className="flex h-14 w-14 items-center justify-center rounded-full bg-amber-100 text-xl font-bold text-amber-700">
+                    WA
+                  </div>
+                )}
+                <div>
+                  <p className="font-semibold text-gray-900">
+                    {connection?.profile_name ?? connection?.instance_name ?? "WhatsApp desconectado"}
+                  </p>
+                  <p className="text-sm text-gray-600">
+                    Instância: <span className="font-mono">{connection?.instance_name ?? instanceName}</span>
+                  </p>
+                  {formatPhone(connection?.phone_number) && (
+                    <p className="text-sm text-gray-600">
+                      Número: <span className="font-mono">{formatPhone(connection?.phone_number)}</span>
+                    </p>
+                  )}
+                  <p className="mt-1 text-xs text-amber-800">Instância desconectada. Clique em Reconectar para gerar um novo QR.</p>
+                </div>
+                <div className="ml-auto flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleConnect}
+                    disabled={connecting || !evolutionConfigured}
+                    className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                  >
+                    {connecting ? "Gerando QR…" : "Reconectar"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDeleteInstance}
+                    disabled={deleting}
+                    className="rounded-lg border border-red-200 px-3 py-2 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60"
+                  >
+                    {deleting ? "Excluindo…" : "Excluir"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-6 md:grid-cols-[1fr_auto]">
+                <div className="space-y-4">
+                  <label className="block text-sm">
+                    <span className="font-medium text-gray-700">Nome da instância</span>
+                    <input
+                      className="mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm md:max-w-sm"
+                      value={instanceName}
+                      onChange={(e) => setInstanceName(e.target.value)}
+                      placeholder="ex.: Agente"
+                      disabled={false}
+                    />
+                    <span className="mt-1 block text-xs text-gray-500">
+                      Letras, números, hífen e underscore. Ex.: Agente, maquina-vendas
+                    </span>
+                  </label>
+
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={handleConnect}
+                      disabled={connecting || !evolutionConfigured || !instanceName.trim()}
+                      className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+                    >
+                      {connecting ? "Gerando QR…" : "Gerar QR Code"}
+                    </button>
+                  </div>
                 </div>
 
                 {qrSrc && (

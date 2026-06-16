@@ -406,6 +406,16 @@ export const api = {
       fetchJson<WhatsappConnectionRes>(
         `/api/agentes/whatsapp/connection${refreshQr ? "?refresh_qr=1" : ""}`
       ),
+    disconnectWhatsapp: () =>
+      fetchJson<{ ok: boolean; error?: string; message?: string }>(
+        "/api/agentes/whatsapp/disconnect",
+        { method: "POST", body: {} }
+      ),
+    deleteWhatsappInstance: () =>
+      fetchJson<{ ok: boolean; deleted?: boolean; error?: string; message?: string }>(
+        "/api/agentes/whatsapp/instance",
+        { method: "DELETE" }
+      ),
     syncWhatsappWebhook: () =>
       fetchJson<{
         ok: boolean;
