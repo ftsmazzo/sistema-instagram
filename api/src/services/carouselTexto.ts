@@ -2,6 +2,11 @@ import sharp from "sharp";
 import { uploadMedia, isStorageConfigured } from "./storage.js";
 import { toInstagramFeedImage } from "./instagramImage.js";
 import type { PostadorOverlayStyle } from "./postadorNiches.js";
+import {
+  buildCarouselTemplateExtras,
+  capaFontSize,
+  type CarouselTemplateOptions,
+} from "./carouselTemplates.js";
 
 const INSTAGRAM_MAX_SIDE = 1080;
 
@@ -37,14 +42,23 @@ function escapeXml(t: string): string {
     .replace(/'/g, "&apos;");
 }
 
-/**
- * Overlay premium para headline em posts Instagram — gradiente suave na base,
- * linha accent fina e tipografia limpa (sem barra vertical sobre o texto).
- */
+async function fetchLogoLayer(logoUrl: string, W: number): Promise<Buffer | null> {
+  try {
+    const res = await fetch(logoUrl);
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    const logoW = Math.round(W * 0.13);
+    return sharp(buf).resize(logoW, undefined, { fit: "inside" }).png().toBuffer();
+  } catch {
+    return null;
+  }
+}
+
 async function addTextToImage(
   imageUrl: string,
   text: string,
-  style: PostadorOverlayStyle = DEFAULT_OVERLAY
+  style: PostadorOverlayStyle = DEFAULT_OVERLAY,
+  templateOpts?: CarouselTemplateOptions
 ): Promise<string> {
   if (!isStorageConfigured()) {
     throw new Error("Configure um armazenamento para salvar as imagens com texto.");
@@ -59,10 +73,16 @@ async function addTextToImage(
   const W = meta.width ?? INSTAGRAM_MAX_SIDE;
   const H = meta.height ?? INSTAGRAM_MAX_SIDE;
 
-  let fontSize = 48;
+  const tpl = templateOpts?.template ?? "minimal";
+  const slideIdx = templateOpts?.slideIndex ?? 0;
+  const capaFs = capaFontSize(text, tpl, slideIdx);
+
+  let fontSize = capaFs || 48;
   const maxChars = text.length > 60 ? 22 : text.length > 30 ? 24 : 26;
-  if (text.length > 50) fontSize = 42;
-  if (text.length > 80) fontSize = 34;
+  if (!capaFs) {
+    if (text.length > 50) fontSize = 42;
+    if (text.length > 80) fontSize = 34;
+  }
 
   const lines = wrapText(text, maxChars).slice(0, 3);
   if (lines.length === 3 && wrapText(text, maxChars).length > 3) {
@@ -70,10 +90,10 @@ async function addTextToImage(
   }
 
   const lineH = fontSize * 1.35;
+  const panelPad = capaFs ? 72 : 56;
   const textBlockH = lines.length * lineH;
-  const panelPad = 56;
   const panelH = textBlockH + panelPad;
-  const panelY = H - panelH;
+  const panelY = tpl === "capa" && slideIdx === 0 ? H - panelH - 24 : H - panelH;
   const accentH = 3;
 
   const startY = panelY + panelPad / 2 + fontSize * 0.55;
@@ -94,6 +114,10 @@ async function addTextToImage(
     })
     .join("\n");
 
+  const templateExtras = templateOpts
+    ? buildCarouselTemplateExtras(W, H, style, templateOpts)
+    : "";
+
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">
   <defs>
     <linearGradient id="panelGrad" x1="0" y1="0" x2="0" y2="1">
@@ -108,29 +132,41 @@ async function addTextToImage(
     </linearGradient>
   </defs>
 
+  ${templateExtras}
   <rect x="0" y="${panelY - 40}" width="${W}" height="${panelH + 40}" fill="url(#panelGrad)"/>
   <rect x="${W * 0.08}" y="${panelY}" width="${W * 0.84}" height="${accentH}" fill="url(#accentGrad)" rx="1.5"/>
-
   ${svgLines}
 </svg>`;
 
   const overlay = Buffer.from(svg);
   const rasterized = await sharp(overlay).resize(W, H).toBuffer();
 
-  const final = await sharp(base)
-    .composite([{ input: rasterized, top: 0, left: 0 }])
-    .jpeg({ quality: 95 })
-    .toBuffer();
+  const composites: sharp.OverlayOptions[] = [{ input: rasterized, top: 0, left: 0 }];
+  const logoUrl = templateOpts?.logoUrl?.trim();
+  if (logoUrl) {
+    const logo = await fetchLogoLayer(logoUrl, W);
+    if (logo) composites.push({ input: logo, top: Math.round(H * 0.035), left: W - Math.round(W * 0.17) });
+  }
 
+  const final = await sharp(base).composite(composites).jpeg({ quality: 95 }).toBuffer();
   return uploadMedia(final, "image/jpeg", ".jpg");
 }
+
+export type CarrosselOverlayOptions = {
+  style?: PostadorOverlayStyle;
+  slideTemplate?: CarouselTemplateOptions["template"];
+  logoUrl?: string;
+};
 
 export async function adicionarTextoCarrossel(
   imageUrls: string[],
   texts: string[],
-  style?: PostadorOverlayStyle
+  style?: PostadorOverlayStyle,
+  overlayOpts?: CarrosselOverlayOptions
 ): Promise<string[]> {
   const overlayStyle = style ?? DEFAULT_OVERLAY;
+  const slideTemplate = overlayOpts?.slideTemplate ?? "numerado";
+  const logoUrl = overlayOpts?.logoUrl;
   const results: string[] = [];
   for (let i = 0; i < imageUrls.length; i++) {
     const url = imageUrls[i];
@@ -139,7 +175,12 @@ export async function adicionarTextoCarrossel(
       results.push(url);
       continue;
     }
-    const newUrl = await addTextToImage(url, text, overlayStyle);
+    const newUrl = await addTextToImage(url, text, overlayStyle, {
+      template: slideTemplate,
+      slideIndex: i,
+      totalSlides: imageUrls.length,
+      logoUrl,
+    });
     results.push(newUrl);
   }
   return results;

@@ -142,6 +142,7 @@ export type GerarCaptionOptions = {
   segmento?: string | null;
   marcaNome?: string | null;
   imageMode?: PostadorImageMode | null;
+  brandKit?: import("./postadorBrand.js").PostadorBrandKit | null;
 };
 
 function captionContextFromOptions(options?: GerarCaptionOptions): PostadorCaptionContext {
@@ -150,6 +151,7 @@ function captionContextFromOptions(options?: GerarCaptionOptions): PostadorCapti
     templateKey: options?.templateKey,
     segmento: options?.segmento,
     marcaNome: options?.marcaNome,
+    brandKit: options?.brandKit ?? undefined,
   });
 }
 

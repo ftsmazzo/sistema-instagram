@@ -94,6 +94,15 @@ export const DEFAULT_AGENDA_CONFIG: AgendaConfigRes = {
   duracao_minutos: 60,
 };
 
+/** Brand kit do Postador (paleta + logo). */
+export type PostadorBrandKitRes = {
+  cor_primaria: string;
+  cor_secundaria: string;
+  cor_destaque: string;
+  logo_url?: string;
+  usar_logo_em_posts?: boolean;
+};
+
 /** Perfil da empresa (workspace + automações). */
 export type EmpresaPerfilRes = {
   nome: string;
@@ -108,6 +117,7 @@ export type EmpresaPerfilRes = {
   agenda_config: AgendaConfigRes;
   criterios_qualificacao: string;
   agenda_local: string;
+  postador_brand?: PostadorBrandKitRes;
 };
 
 export type Config = {
@@ -239,6 +249,7 @@ export type PostadorNicheParams = {
   segmento?: string;
   marca_nome?: string;
   image_mode?: "criativo" | "produto";
+  slide_template?: "minimal" | "numerado" | "capa";
 };
 
 export type PostadorNicheTemplateRes = {
@@ -434,6 +445,11 @@ export const api = {
       }>("/api/postador/gerar-carrossel", {
         method: "POST",
         body: { ...body, provider: body.provider ?? "gemini" },
+      }),
+    compositarProduto: (body: { background_url: string; product_url: string; product_scale?: number }) =>
+      fetchJson<{ media_url: string }>("/api/postador/compositar-produto", {
+        method: "POST",
+        body,
       }),
     getVideoProviders: () =>
       fetchJson<{

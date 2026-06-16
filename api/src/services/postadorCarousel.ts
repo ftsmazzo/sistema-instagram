@@ -1,6 +1,8 @@
 import { gerarImagemComIA, type ImageGenProvider } from "./imageGen.js";
 import { adicionarTextoCarrossel } from "./carouselTexto.js";
 import { enriquecerPromptImagem, gerarIngredientesCarrossel, type GerarCaptionOptions } from "./caption.js";
+import type { PostadorBrandKit } from "./postadorBrand.js";
+import type { PostadorSlideTemplate } from "./carouselTemplates.js";
 import {
   resolveCaptionContext,
   buildCarouselSlideBrief,
@@ -28,12 +30,14 @@ function custoPorSlide(provider: ImageGenProvider): number {
 }
 
 /**
- * Fase 2 — ingredientes → N imagens criativas → moldura opcional → legenda curta.
+ * Fase 2/3 — ingredientes → N imagens criativas → template visual + brand kit → legenda.
  */
 export async function gerarCarrosselCompleto(args: {
   brief: string;
   provider?: ImageGenProvider;
   aplicarMoldura?: boolean;
+  slide_template?: PostadorSlideTemplate;
+  brandKit?: PostadorBrandKit | null;
   options?: GerarCaptionOptions;
 }): Promise<GerarCarrosselResult> {
   const brief = args.brief.trim();
@@ -41,18 +45,20 @@ export async function gerarCarrosselCompleto(args: {
 
   const provider: ImageGenProvider = args.provider === "openai" ? "openai" : "gemini";
   const aplicarMoldura = args.aplicarMoldura !== false;
+  const slideTemplate = args.slide_template ?? "capa";
   const ctx = resolveCaptionContext({
     nicheId: args.options?.nicheId,
     templateKey: args.options?.templateKey,
     segmento: args.options?.segmento,
     marcaNome: args.options?.marcaNome,
+    brandKit: args.brandKit ?? args.options?.brandKit ?? undefined,
   });
 
   if (ctx.template.formato !== "carrossel" || ctx.template.slides < 2) {
     throw new Error("O template selecionado não é um carrossel multi-slide. Escolha um template de carrossel no passo Nicho.");
   }
 
-  const ingredientes = await gerarIngredientesCarrossel(brief, args.options);
+  const ingredientes = await gerarIngredientesCarrossel(brief, { ...args.options, brandKit: ctx.brandKit });
   const slides = ingredientes.slides ?? [];
   if (slides.length < 2) {
     throw new Error("A IA não retornou slides suficientes para o carrossel.");
@@ -69,7 +75,7 @@ export async function gerarCarrosselCompleto(args: {
     try {
       imgPrompt = await enriquecerPromptImagem(slideBrief, ctx, args.options);
     } catch {
-      /* fallback brief estruturado */
+      /* fallback */
     }
     const url = await gerarImagemComIA(imgPrompt, provider);
     imageUrls.push(url);
@@ -79,7 +85,12 @@ export async function gerarCarrosselCompleto(args: {
   let overlayApplied = false;
   if (aplicarMoldura && slideTexts.some((t) => t.length > 0)) {
     const style = overlayStyleFromContext(ctx);
-    finalUrls = await adicionarTextoCarrossel(imageUrls, slideTexts, style);
+    const logoUrl =
+      ctx.brandKit?.usar_logo_em_posts && ctx.brandKit.logo_url ? ctx.brandKit.logo_url : undefined;
+    finalUrls = await adicionarTextoCarrossel(imageUrls, slideTexts, style, {
+      slideTemplate,
+      logoUrl,
+    });
     overlayApplied = true;
   }
 

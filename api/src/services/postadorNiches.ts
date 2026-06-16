@@ -3,6 +3,9 @@
  * Cada organização escolhe (ou herda do segmento) um nicho na UI.
  */
 
+import type { PostadorBrandKit } from "./postadorBrand.js";
+import { brandKitToOverlayStyle, brandPaletaString } from "./postadorBrand.js";
+
 export type PostadorFormato = "feed" | "carrossel" | "reels" | "story";
 
 export type PostadorTemplateId =
@@ -364,6 +367,7 @@ export type PostadorCaptionContext = {
   template: PostadorTemplate;
   marcaNome?: string;
   segmento?: string;
+  brandKit?: PostadorBrandKit;
 };
 
 const VALID_NICHE_IDS = new Set<string>(POSTADOR_NICHES.map((p) => p.id));
@@ -395,6 +399,7 @@ export function resolveCaptionContext(args: {
   templateKey?: string | null;
   segmento?: string | null;
   marcaNome?: string | null;
+  brandKit?: PostadorBrandKit | null;
 }): PostadorCaptionContext {
   const suggested = args.segmento?.trim()
     ? suggestNicheFromSegmento(args.segmento)
@@ -406,6 +411,7 @@ export function resolveCaptionContext(args: {
     template,
     marcaNome: args.marcaNome?.trim() || undefined,
     segmento: args.segmento?.trim() || undefined,
+    brandKit: args.brandKit ?? undefined,
   };
 }
 
@@ -569,7 +575,7 @@ export function buildImagePrompt(
   mode: PostadorImageMode = "criativo"
 ): string {
   const pack = getNichePack(ctx.nicheId);
-  const paleta = pack.paleta_sugerida.join(", ");
+  const paleta = ctx.brandKit ? brandPaletaString(ctx.brandKit) : pack.paleta_sugerida.join(", ");
   const useCreative = mode === "criativo";
   const imageBase =
     useCreative && CREATIVE_IMAGE_BASE[ctx.nicheId]
@@ -603,7 +609,7 @@ export function buildImageEnrichSystemPrompt(
   mode: PostadorImageMode = "criativo"
 ): string {
   const pack = getNichePack(ctx.nicheId);
-  const paleta = pack.paleta_sugerida.join(", ");
+  const paleta = ctx.brandKit ? brandPaletaString(ctx.brandKit) : pack.paleta_sugerida.join(", ");
   const creativeBlock =
     mode === "criativo"
       ? `
@@ -662,6 +668,7 @@ const OVERLAY_BY_NICHE: Record<PostadorNicheId, PostadorOverlayStyle> = {
 };
 
 export function overlayStyleFromContext(ctx: PostadorCaptionContext): PostadorOverlayStyle {
+  if (ctx.brandKit) return brandKitToOverlayStyle(ctx.brandKit);
   return OVERLAY_BY_NICHE[ctx.nicheId] ?? OVERLAY_BY_NICHE.servicos_b2b;
 }
 

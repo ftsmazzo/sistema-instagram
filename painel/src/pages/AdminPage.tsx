@@ -36,6 +36,13 @@ function emptyEmpresa(): EmpresaPerfilRes {
     agenda_config: { ...DEFAULT_AGENDA_CONFIG },
     criterios_qualificacao: "",
     agenda_local: "",
+    postador_brand: {
+      cor_primaria: "#111827",
+      cor_secundaria: "#6b7280",
+      cor_destaque: "#d4af37",
+      logo_url: "",
+      usar_logo_em_posts: false,
+    },
   };
 }
 
@@ -46,6 +53,7 @@ function mergeEmpresa(e?: Partial<EmpresaPerfilRes>): EmpresaPerfilRes {
     ...base,
     ...e,
     agenda_config: { ...DEFAULT_AGENDA_CONFIG, ...e.agenda_config },
+    postador_brand: { ...base.postador_brand!, ...e.postador_brand },
   };
 }
 
@@ -374,6 +382,84 @@ export function AdminPage() {
             className="input-field"
             placeholder="Ex.: clínica, e-commerce, consultoria, serviços"
           />
+
+          <div className="mt-6 rounded-lg border border-indigo-200 bg-indigo-50/50 p-4 space-y-3">
+            <p className="text-sm font-semibold text-indigo-900">Brand kit — Postador</p>
+            <p className="text-xs text-indigo-800">
+              Paleta e logo usados em molduras, carrossel e composição produto + fundo criativo.
+            </p>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label className="label-field text-xs">Cor primária</label>
+                <input
+                  type="color"
+                  value={empresa.postador_brand?.cor_primaria ?? "#111827"}
+                  onChange={(e) =>
+                    setEmpresa((x) => ({
+                      ...x,
+                      postador_brand: { ...x.postador_brand!, cor_primaria: e.target.value },
+                    }))
+                  }
+                  className="h-10 w-full rounded border border-gray-300 cursor-pointer"
+                />
+              </div>
+              <div>
+                <label className="label-field text-xs">Cor secundária</label>
+                <input
+                  type="color"
+                  value={empresa.postador_brand?.cor_secundaria ?? "#6b7280"}
+                  onChange={(e) =>
+                    setEmpresa((x) => ({
+                      ...x,
+                      postador_brand: { ...x.postador_brand!, cor_secundaria: e.target.value },
+                    }))
+                  }
+                  className="h-10 w-full rounded border border-gray-300 cursor-pointer"
+                />
+              </div>
+              <div>
+                <label className="label-field text-xs">Cor destaque</label>
+                <input
+                  type="color"
+                  value={empresa.postador_brand?.cor_destaque ?? "#d4af37"}
+                  onChange={(e) =>
+                    setEmpresa((x) => ({
+                      ...x,
+                      postador_brand: { ...x.postador_brand!, cor_destaque: e.target.value },
+                    }))
+                  }
+                  className="h-10 w-full rounded border border-gray-300 cursor-pointer"
+                />
+              </div>
+            </div>
+            <label className="label-field">URL do logo (PNG transparente)</label>
+            <input
+              type="url"
+              value={empresa.postador_brand?.logo_url ?? ""}
+              onChange={(e) =>
+                setEmpresa((x) => ({
+                  ...x,
+                  postador_brand: { ...x.postador_brand!, logo_url: e.target.value },
+                }))
+              }
+              className="input-field"
+              placeholder="https://.../logo.png (use upload no Postador e cole a URL)"
+            />
+            <label className="inline-flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={empresa.postador_brand?.usar_logo_em_posts ?? false}
+                onChange={(e) =>
+                  setEmpresa((x) => ({
+                    ...x,
+                    postador_brand: { ...x.postador_brand!, usar_logo_em_posts: e.target.checked },
+                  }))
+                }
+              />
+              Incluir logo nos criativos (canto superior)
+            </label>
+          </div>
+
           <label className="label-field">Cidade / região de atuação</label>
           <input
             type="text"

@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyPluginAsync } from "fastify";
+import type { FastifyInstance, FastifyPluginAsync, FastifyRequest } from "fastify";
 import { createReadStream } from "fs";
 import { stat } from "fs/promises";
 import { join } from "path";
@@ -11,6 +11,9 @@ import { gerarImagemComIA } from "../services/imageGen.js";
 import { gerarVideoComIA, VIDEO_PROVIDERS_INFO, type VideoGenProvider, type VideoDuration } from "../services/videoGen.js";
 import { adicionarTextoCarrossel } from "../services/carouselTexto.js";
 import { gerarCarrosselCompleto } from "../services/postadorCarousel.js";
+import { parsePostadorBrandKit } from "../services/postadorBrand.js";
+import { compositarProdutoNoFundo } from "../services/postadorComposite.js";
+import type { PostadorSlideTemplate } from "../services/carouselTemplates.js";
 import {
   listNichesForApi,
   suggestNicheFromSegmento,
@@ -54,9 +57,18 @@ type PostadorIaBody = {
   segmento?: string;
   marca_nome?: string;
   image_mode?: string;
+  slide_template?: string;
 };
 
-function captionOptionsFromBody(body: PostadorIaBody): GerarCaptionOptions {
+async function loadBrandKitFromRequest(app: FastifyInstance, request: FastifyRequest) {
+  const config = await resolveConfigStore(app, request);
+  return parsePostadorBrandKit(config.empresa.postador_brand);
+}
+
+function captionOptionsFromBody(
+  body: PostadorIaBody,
+  brandKit?: ReturnType<typeof parsePostadorBrandKit>
+): GerarCaptionOptions {
   const provider = body.provider?.trim();
   const providerNorm: GerarCaptionOptions["provider"] =
     provider === "claude" ? "claude" : provider === "openai" ? "openai" : undefined;
@@ -65,6 +77,7 @@ function captionOptionsFromBody(body: PostadorIaBody): GerarCaptionOptions {
     templateKey: body.template_id,
     segmento: body.segmento,
     marcaNome: body.marca_nome,
+    brandKit: brandKit ?? undefined,
   });
   return {
     provider: providerNorm,
@@ -74,7 +87,22 @@ function captionOptionsFromBody(body: PostadorIaBody): GerarCaptionOptions {
     segmento: body.segmento?.trim() || undefined,
     marcaNome: body.marca_nome?.trim() || undefined,
     imageMode: resolveImageMode(body.image_mode, ctx.nicheId),
+    brandKit: brandKit ?? undefined,
   };
+}
+
+function parseSlideTemplate(raw?: string): PostadorSlideTemplate {
+  if (raw === "minimal" || raw === "numerado" || raw === "capa") return raw;
+  return "capa";
+}
+
+async function iaOptsFromRequest(
+  app: FastifyInstance,
+  request: FastifyRequest,
+  body: PostadorIaBody
+): Promise<GerarCaptionOptions> {
+  const brand = await loadBrandKitFromRequest(app, request);
+  return captionOptionsFromBody(body, brand);
 }
 
 async function recordCrmPostagemAposPublicar(
@@ -308,7 +336,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
     const body = request.body as { caption: string } & PostadorIaBody;
     if (!body.caption) return reply.status(400).send({ error: "Caption é obrigatório." });
     try {
-      const cta = await gerarCTAImagem(body.caption, captionOptionsFromBody(body));
+      const cta = await gerarCTAImagem(body.caption, await iaOptsFromRequest(fastify, request, body));
       return reply.send({ cta });
     } catch (err) {
       return reply.status(500).send({ error: err instanceof Error ? err.message : "Erro ao gerar CTA." });
@@ -369,11 +397,13 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       ? body.image_urls.filter((u) => typeof u === "string" && u.trim())
       : [];
 
+    const brandVideo = await loadBrandKitFromRequest(fastify, request);
     const ctx = resolveCaptionContext({
       nicheId: body.niche_id,
       templateKey: body.template_id,
       segmento: body.segmento,
       marcaNome: body.marca_nome,
+      brandKit: brandVideo ?? undefined,
     });
 
     if (!prompt && provider !== "slideshow") {
@@ -387,7 +417,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
         });
       }
       try {
-        const iaOpts = captionOptionsFromBody(body);
+        const iaOpts = await iaOptsFromRequest(fastify, request, body);
         const imgMode = resolveImageMode(body.image_mode, ctx.nicheId);
         let imgPrompt = buildImagePrompt(prompt, ctx, imgMode);
         try {
@@ -405,7 +435,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
 
     if (provider === "veo" || provider === "sora") {
       try {
-        const iaOpts = captionOptionsFromBody(body);
+        const iaOpts = await iaOptsFromRequest(fastify, request, body);
         prompt = await enriquecerPromptImagem(
           `${prompt}. Vertical 9:16 Instagram Reels, cinematic motion, smooth camera, no text overlay`,
           ctx,
@@ -459,7 +489,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       segmento: body.segmento,
       marcaNome: body.marca_nome,
     });
-    const iaOpts = captionOptionsFromBody(body);
+    const iaOpts = await iaOptsFromRequest(fastify, request, body);
     const imgMode = resolveImageMode(body.image_mode, ctx.nicheId);
     let prompt = buildImagePrompt(rawPrompt || "post para Instagram", ctx, imgMode);
     if (body.enrich_prompt !== false) {
@@ -482,7 +512,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
-  // POST /api/postador/gerar-carrossel — Fase 2: ingredientes + N imagens + moldura + legenda
+  // POST /api/postador/gerar-carrossel — Fase 2/3: ingredientes + imagens + template + brand kit
   fastify.post("/gerar-carrossel", async (request, reply) => {
     const body = request.body as {
       brief?: string;
@@ -495,12 +525,15 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ error: "Campo 'brief' é obrigatório (descrição do post)." });
     }
     const provider = (body?.provider === "openai" ? "openai" : "gemini") as "openai" | "gemini";
-    const iaOpts = captionOptionsFromBody(body);
+    const brand = await loadBrandKitFromRequest(fastify, request);
+    const iaOpts = await iaOptsFromRequest(fastify, request, body);
     try {
       const result = await gerarCarrosselCompleto({
         brief,
         provider,
         aplicarMoldura: body.aplicar_moldura !== false,
+        slide_template: parseSlideTemplate(body.slide_template),
+        brandKit: brand,
         options: iaOpts,
       });
       return reply.send(result);
@@ -522,30 +555,64 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
     }
   });
 
+  // POST /api/postador/compositar-produto — foto real do produto sobre fundo criativo
+  fastify.post("/compositar-produto", async (request, reply) => {
+    const body = request.body as {
+      background_url?: string;
+      product_url?: string;
+      product_scale?: number;
+    };
+    const background_url = body?.background_url?.trim();
+    const product_url = body?.product_url?.trim();
+    if (!background_url || !product_url) {
+      return reply.status(400).send({ error: "Campos 'background_url' e 'product_url' são obrigatórios." });
+    }
+    try {
+      const brand = await loadBrandKitFromRequest(fastify, request);
+      const media_url = await compositarProdutoNoFundo({
+        background_url,
+        product_url,
+        product_scale: body.product_scale,
+        logo_url: brand?.usar_logo_em_posts ? brand.logo_url : undefined,
+      });
+      return reply.send({ media_url });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro ao compositar imagem.";
+      if (msg.includes("Cloudinary") || msg.includes("armazenamento")) {
+        return reply.status(503).send({ error: msg });
+      }
+      fastify.log.error({ err }, "compositar-produto");
+      return reply.status(500).send({ error: msg });
+    }
+  });
+
   // POST /api/postador/carousel-adicionar-texto — overlay de texto em cada imagem usando template SVG
   fastify.post("/carousel-adicionar-texto", async (request, reply) => {
     const body = request.body as {
       image_urls?: string[];
       texts?: string[];
-      niche_id?: string;
-      template_id?: string;
-      segmento?: string;
-      marca_nome?: string;
-    };
+      slide_template?: string;
+    } & PostadorIaBody;
     const imageUrls = Array.isArray(body?.image_urls) ? body.image_urls.filter((u) => typeof u === "string" && u.trim()) : [];
     const texts = Array.isArray(body?.texts) ? body.texts.map((t) => (typeof t === "string" ? t : "")) : [];
     if (!imageUrls.length) {
       return reply.status(400).send({ error: "Campo 'image_urls' (array) é obrigatório." });
     }
     try {
+      const brand = await loadBrandKitFromRequest(fastify, request);
       const ctx = resolveCaptionContext({
         nicheId: body.niche_id,
         templateKey: body.template_id,
         segmento: body.segmento,
         marcaNome: body.marca_nome,
+        brandKit: brand ?? undefined,
       });
       const style = overlayStyleFromContext(ctx);
-      const newUrls = await adicionarTextoCarrossel(imageUrls, texts, style);
+      const logoUrl = brand?.usar_logo_em_posts && brand.logo_url ? brand.logo_url : undefined;
+      const newUrls = await adicionarTextoCarrossel(imageUrls, texts, style, {
+        slideTemplate: parseSlideTemplate(body.slide_template),
+        logoUrl,
+      });
       return reply.send({ image_urls: newUrls });
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao adicionar texto nas imagens.";
@@ -565,7 +632,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
       return reply.status(400).send({ error: "URL inválida. Use um link completo (ex.: https://loja.com/produto)." });
     }
-    const iaOpts = captionOptionsFromBody(body);
+    const iaOpts = await iaOptsFromRequest(fastify, request, body);
 
     try {
       const dados = await rasparPaginaImovel(url);
@@ -715,14 +782,18 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       return reply.status(400).send({ error: "Campo 'descricao' é obrigatório" });
     }
 
-    const iaOpts = captionOptionsFromBody({
-      provider,
-      model,
-      niche_id: nicheId,
-      template_id: templateId,
-      segmento,
-      marca_nome: marcaNome,
-    });
+    const brandCaption = await loadBrandKitFromRequest(fastify, request);
+    const iaOpts = captionOptionsFromBody(
+      {
+        provider,
+        model,
+        niche_id: nicheId,
+        template_id: templateId,
+        segmento,
+        marca_nome: marcaNome,
+      },
+      brandCaption
+    );
     try {
       const captionTipo =
         mediaType === "CAROUSEL" ? "CAROUSEL" : mediaType === "REELS" ? "REELS" : "IMAGE";
@@ -764,7 +835,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
     }
 
     try {
-      const caption = await refazerCaptionIA(captionAtual, feedback, captionOptionsFromBody(body));
+      const caption = await refazerCaptionIA(captionAtual, feedback, await iaOptsFromRequest(fastify, request, body));
       return reply.send({
         caption,
         media_url: undefined,

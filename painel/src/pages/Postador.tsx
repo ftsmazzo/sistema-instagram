@@ -93,6 +93,10 @@ export function Postador() {
   const [templateKey, setTemplateKey] = useState("");
   const [segmento, setSegmento] = useState("");
   const [marcaNome, setMarcaNome] = useState("");
+  const [slideTemplate, setSlideTemplate] = useState<"minimal" | "numerado" | "capa">("capa");
+  const [brandKitAtivo, setBrandKitAtivo] = useState(false);
+  const [arquivoProduto, setArquivoProduto] = useState<File | null>(null);
+  const productFileRef = useRef<HTMLInputElement>(null);
 
   const modelsList = provider === "claude" ? MODELS_CLAUDE : MODELS_OPENAI;
   const currentModelInList = modelsList.some((m) => m.id === model);
@@ -109,6 +113,7 @@ export function Postador() {
     segmento: segmento || undefined,
     marca_nome: marcaNome || undefined,
     image_mode: modoImagemIA,
+    slide_template: isCarrosselTemplate ? slideTemplate : undefined,
   });
 
   useEffect(() => {
@@ -140,6 +145,16 @@ export function Postador() {
       const marca = (c.empresa?.nome_fantasia || c.empresa?.nome || "").trim();
       setSegmento(seg);
       setMarcaNome(marca);
+      const brand = c.empresa?.postador_brand;
+      setBrandKitAtivo(
+        Boolean(
+          brand &&
+            (brand.logo_url?.trim() ||
+              brand.usar_logo_em_posts ||
+              brand.cor_primaria !== "#111827" ||
+              brand.cor_destaque !== "#d4af37")
+        )
+      );
       api.postador
         .getNiches(seg || undefined)
         .then((res) => {
@@ -478,6 +493,37 @@ export function Postador() {
       setPreviewUrls([newUrl]);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao aplicar moldura.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCompositarProduto = async () => {
+    const bg = mediaUrl ?? mediaUrls[0] ?? previewUrls[0];
+    if (!bg) {
+      setError("Gere ou envie um fundo criativo antes de compositar.");
+      return;
+    }
+    if (!arquivoProduto) {
+      setError("Envie a foto real do produto (PNG/JPG com fundo neutro ou recortado).");
+      return;
+    }
+    setError(null);
+    setLoading(true);
+    try {
+      const up = await api.postador.uploadMidia(arquivoProduto);
+      const res = await api.postador.compositarProduto({
+        background_url: bg,
+        product_url: up.media_url,
+      });
+      setMediaUrl(res.media_url);
+      setMediaUrls([res.media_url]);
+      setPreviewUrls([res.media_url]);
+      setMediaType("IMAGE");
+      setArquivoProduto(null);
+      if (productFileRef.current) productFileRef.current.value = "";
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Falha ao compositar produto.");
     } finally {
       setLoading(false);
     }
@@ -986,9 +1032,27 @@ export function Postador() {
                   )}
 
                   {isCarrosselTemplate && criarMidiaIA && tipoMidiaIA === "imagem" && (
-                    <p className="text-xs text-indigo-800 bg-indigo-50 border border-indigo-200 rounded-md px-3 py-2">
-                      Template de carrossel ({templateSelecionado?.slides} slides): a IA planeja roteiro visual + gera cada slide em modo criativo + aplica moldura com headline. Legenda curta vem pronta na revisão. Tempo estimado: 1–3 min.
-                    </p>
+                    <>
+                      <p className="text-xs text-indigo-800 bg-indigo-50 border border-indigo-200 rounded-md px-3 py-2">
+                        Template de carrossel ({templateSelecionado?.slides} slides): a IA planeja roteiro visual + gera cada slide em modo criativo + aplica moldura com headline. Legenda curta vem pronta na revisão. Tempo estimado: 1–3 min.
+                      </p>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Estilo visual dos slides</label>
+                        <select
+                          value={slideTemplate}
+                          onChange={(e) => setSlideTemplate(e.target.value as "minimal" | "numerado" | "capa")}
+                          className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+                          disabled={loading}
+                        >
+                          <option value="capa">Capa — destaque no slide 1</option>
+                          <option value="numerado">Numerado — badge 1/N em cada slide</option>
+                          <option value="minimal">Minimal — só headline</option>
+                        </select>
+                        {brandKitAtivo && (
+                          <p className="mt-1 text-xs text-emerald-700">Brand kit ativo — paleta e logo do Admin serão aplicados.</p>
+                        )}
+                      </div>
+                    </>
                   )}
 
                   <button
@@ -1085,6 +1149,12 @@ export function Postador() {
               >
                 Alterar conta
               </button>
+            </div>
+          )}
+          {brandKitAtivo && (
+            <div className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-800">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              Brand kit ativo — molduras usam sua paleta
             </div>
           )}
           <div>
@@ -1215,6 +1285,31 @@ export function Postador() {
                     className="px-3 py-1.5 text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 disabled:opacity-50"
                   >
                     {loading ? "Aplicando..." : "Aplicar moldura na imagem"}
+                  </button>
+                </div>
+                <div className="mt-3 p-3 bg-amber-50 rounded-lg border border-amber-200 space-y-3">
+                  <p className="text-sm font-medium text-amber-900">Compositar produto real (Fase 3)</p>
+                  <p className="text-xs text-amber-800">
+                    Use o fundo criativo acima + foto real do produto (recortada ou fundo branco). A API sobrepõe o produto com sombra e logo do brand kit.
+                  </p>
+                  <input
+                    ref={productFileRef}
+                    type="file"
+                    accept="image/*"
+                    className="block w-full text-sm text-gray-600 file:mr-3 file:rounded-md file:border-0 file:bg-amber-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-amber-900"
+                    onChange={(e) => setArquivoProduto(e.target.files?.[0] ?? null)}
+                    disabled={loading}
+                  />
+                  {arquivoProduto && (
+                    <p className="text-xs text-gray-600">Produto: {arquivoProduto.name}</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleCompositarProduto}
+                    disabled={loading || !arquivoProduto}
+                    className="px-3 py-1.5 text-sm font-medium rounded-md text-amber-900 bg-amber-100 hover:bg-amber-200 border border-amber-300 disabled:opacity-50"
+                  >
+                    {loading ? "Compositando..." : "Compositar produto no fundo"}
                   </button>
                 </div>
               </>

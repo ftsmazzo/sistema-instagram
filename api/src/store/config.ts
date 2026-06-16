@@ -7,6 +7,7 @@ const CONFIG_PATH = join(DATA_DIR, "config.json");
 
 import type { AgendaConfig } from "../services/empresaConfigHelpers.js";
 import { DEFAULT_AGENDA_CONFIG, parseAgendaConfig } from "../services/empresaConfigHelpers.js";
+import type { PostadorBrandKit } from "../services/postadorBrand.js";
 
 export type ContaInstagram = {
   id: string;
@@ -44,6 +45,8 @@ export type EmpresaPerfil = {
   criterios_qualificacao: string;
   /** Local padrão do compromisso (endereço, link de reunião, etc.). */
   agenda_local: string;
+  /** Brand kit do Postador (paleta + logo). */
+  postador_brand?: PostadorBrandKit;
 };
 
 export type ConfigStore = {
@@ -229,6 +232,7 @@ export async function saveConfig(
     if (e.agenda_config !== undefined) emp.agenda_config = parseAgendaConfig(e.agenda_config);
     if (e.criterios_qualificacao !== undefined) emp.criterios_qualificacao = (e.criterios_qualificacao ?? "").trim();
     if (e.agenda_local !== undefined) emp.agenda_local = (e.agenda_local ?? "").trim();
+    if (e.postador_brand !== undefined) emp.postador_brand = e.postador_brand;
     current.empresa = emp;
   }
 
