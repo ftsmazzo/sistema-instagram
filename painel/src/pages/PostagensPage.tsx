@@ -42,7 +42,7 @@ function PostThumb({ mediaUrl, mediaType }: { mediaUrl: string | null; mediaType
   );
 }
 
-export function PostagensPage() {
+export function PostagensPage({ embedded = false }: { embedded?: boolean }) {
   const [postagens, setPostagens] = useState<PostagemListItemRes[]>([]);
   const [total, setTotal] = useState(0);
   const [contas, setContas] = useState<ContaInstagramRes[]>([]);
@@ -128,22 +128,13 @@ export function PostagensPage() {
 
   const semConta = contas.length === 0;
 
-  return (
-    <PageShell
-      title="Posts do Instagram"
-      description={
-        <>
-          Sincronize os posts que você já publicou no Instagram. Eles alimentam o contexto dos agentes de{" "}
-          <strong className="text-slate-700">comentário</strong>, <strong className="text-slate-700">Direct</strong> e{" "}
-          <strong className="text-slate-700">WhatsApp</strong>. Remova entradas inválidas ou posts que já foram apagados no Instagram.
-        </>
-      }
-    >
+  const body = (
+    <>
       {semConta && (
         <div className="alert-warn mb-6 text-sm">
           Nenhuma conta Instagram cadastrada.{" "}
-          <Link to="/agentes" className="font-semibold text-amber-900 underline">
-            Agentes Instagram
+          <Link to="/instagram?tab=agente" className="font-semibold text-amber-900 underline">
+            Configurar agente
           </Link>{" "}
           (token + ig_user_id) antes de sincronizar.
         </div>
@@ -229,7 +220,7 @@ export function PostagensPage() {
                       href={p.link_post}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-indigo-600 hover:text-indigo-800"
+                      className="text-brand-600 hover:text-brand-800"
                     >
                       Ver no Instagram →
                     </a>
@@ -248,6 +239,23 @@ export function PostagensPage() {
           ))}
         </ul>
       )}
+    </>
+  );
+
+  if (embedded) return body;
+
+  return (
+    <PageShell
+      title="Posts do Instagram"
+      description={
+        <>
+          Sincronize os posts que você já publicou no Instagram. Eles alimentam o contexto dos agentes de{" "}
+          <strong className="text-slate-700">comentário</strong>, <strong className="text-slate-700">Direct</strong> e{" "}
+          <strong className="text-slate-700">WhatsApp</strong>.
+        </>
+      }
+    >
+      {body}
     </PageShell>
   );
 }

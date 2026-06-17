@@ -13,32 +13,26 @@ const quickLinks = [
   {
     to: "/operacao",
     title: "Operação",
-    desc: "Funil de conversão, alertas de saúde e histórico de conversas por lead.",
-    accent: "from-sky-500 to-indigo-600",
+    desc: "CRM, follow-ups, score de leads e cadência de vendas.",
+    accent: "from-brand-500 to-emerald-600",
   },
   {
-    to: "/postagens",
-    title: "Posts Instagram",
-    desc: "Sincronize publicações do feed — contexto para os agentes venderem nos seus posts.",
-    accent: "from-violet-500 to-indigo-600",
-  },
-  {
-    to: "/agentes",
-    title: "Agentes Instagram",
-    desc: "Conta comercial, tokens Graph API e prompts de comentário e Direct.",
-    accent: "from-indigo-500 to-violet-600",
-  },
-  {
-    to: "/admin",
-    title: "Empresa",
-    desc: "Perfil da marca, qualificação de leads, agenda e link comercial.",
-    accent: "from-amber-500 to-orange-600",
+    to: "/instagram",
+    title: "Instagram",
+    desc: "Posts sincronizados e agente de comentário/Direct.",
+    accent: "from-teal-500 to-brand-600",
   },
   {
     to: "/whatsapp",
-    title: "WhatsApp & leads",
-    desc: "Conexão Evolution, agente comercial e leads capturados pelo funil.",
+    title: "WhatsApp",
+    desc: "Conexão Evolution e agente comercial no Zap.",
     accent: "from-emerald-500 to-teal-600",
+  },
+  {
+    to: "/empresa",
+    title: "Empresa",
+    desc: "Perfil, qualificação por nicho e dados comerciais.",
+    accent: "from-brand-600 to-brand-800",
   },
 ];
 
@@ -53,18 +47,23 @@ export function HomePage() {
   }, []);
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-10 sm:px-10 lg:px-12 lg:py-12 page-enter">
-      <section className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-600 via-indigo-700 to-violet-800 px-6 py-10 text-white shadow-lg sm:px-10 sm:py-12">
+    <div className="mx-auto max-w-5xl px-4 py-8 page-enter sm:px-8 lg:px-10 lg:py-10">
+      <section className="relative overflow-hidden rounded-2xl border border-brand-200/50 bg-gradient-to-br from-brand-700 via-brand-600 to-emerald-700 px-6 py-10 text-white shadow-lift sm:px-10 sm:py-12">
         <div
           className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-white/10 blur-3xl"
           aria-hidden
         />
         <div className="relative">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-indigo-200">{BRAND.parent}</p>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-100">{BRAND.parent}</p>
           <h1 className="font-display mt-2 text-4xl font-bold tracking-tight sm:text-5xl">{BRAND.name}</h1>
-          <p className="mt-2 text-lg font-medium text-indigo-100">{BRAND.tagline}</p>
-          <p className="mt-6 max-w-2xl text-base leading-relaxed text-indigo-50/95 sm:text-lg">{BRAND.headline}.</p>
-          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-indigo-100/80">{BRAND.description}</p>
+          <p className="mt-2 text-lg font-medium text-brand-50">{BRAND.tagline}</p>
+          <p className="mt-6 max-w-2xl text-base leading-relaxed text-white/95 sm:text-lg">{BRAND.headline}.</p>
+          <Link
+            to="/operacao"
+            className="mt-8 inline-flex items-center rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-brand-800 shadow-lg transition hover:bg-brand-50"
+          >
+            Ver operação comercial
+          </Link>
         </div>
       </section>
 
@@ -88,8 +87,8 @@ export function HomePage() {
         <p className="mb-4 text-sm font-semibold uppercase tracking-wider text-slate-500">Como funciona</p>
         <ol className="grid gap-4 sm:grid-cols-3">
           {funnelSteps.map(({ step, title, desc }) => (
-            <li key={step} className="card flex flex-col gap-2 border-slate-200/80">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-sm font-bold text-indigo-700">
+            <li key={step} className="card flex flex-col gap-2">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-sm font-bold text-brand-700">
                 {step}
               </span>
               <span className="font-display text-lg font-semibold text-slate-900">{title}</span>
@@ -104,14 +103,14 @@ export function HomePage() {
         <ul className="grid gap-4 sm:grid-cols-2">
           {quickLinks.map(({ to, title, desc, accent }) => (
             <li key={to}>
-              <Link to={to} className="group card flex h-full flex-col transition-shadow hover:shadow-md">
+              <Link to={to} className="group card-interactive flex h-full flex-col">
                 <div
                   className={`mb-4 h-1 w-12 rounded-full bg-gradient-to-r ${accent} transition-transform group-hover:scale-x-110`}
                   aria-hidden
                 />
-                <span className="font-display text-lg font-semibold text-slate-900 group-hover:text-indigo-700">{title}</span>
+                <span className="font-display text-lg font-semibold text-slate-900 group-hover:text-brand-700">{title}</span>
                 <span className="mt-1.5 flex-1 text-sm leading-relaxed text-slate-600">{desc}</span>
-                <span className="mt-4 inline-flex items-center text-sm font-semibold text-indigo-600">
+                <span className="mt-4 inline-flex items-center text-sm font-semibold text-brand-600">
                   Abrir
                   <span className="ml-1 transition-transform group-hover:translate-x-0.5" aria-hidden>
                     →
@@ -124,11 +123,15 @@ export function HomePage() {
       </section>
 
       <p className="mt-10 text-center text-xs text-slate-400">
-        Publique no Instagram como sempre — sincronize os posts em{" "}
-        <Link to="/postagens" className="text-indigo-600 hover:underline">
-          Posts Instagram
-        </Link>{" "}
-        para os agentes terem contexto.
+        Crie conteúdo em{" "}
+        <Link to="/postador" className="text-brand-600 hover:underline">
+          Criar post
+        </Link>
+        {" · "}
+        Sincronize o feed em{" "}
+        <Link to="/instagram" className="text-brand-600 hover:underline">
+          Instagram
+        </Link>
       </p>
     </div>
   );

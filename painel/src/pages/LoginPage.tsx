@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Link } from "react-router-dom";
 import { api, clearAuthToken, getAuthToken, setAuthToken, type AuthStatus } from "../api/client";
 import { BRAND } from "../config/brand";
 
@@ -63,121 +63,167 @@ export function LoginPage() {
   };
 
   return (
-    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-slate-900 px-4 py-12 sm:px-6">
-      <div
-        className="pointer-events-none absolute inset-0 opacity-40"
-        style={{
-          background:
-            "radial-gradient(ellipse 80% 50% at 50% -20%, rgb(99 102 241 / 0.35), transparent), radial-gradient(ellipse 60% 40% at 100% 0%, rgb(45 212 191 / 0.12), transparent)",
-        }}
-        aria-hidden
-      />
-      <div className="relative w-full max-w-md">
-        <div className="mb-8 text-center">
-          <p className="font-display text-2xl font-semibold tracking-tight text-white">{BRAND.name}</p>
-          <p className="mt-1 text-sm text-slate-400">{BRAND.tagline} · {BRAND.parent}</p>
+    <div className="flex min-h-screen">
+      {/* Painel de marca */}
+      <div className="relative hidden w-[44%] max-w-xl flex-col justify-between overflow-hidden bg-gradient-to-br from-brand-800 via-brand-700 to-emerald-800 p-10 text-white lg:flex xl:max-w-2xl xl:p-14">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-30"
+          style={{
+            background:
+              "radial-gradient(circle at 20% 80%, rgba(255,255,255,0.15), transparent 50%), radial-gradient(circle at 80% 20%, rgba(52,211,153,0.2), transparent 40%)",
+          }}
+          aria-hidden
+        />
+        <div className="relative">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-200">{BRAND.parent}</p>
+          <h1 className="font-display mt-4 text-4xl font-bold tracking-tight xl:text-5xl">{BRAND.name}</h1>
+          <p className="mt-3 text-lg font-medium text-brand-100">{BRAND.tagline}</p>
+        </div>
+        <div className="relative space-y-6">
+          <p className="text-2xl font-semibold leading-snug text-white/95">{BRAND.headline}.</p>
+          <p className="max-w-md text-sm leading-relaxed text-brand-100/90">{BRAND.description}</p>
+          <ul className="space-y-3 text-sm text-brand-50/90">
+            <li className="flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15 text-xs">1</span>
+              Comentário inteligente no post
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15 text-xs">2</span>
+              Direct qualifica e captura WhatsApp
+            </li>
+            <li className="flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/15 text-xs">3</span>
+              CRM fecha a venda 24/7
+            </li>
+          </ul>
+        </div>
+        <p className="relative text-xs text-brand-200/80">© {new Date().getFullYear()} {BRAND.parent}</p>
+      </div>
+
+      {/* Formulário */}
+      <div className="flex flex-1 flex-col items-center justify-center px-4 py-12 sm:px-8">
+        <div className="mb-8 w-full max-w-md text-center lg:hidden">
+          <p className="font-display text-2xl font-bold text-slate-900">{BRAND.name}</p>
+          <p className="mt-1 text-sm text-slate-500">{BRAND.tagline}</p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/95 p-8 shadow-lift backdrop-blur-sm">
-          {status === null && (
-            <p className="mb-6 text-center text-sm text-slate-500">Carregando opções de acesso…</p>
-          )}
+        <div className="w-full max-w-md">
+          <div className="card !p-8">
+            <h2 className="font-display text-xl font-bold text-slate-900">
+              {mode === "register" ? "Criar workspace" : "Entrar na plataforma"}
+            </h2>
+            <p className="mt-1 text-sm text-slate-500">
+              {mode === "register"
+                ? "Configure sua empresa e comece a converter leads."
+                : "Acesse sua operação comercial no Instagram."}
+            </p>
 
-          {status?.database === false && (
-            <div className="alert-error mb-6">
-              <p className="font-semibold text-red-900">Erro Crítico: Banco de Dados não configurado</p>
-              <p className="mt-1 text-sm text-red-800">
-                A plataforma exige um banco de dados PostgreSQL para funcionar. Configure a variável de ambiente{" "}
-                <code className="rounded bg-red-100 px-1 font-mono text-xs">DATABASE_URL</code> no servidor backend e reinicie.
-              </p>
-            </div>
-          )}
+            {status === null && (
+              <p className="mt-6 text-center text-sm text-slate-500">Carregando opções de acesso…</p>
+            )}
 
-          {error && <div className="alert-error mb-6">{error}</div>}
-
-          {status?.database === true && (
-            <div className="mb-6 flex rounded-xl bg-slate-100/90 p-1">
-              <button
-                type="button"
-                onClick={() => setMode("login")}
-                className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
-                  mode === "login" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                Já tenho conta
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode("register")}
-                className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
-                  mode === "register" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                Nova conta
-              </button>
-            </div>
-          )}
-
-          {status?.database === true && mode === "register" && !status.allowRegister && (
-            <div className="alert-warn mb-6 text-sm">
-              Cadastro público está desligado neste servidor (já existe pelo menos um usuário). Para permitir novos workspaces,
-              defina <code className="rounded bg-amber-100/80 px-1 text-xs">ALLOW_OPEN_REGISTER=true</code> nas variáveis de ambiente
-              da API e reinicie o serviço.
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className={`space-y-5 ${status === null ? "pointer-events-none opacity-50" : ""}`}>
-            {mode === "register" && (
-              <div>
-                <label className="label-field">Nome da empresa / workspace</label>
-                <input
-                  type="text"
-                  value={organizationName}
-                  onChange={(e) => setOrganizationName(e.target.value)}
-                  className="input-field"
-                  placeholder="Ex.: Imobiliária Silva"
-                  autoComplete="organization"
-                />
+            {status?.database === false && (
+              <div className="alert-error mt-6">
+                <p className="font-semibold">Banco de dados não configurado</p>
+                <p className="mt-1 text-sm opacity-90">
+                  Configure <code className="rounded bg-red-100 px-1 text-xs">DATABASE_URL</code> na API e reinicie.
+                </p>
               </div>
             )}
-            <div>
-              <label className="label-field">E-mail</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="input-field"
-                autoComplete="email"
-              />
-            </div>
-            <div>
-              <label className="label-field">Senha</label>
-              <input
-                type="password"
-                required
-                minLength={mode === "register" ? 8 : undefined}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input-field"
-                autoComplete={mode === "register" ? "new-password" : "current-password"}
-              />
-              {mode === "register" && <p className="mt-1.5 text-xs text-slate-500">Mínimo 8 caracteres.</p>}
-            </div>
-            <button
-              type="submit"
-              disabled={
-                loading ||
-                status?.database === false ||
-                (mode === "register" && status?.database === true && !status.allowRegister)
-              }
-              className="btn-primary mt-2 w-full py-3"
+
+            {error && <div className="alert-error mt-6">{error}</div>}
+
+            {status?.database === true && (
+              <div className="mt-6 flex rounded-xl bg-slate-100 p-1">
+                <button
+                  type="button"
+                  onClick={() => setMode("login")}
+                  className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
+                    mode === "login" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"
+                  }`}
+                >
+                  Já tenho conta
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMode("register")}
+                  className={`flex-1 rounded-lg py-2.5 text-sm font-semibold transition-all ${
+                    mode === "register" ? "bg-white text-slate-900 shadow-sm" : "text-slate-600"
+                  }`}
+                >
+                  Nova conta
+                </button>
+              </div>
+            )}
+
+            {status?.database === true && mode === "register" && !status.allowRegister && (
+              <div className="alert-warn mt-6 text-sm">
+                Cadastro público desligado. Defina{" "}
+                <code className="rounded bg-amber-100/80 px-1 text-xs">ALLOW_OPEN_REGISTER=true</code> na API.
+              </div>
+            )}
+
+            <form
+              onSubmit={handleSubmit}
+              className={`mt-6 space-y-4 ${status === null ? "pointer-events-none opacity-50" : ""}`}
             >
-              {loading ? "Aguarde…" : mode === "register" ? "Criar conta e entrar" : "Entrar"}
-            </button>
-          </form>
+              {mode === "register" && (
+                <div>
+                  <label className="label-field">Nome da empresa</label>
+                  <input
+                    type="text"
+                    value={organizationName}
+                    onChange={(e) => setOrganizationName(e.target.value)}
+                    className="input-field"
+                    placeholder="Ex.: Barbearia Silva"
+                    autoComplete="organization"
+                  />
+                </div>
+              )}
+              <div>
+                <label className="label-field">E-mail</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="input-field"
+                  autoComplete="email"
+                />
+              </div>
+              <div>
+                <label className="label-field">Senha</label>
+                <input
+                  type="password"
+                  required
+                  minLength={mode === "register" ? 8 : undefined}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="input-field"
+                  autoComplete={mode === "register" ? "new-password" : "current-password"}
+                />
+                {mode === "register" && <p className="mt-1 text-xs text-slate-500">Mínimo 8 caracteres.</p>}
+              </div>
+              <button
+                type="submit"
+                disabled={
+                  loading ||
+                  status?.database === false ||
+                  (mode === "register" && status?.database === true && !status.allowRegister)
+                }
+                className="btn-primary mt-2 w-full py-3"
+              >
+                {loading ? "Aguarde…" : mode === "register" ? "Criar conta e entrar" : "Entrar"}
+              </button>
+            </form>
+          </div>
 
-
+          <p className="mt-6 text-center text-xs text-slate-400">
+            Produto comercial da{" "}
+            <Link to="/" className="text-brand-600 hover:underline">
+              {BRAND.parent}
+            </Link>
+          </p>
         </div>
       </div>
     </div>

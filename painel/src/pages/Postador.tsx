@@ -872,7 +872,7 @@ export function Postador() {
                   <p className="font-medium">Nenhuma conta configurada</p>
                   <p className="mt-1">
                     Cadastre em{" "}
-                    <Link to="/admin" className="underline font-medium text-amber-950">
+                    <Link to="/empresa" className="underline font-medium text-amber-950">
                       Administração
                     </Link>
                     . Você ainda pode gerar legenda para testar, mas não publicará sem conta.
@@ -1386,7 +1386,9 @@ export function Postador() {
                         {(slideTemplatesCatalog.length
                           ? slideTemplatesCatalog
                           : [
-                              { id: "capa" as const, label: "Capa premium", descricao: "destaque slide 1", recomendado: true },
+                              { id: "limpo" as const, label: "Limpo (foto pronta)", descricao: "sem logo, faixa mínima", recomendado: true },
+                              { id: "minimal" as const, label: "Minimal", descricao: "gradiente na base" },
+                              { id: "capa" as const, label: "Capa premium", descricao: "faixa superior + logo" },
                               { id: "editorial" as const, label: "Editorial", descricao: "revista" },
                               { id: "magazine" as const, label: "Magazine", descricao: "publicitário" },
                               { id: "bold" as const, label: "Bold block", descricao: "alto contraste" },
@@ -1401,8 +1403,10 @@ export function Postador() {
                           </option>
                         ))}
                       </select>
-                      {brandKitAtivo && (
-                        <p className="mt-1 text-xs text-emerald-700">Brand kit ativo — paleta e logo do Admin serão aplicados.</p>
+                      {brandKitAtivo && slideTemplate !== "limpo" && (
+                        <p className="mt-1 text-xs text-emerald-700">
+                          Brand kit: logo só em templates Capa ou Magazine (não em Limpo).
+                        </p>
                       )}
                     </div>
                   )}

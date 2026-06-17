@@ -32,7 +32,7 @@ function contaSummary(c: ContaInstagramRes, isDefault: boolean): string {
   return parts.join(" · ");
 }
 
-export function AgentesInstagramPage() {
+export function AgentesInstagramPage({ embedded = false }: { embedded?: boolean }) {
   const { config, setConfig, loading, error, setError, useWorkspace, needLogin } = useWorkspaceConfig();
   const [saving, setSaving] = useState(false);
   const [editId, setEditId] = useState<string | "new" | null>(null);
@@ -182,15 +182,17 @@ export function AgentesInstagramPage() {
   };
 
   if (loading) {
+    const skeleton = <div className="card h-36 animate-pulse bg-slate-100/80" aria-hidden />;
+    if (embedded) return skeleton;
     return (
       <PageShell title="Agentes Instagram" description="Carregando…" wide>
-        <div className="card h-36 animate-pulse bg-slate-100/80" aria-hidden />
+        {skeleton}
       </PageShell>
     );
   }
 
-  return (
-    <PageShell wide title="Agentes Instagram" description="Conta Instagram e agente de comentário/Direct.">
+  const body = (
+    <>
       {needLogin && (
         <div className="alert-info mb-6">
           <Link to="/login" className="btn-primary inline-flex">
@@ -349,6 +351,14 @@ export function AgentesInstagramPage() {
           )}
         </section>
       )}
+    </>
+  );
+
+  if (embedded) return body;
+
+  return (
+    <PageShell wide title="Agentes Instagram" description="Conta Instagram e agente de comentário/Direct.">
+      {body}
     </PageShell>
   );
 }

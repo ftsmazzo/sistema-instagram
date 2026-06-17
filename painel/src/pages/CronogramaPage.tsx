@@ -41,8 +41,8 @@ export function CronogramaPage() {
 
   return (
     <PageShell
-      title="Calendário e Histórico"
-      description="Gerencie os posts agendados e visualize o histórico de publicações realizadas."
+      title="Agenda"
+      description="Posts agendados e histórico de publicações."
     >
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Futuros / Agendados */}
