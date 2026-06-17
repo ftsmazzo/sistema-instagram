@@ -244,6 +244,7 @@ function postadorAuthHeaders(): Record<string, string> {
 }
 
 export type PostadorSlideTemplateId =
+  | "limpo"
   | "minimal"
   | "numerado"
   | "capa"

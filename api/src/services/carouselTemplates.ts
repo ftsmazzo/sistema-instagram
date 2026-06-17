@@ -1,6 +1,7 @@
 import type { PostadorOverlayStyle } from "./postadorNiches.js";
 
 export type PostadorSlideTemplate =
+  | "limpo"
   | "minimal"
   | "numerado"
   | "capa"
@@ -25,9 +26,10 @@ export type SlideTemplateInfo = {
 };
 
 export const SLIDE_TEMPLATES_CATALOG: SlideTemplateInfo[] = [
-  { id: "capa", label: "Capa premium", descricao: "Faixa superior + destaque no slide 1", recomendado: true },
+  { id: "limpo", label: "Limpo (foto pronta)", descricao: "Faixa mínima na base — sem logo, ideal para arte já montada", recomendado: true },
+  { id: "minimal", label: "Minimal", descricao: "Gradiente suave + headline na base" },
+  { id: "capa", label: "Capa premium", descricao: "Faixa superior + destaque — só para fundo simples" },
   { id: "numerado", label: "Numerado", descricao: "Badge 1/N + headline na base" },
-  { id: "minimal", label: "Minimal", descricao: "Gradiente suave + headline centralizada" },
   { id: "editorial", label: "Editorial", descricao: "Tipografia à esquerda, barra vertical — estilo revista" },
   { id: "magazine", label: "Magazine", descricao: "Faixa lateral colorida + badge — layout publicitário" },
   { id: "bold", label: "Bold block", descricao: "Bloco sólido de marca na base — alto contraste" },
@@ -83,6 +85,10 @@ export function capaFontSize(text: string, tpl: PostadorSlideTemplate, slideInde
     if (text.length > 40) return 28;
     if (text.length > 28) return 32;
     return 36;
+  }
+  if (tpl === "limpo") {
+    if (text.length > 36) return 26;
+    return 30;
   }
   return 0;
 }
@@ -163,6 +169,19 @@ function resolveTextLayout(
     };
   }
 
+  if (tpl === "limpo") {
+    return {
+      fontSize,
+      lines,
+      anchor: "start",
+      x: Math.round(W * 0.05),
+      startY: panelY + (panelH - textBlockH) / 2 + fontSize * 0.55,
+      lineH,
+      fill: "#FFFFFF",
+      shadow: "rgba(0,0,0,0.35)",
+    };
+  }
+
   return {
     fontSize,
     lines,
@@ -196,6 +215,16 @@ function buildPanelLayers(
   slideIndex: number
 ): { panelY: number; panelH: number; layers: string } {
   const idx = slideIndex + 1;
+
+  if (tpl === "limpo") {
+    const panelH = Math.round(H * 0.11);
+    const panelY = H - panelH;
+    return {
+      panelY,
+      panelH,
+      layers: `<rect x="0" y="${panelY}" width="${W}" height="${panelH}" fill="rgba(0,0,0,0.58)"/>`,
+    };
+  }
 
   if (tpl === "split") {
     const splitY = Math.round(H * 0.72);
@@ -353,6 +382,7 @@ export function buildCarouselTemplateExtras(
 
 export function parseSlideTemplateId(raw?: string): PostadorSlideTemplate {
   const valid: PostadorSlideTemplate[] = [
+    "limpo",
     "minimal",
     "numerado",
     "capa",
@@ -363,5 +393,5 @@ export function parseSlideTemplateId(raw?: string): PostadorSlideTemplate {
     "glass",
   ];
   if (raw && valid.includes(raw as PostadorSlideTemplate)) return raw as PostadorSlideTemplate;
-  return "capa";
+  return "limpo";
 }

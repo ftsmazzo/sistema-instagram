@@ -178,7 +178,7 @@ export function Postador() {
   const [templateKey, setTemplateKey] = useState("");
   const [segmento, setSegmento] = useState("");
   const [marcaNome, setMarcaNome] = useState("");
-  const [slideTemplate, setSlideTemplate] = useState<PostadorSlideTemplateId>("capa");
+  const [slideTemplate, setSlideTemplate] = useState<PostadorSlideTemplateId>("limpo");
   const [slideTemplatesCatalog, setSlideTemplatesCatalog] = useState<
     Array<{ id: PostadorSlideTemplateId; label: string; descricao: string; recomendado?: boolean }>
   >([]);
@@ -1665,10 +1665,28 @@ export function Postador() {
               <>
                 <img src={previewUrls[0]} alt="Preview" className="max-h-64 rounded-md border border-gray-200" />
                 <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-3">
-                  <p className="text-sm font-medium text-gray-700">Moldura visual (opcional)</p>
-                  <p className="text-xs text-gray-500">
-                    Deixa o post com cara de social media: gradiente + headline na paleta do nicho.
+                  <p className="text-sm font-medium text-gray-700">Legenda na imagem (opcional)</p>
+                  <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5">
+                    <strong>Arte já pronta?</strong> Publique direto — não aplique moldura. Moldura só faz sentido em foto simples sem texto.
+                    Template padrão «Limpo» não coloca logo (evita corte).
                   </p>
+                  <label className="block text-xs font-medium text-gray-600">Estilo (se for aplicar)</label>
+                  <select
+                    value={slideTemplate}
+                    onChange={(e) => setSlideTemplate(e.target.value as PostadorSlideTemplateId)}
+                    className="w-full max-w-md rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                    disabled={loading}
+                  >
+                    {(slideTemplatesCatalog.length ? slideTemplatesCatalog : [
+                      { id: "limpo" as const, label: "Limpo (foto pronta)", descricao: "faixa mínima, sem logo", recomendado: true },
+                      { id: "minimal" as const, label: "Minimal", descricao: "gradiente na base" },
+                      { id: "capa" as const, label: "Capa premium", descricao: "faixa superior + logo" },
+                    ]).map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.label}{t.recomendado ? " ★" : ""}
+                      </option>
+                    ))}
+                  </select>
                   <div className="flex items-center gap-2">
                     <input
                       type="text"
@@ -1700,7 +1718,7 @@ export function Postador() {
                     disabled={loading || !(textosCarrossel[0]?.trim())}
                     className="px-3 py-1.5 text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 disabled:opacity-50"
                   >
-                    {loading ? "Aplicando..." : "Aplicar moldura na imagem"}
+                    {loading ? "Aplicando..." : "Aplicar faixa de texto (só se precisar)"}
                   </button>
                 </div>
                 <div className="mt-3 p-3 bg-amber-50 rounded-lg border border-amber-200 space-y-3">

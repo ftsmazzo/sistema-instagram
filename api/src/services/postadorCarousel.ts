@@ -46,7 +46,7 @@ export async function gerarCarrosselCompleto(args: {
 
   const provider: ImageGenProvider = args.provider === "openai" ? "openai" : "gemini";
   const aplicarMoldura = args.aplicarMoldura === true;
-  const slideTemplate = args.slide_template ?? "capa";
+  const slideTemplate = args.slide_template ?? "limpo";
   const ctx = resolveCaptionContext({
     nicheId: args.options?.nicheId,
     templateKey: args.options?.templateKey,
