@@ -262,6 +262,9 @@ export type LeadListItemRes = {
   handoff_at: string | null;
   handoff_motivo: string | null;
   whatsapp_boas_vindas_enviado: boolean;
+  whatsapp_primeira_ia_enviada: boolean;
+  whatsapp_ia_agendada_em: string | null;
+  whatsapp_boas_vindas_em: string | null;
   created_at: string;
   updated_at: string;
 };

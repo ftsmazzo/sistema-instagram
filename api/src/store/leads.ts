@@ -13,6 +13,9 @@ export type LeadListItem = {
   handoff_at: string | null;
   handoff_motivo: string | null;
   whatsapp_boas_vindas_enviado: boolean;
+  whatsapp_primeira_ia_enviada: boolean;
+  whatsapp_ia_agendada_em: string | null;
+  whatsapp_boas_vindas_em: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -56,6 +59,7 @@ export async function listLeads(params: ListLeadsParams): Promise<{ leads: LeadL
     `SELECT id, nome, whatsapp, username_instagram, objetivo, status,
             id_post_origem, origem_interacao, url_interesse,
             handoff_at, handoff_motivo, whatsapp_boas_vindas_enviado,
+            whatsapp_primeira_ia_enviada, whatsapp_ia_agendada_em, whatsapp_boas_vindas_em,
             created_at, updated_at
      FROM leads WHERE ${where}
      ORDER BY updated_at DESC
@@ -76,6 +80,13 @@ export async function listLeads(params: ListLeadsParams): Promise<{ leads: LeadL
     handoff_at: row.handoff_at ? new Date(row.handoff_at).toISOString() : null,
     handoff_motivo: row.handoff_motivo,
     whatsapp_boas_vindas_enviado: Boolean(row.whatsapp_boas_vindas_enviado),
+    whatsapp_primeira_ia_enviada: Boolean(row.whatsapp_primeira_ia_enviada),
+    whatsapp_ia_agendada_em: row.whatsapp_ia_agendada_em
+      ? new Date(row.whatsapp_ia_agendada_em).toISOString()
+      : null,
+    whatsapp_boas_vindas_em: row.whatsapp_boas_vindas_em
+      ? new Date(row.whatsapp_boas_vindas_em).toISOString()
+      : null,
     created_at: new Date(row.created_at).toISOString(),
     updated_at: new Date(row.updated_at).toISOString(),
   }));

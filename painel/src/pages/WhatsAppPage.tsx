@@ -99,6 +99,31 @@ function promptSummary(prompt: string): string {
   return t.length > 120 ? `${t.slice(0, 120)}…` : t;
 }
 
+function formatDateTime(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  try {
+    return new Date(iso).toLocaleString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "—";
+  }
+}
+
+function waFunnelLabel(lead: LeadListItemRes): string {
+  if (lead.whatsapp_primeira_ia_enviada) return "IA conversando";
+  if (lead.whatsapp_ia_agendada_em) {
+    const agendada = new Date(lead.whatsapp_ia_agendada_em);
+    if (agendada.getTime() > Date.now()) return `IA agendada ${formatDateTime(lead.whatsapp_ia_agendada_em)}`;
+    return "IA pendente";
+  }
+  if (lead.whatsapp_boas_vindas_enviado) return "Boas-vindas enviada";
+  return "Aguardando handoff";
+}
+
 export function WhatsAppPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -379,6 +404,33 @@ export function WhatsAppPage() {
               <code className="rounded bg-white/80 px-1">EVOLUTION_GLOBAL_API_KEY</code> na API.
             </div>
           )}
+
+          <section className="card border-indigo-100 bg-indigo-50/40">
+            <h2 className="text-lg font-semibold text-gray-900">Funil Instagram → WhatsApp</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Comentário e Direct no Instagram; qualificação e fechamento no WhatsApp (Evolution + agente n8n).
+            </p>
+            <ol className="mt-4 grid gap-3 sm:grid-cols-3">
+              <li className="rounded-lg border border-indigo-100 bg-white p-3 text-sm">
+                <span className="font-semibold text-indigo-800">1. Direct</span>
+                <p className="mt-1 text-gray-600">
+                  Lead informa WhatsApp → agente Instagram envia boas-vindas e agenda a IA.
+                </p>
+              </li>
+              <li className="rounded-lg border border-indigo-100 bg-white p-3 text-sm">
+                <span className="font-semibold text-indigo-800">2. Boas-vindas</span>
+                <p className="mt-1 text-gray-600">
+                  Mensagem automática na Evolution; agenda 1ª msg da IA ({savedAgent.delay_primeira_msg_minutos} min).
+                </p>
+              </li>
+              <li className="rounded-lg border border-indigo-100 bg-white p-3 text-sm">
+                <span className="font-semibold text-indigo-800">3. Agente WA</span>
+                <p className="mt-1 text-gray-600">
+                  Retoma contexto do Direct, qualifica e usa tools (agenda, link, handoff).
+                </p>
+              </li>
+            </ol>
+          </section>
 
           <section className="card space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -790,6 +842,28 @@ export function WhatsAppPage() {
             )}
           </section>
 
+          <section className="card border-indigo-100 bg-indigo-50/40">
+            <h2 className="text-lg font-semibold text-gray-900">Funil Instagram → WhatsApp</h2>
+            <p className="mt-1 text-sm text-gray-600">
+              Comentário e Direct no Instagram; qualificação e fechamento no WhatsApp (Evolution + agente n8n).
+            </p>
+            <ol className="mt-4 grid gap-3 sm:grid-cols-3">
+              <li className="rounded-lg border border-indigo-100 bg-white p-3 text-sm">
+                <span className="font-semibold text-indigo-800">1. Direct</span>
+                <p className="mt-1 text-gray-600">Lead informa WhatsApp → agente chama <code className="text-xs">enviar_whatsapp</code> +{" "}
+                  <code className="text-xs">pos_boas_vindas_wa</code>.</p>
+              </li>
+              <li className="rounded-lg border border-indigo-100 bg-white p-3 text-sm">
+                <span className="font-semibold text-indigo-800">2. Boas-vindas</span>
+                <p className="mt-1 text-gray-600">Mensagem automática na Evolution; agenda 1ª msg da IA ({savedAgent.delay_primeira_msg_minutos} min).</p>
+              </li>
+              <li className="rounded-lg border border-indigo-100 bg-white p-3 text-sm">
+                <span className="font-semibold text-indigo-800">3. Agente WA</span>
+                <p className="mt-1 text-gray-600">Retoma contexto do Direct, qualifica e usa tools (agenda, link, handoff).</p>
+              </li>
+            </ol>
+          </section>
+
           <section className="card">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
@@ -808,6 +882,7 @@ export function WhatsAppPage() {
                       <th className="py-2 pr-4 font-medium">Nome</th>
                       <th className="py-2 pr-4 font-medium">Instagram</th>
                       <th className="py-2 pr-4 font-medium">WhatsApp</th>
+                      <th className="py-2 pr-4 font-medium">Funil WA</th>
                       <th className="py-2 pr-4 font-medium">Status</th>
                       <th className="py-2 pr-4 font-medium">Objetivo</th>
                     </tr>
@@ -818,6 +893,7 @@ export function WhatsAppPage() {
                         <td className="py-2 pr-4">{lead.nome ?? "—"}</td>
                         <td className="py-2 pr-4">{lead.username_instagram ? `@${lead.username_instagram}` : "—"}</td>
                         <td className="py-2 pr-4 font-mono text-xs">{lead.whatsapp ?? "—"}</td>
+                        <td className="py-2 pr-4 text-xs text-gray-700">{waFunnelLabel(lead)}</td>
                         <td className="py-2 pr-4">
                           <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs">{statusLabel(lead.status)}</span>
                         </td>
