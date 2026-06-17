@@ -8,21 +8,9 @@ import {
   createUserWithOrganization,
   findUserByEmail,
   userHasOrg,
-  userBelongsToOrg,
   copyLegacyConfigIntoWorkspace,
 } from "../store/workspace.js";
-import {
-  exchangeCodeForLongLivedUserToken,
-  exchangeInstagramCodeForLongLivedToken,
-  fetchInstagramBusinessMe,
-  fetchPagesWithInstagram,
-  getMetaOAuthEnv,
-  getMetaOAuthMode,
-  isMetaOAuthConfigured,
-  pagesFromInstagramDirectAuth,
-  verifyMetaOAuthState,
-} from "../services/metaOAuth.js";
-import { mergeInstagramPagesIntoWorkspace } from "../services/metaOAuthWorkspace.js";
+import { getMetaOAuthMode, isMetaOAuthConfigured } from "../services/metaOAuth.js";
 
 export async function authRoutes(app: FastifyInstance, _opts: FastifyPluginOptions) {
   app.get("/status", async (_request, reply) => {
@@ -49,41 +37,10 @@ export async function authRoutes(app: FastifyInstance, _opts: FastifyPluginOptio
     });
   });
 
-  /** Callback público do Facebook Login (sem JWT). Redireciona de volta ao painel. */
-  app.get("/meta/callback", async (request, reply) => {
-    const env = getMetaOAuthEnv();
+  /** OAuth Meta desativado — redireciona ao painel (cadastro manual de contas). */
+  app.get("/meta/callback", async (_request, reply) => {
     const baseRedirect = (process.env.PAINEL_PUBLIC_URL?.trim().replace(/\/$/, "") || "http://localhost:5173").trim();
-    const fail = (reason: string) =>
-      reply
-        .code(302)
-        .redirect(`${baseRedirect}/admin?meta_oauth=err&reason=${encodeURIComponent(reason.slice(0, 500))}`);
-    try {
-      if (!env) return fail("OAuth Meta não configurado na API (META_APP_ID / SECRET / REDIRECT_URI).");
-      const q = request.query as { code?: string; state?: string; error?: string; error_description?: string };
-      if (q.error) return fail((q.error_description || q.error || "login_cancelado").replace(/\+/g, " "));
-      const code = q.code?.trim();
-      const state = q.state?.trim();
-      if (!code || !state) return fail("Resposta inválida do Facebook.");
-      const payload = verifyMetaOAuthState(state, env.stateSecret);
-      if (!payload) return fail("Sessão expirada ou inválida. Abra Conectar de novo na Administração.");
-      const member = await userBelongsToOrg(payload.sub, payload.orgId);
-      if (!member) return fail("Usuário não autorizado para esta organização.");
-      if (getMetaOAuthMode() === "instagram") {
-        const long = await exchangeInstagramCodeForLongLivedToken(env, code);
-        const me = await fetchInstagramBusinessMe(env, long.access_token);
-        const pages = pagesFromInstagramDirectAuth(long.access_token, me);
-        await mergeInstagramPagesIntoWorkspace(payload.orgId, pages);
-      } else {
-        const long = await exchangeCodeForLongLivedUserToken(env, code);
-        const pages = await fetchPagesWithInstagram(env, long.access_token);
-        await mergeInstagramPagesIntoWorkspace(payload.orgId, pages);
-      }
-      return reply.code(302).redirect(`${baseRedirect}/admin?meta_oauth=ok`);
-    } catch (err) {
-      request.log.error({ err }, "meta oauth callback");
-      const msg = err instanceof Error ? err.message : "Erro ao conectar.";
-      return fail(msg);
-    }
+    return reply.code(302).redirect(`${baseRedirect}/admin`);
   });
 
   app.post("/register", async (request, reply) => {

@@ -3,8 +3,6 @@ import { isDbConfigured } from "../db/index.js";
 import { loadWorkspaceConfigStore, saveWorkspaceConfig } from "../store/workspace.js";
 import { emptyEmpresa, type ContaInstagramInput, type EmpresaPerfil } from "../store/config.js";
 import { toContaInstagramPublic } from "../util/instagramPublic.js";
-import { buildMetaAuthorizeUrl, getMetaOAuthEnv, signMetaOAuthState } from "../services/metaOAuth.js";
-import { buildMetaReadinessReport } from "../services/metaAppReadiness.js";
 
 export async function meWorkspaceRoutes(app: FastifyInstance, _opts: FastifyPluginOptions) {
   app.addHook("preHandler", async (request, reply) => {
@@ -19,23 +17,17 @@ export async function meWorkspaceRoutes(app: FastifyInstance, _opts: FastifyPlug
   });
 
   /** URL do Facebook Login para conectar páginas Instagram ao app Meta da FabriaIA. */
-  app.get("/integrations/meta/oauth-url", async (request, reply) => {
-    const env = getMetaOAuthEnv();
-    if (!env) {
-      return reply.status(503).send({
-        error: "OAuth Meta não configurado. Defina META_APP_ID, META_APP_SECRET e META_OAUTH_REDIRECT_URI na API.",
-      });
-    }
-    const u = request.user as { sub: string; orgId: string };
-    const state = signMetaOAuthState(u.orgId, u.sub, env.stateSecret);
-    const url = buildMetaAuthorizeUrl(env, state);
-    return reply.send({ url });
+  app.get("/integrations/meta/oauth-url", async (_request, reply) => {
+    return reply.status(410).send({
+      error:
+        "Conexão OAuth Meta foi desativada no painel. Use Administração → Adicionar conta (token + ig_user_id).",
+    });
   });
 
-  /** Diagnóstico: por que clientes veem «Login indisponível» e o que falta no app Meta. */
   app.get("/integrations/meta/readiness", async (_request, reply) => {
-    const report = await buildMetaReadinessReport();
-    return reply.send(report);
+    return reply.status(410).send({
+      error: "Diagnóstico OAuth Meta desativado. Cadastre contas em Administração → Adicionar conta.",
+    });
   });
 
   app.get("/workspace", async (request, reply) => {

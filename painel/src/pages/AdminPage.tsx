@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { PageShell } from "../components/layout/PageShell";
 import {
   api,
@@ -71,7 +71,6 @@ function emptyContaForm() {
 }
 
 export function AdminPage() {
-  const [searchParams, setSearchParams] = useSearchParams();
   const [config, setConfig] = useState<Config | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -83,10 +82,6 @@ export function AdminPage() {
   /** Dados vêm de /api/me/workspace (organização + contas no PostgreSQL). */
   const [useWorkspace, setUseWorkspace] = useState(false);
   const [needLogin, setNeedLogin] = useState(false);
-  /** API com META_APP_ID + SECRET + redirect (botão conectar). */
-  const [metaOAuth, setMetaOAuth] = useState(false);
-  const [metaOAuthMode, setMetaOAuthMode] = useState<"facebook" | "instagram">("facebook");
-  const [metaReadiness, setMetaReadiness] = useState<Awaited<ReturnType<typeof api.getMetaReadiness>> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,10 +91,6 @@ export function AdminPage() {
       try {
         const status = await api.getAuthStatus();
         if (cancelled) return;
-        setMetaOAuth(Boolean(status.metaOAuthConfigured));
-        if (status.metaOAuthMode === "instagram" || status.metaOAuthMode === "facebook") {
-          setMetaOAuthMode(status.metaOAuthMode);
-        }
         if (status.authMode === "workspace" && status.hasUsers) {
           const token = getAuthToken();
           if (!token) {
@@ -115,13 +106,6 @@ export function AdminPage() {
             setEmpresa(mergeEmpresa(data.empresa));
             setUseWorkspace(true);
             setNeedLogin(false);
-            if (status.metaOAuthConfigured) {
-              void api.getMetaReadiness().then((r) => {
-                if (!cancelled) setMetaReadiness(r);
-              }).catch(() => {
-                if (!cancelled) setMetaReadiness(null);
-              });
-            }
           } catch {
             clearAuthToken();
             setNeedLogin(true);
@@ -146,35 +130,6 @@ export function AdminPage() {
       cancelled = true;
     };
   }, []);
-
-  useEffect(() => {
-    const mo = searchParams.get("meta_oauth");
-    if (!mo) return;
-    if (mo === "ok") {
-      setError(null);
-      const t = getAuthToken();
-      if (t) {
-        void api.getMeWorkspace().then((data) => {
-          setConfig(data);
-          setEmpresa(mergeEmpresa(data.empresa));
-        });
-      }
-    } else if (mo === "err") {
-      const r = searchParams.get("reason");
-      const base = r ? decodeURIComponent(r.replace(/\+/g, " ")) : "Não foi possível conectar ao Facebook.";
-      const extra =
-        /invalid platform app/i.test(base)
-          ? "\n\nDesbloqueio: na API defina META_OAUTH_MODE=facebook (ou remova a variável), reinicie o serviço. No app Meta adicione o produto «Facebook Login» e o mesmo redirect OAuth (…/api/auth/meta/callback). O login passa pelo Facebook e continua a gravar Instagram no workspace."
-          : /indisponível|unavailable|atualizando detalhes/i.test(base)
-            ? "\n\nSem CNPJ / app em Dev: não use OAuth para clientes. Administração → Nova conta → cole ig_user_id + token Graph API (ver docs/META-SEM-CNPJ-FABRIAIA.md)."
-            : "";
-      setError(base + extra);
-    }
-    const next = new URLSearchParams(searchParams);
-    next.delete("meta_oauth");
-    next.delete("reason");
-    setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams]);
 
   const contas = config?.contas_instagram ?? [];
   const defaultId = config?.instagram_default_id ?? null;
@@ -218,19 +173,6 @@ export function AdminPage() {
       setLogoUploading(false);
       e.target.value = "";
     }
-  };
-
-  const handleConectarMeta = () => {
-    setSaving(true);
-    setError(null);
-    api.getMetaOAuthUrl()
-      .then((res) => {
-        window.location.href = res.url;
-      })
-      .catch((e) => {
-        setSaving(false);
-        setError(e instanceof Error ? e.message : "Erro ao gerar URL OAuth");
-      });
   };
 
   const handleSetDefault = (id: string) => {
@@ -663,76 +605,42 @@ export function AdminPage() {
         </div>
 
         <div>
-          <h2 className="font-display text-xl font-semibold text-slate-900">Contas Instagram</h2>
-          <p className="mt-2 text-sm text-slate-600">
-            Postador e agente de comentários/Direct usam estas contas. O segredo{" "}
-            <code className="rounded bg-slate-100 px-1 text-xs">INTERNAL_AGENT_API_SECRET</code> fica só na API e no n8n —{" "}
-            <strong>não</strong> no painel.
-          </p>
-
-          {useWorkspace && metaOAuth && (
-            <div className="card mt-4 space-y-3 border-indigo-200/80 bg-indigo-50/40">
-              {metaReadiness && !metaReadiness.pronto_para_clientes && (
-                <div className="rounded-xl border-2 border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-                  <p className="font-bold">OAuth «Conectar Meta» não libera clientes sozinhos (app Meta em Dev / sem Advanced Access)</p>
-                  <p className="mt-2 font-semibold text-amber-900">
-                    Sem CNPJ da FabriaIA? Não insista no OAuth — use o fluxo que já funciona:
-                  </p>
-                  <p className="mt-1">
-                    <strong>Administração → Nova conta</strong> → cole <code className="rounded bg-white/80 px-1">ig_user_id</code> +{" "}
-                    <strong>token Graph API</strong> gerado no <strong>app Meta do cliente</strong> (não use Funções → Testador do Instagram).
-                  </p>
-                  <p className="mt-2 text-xs">{metaReadiness.nota_producao}</p>
-                  <details className="mt-3">
-                    <summary className="cursor-pointer font-medium text-amber-900">Só se você tiver CNPJ e Verificação comercial aprovada</summary>
-                    {metaReadiness.bloqueios.length > 0 && (
-                      <ul className="mt-2 list-disc pl-5 space-y-1">
-                        {metaReadiness.bloqueios.map((b) => (
-                          <li key={b}>{b}</li>
-                        ))}
-                      </ul>
-                    )}
-                    <ol className="mt-2 list-decimal pl-5 space-y-1">
-                      {metaReadiness.proximos_passos.slice(1).map((s) => (
-                        <li key={s}>{s}</li>
-                      ))}
-                    </ol>
-                  </details>
-                </div>
-              )}
-              {metaReadiness?.pronto_para_clientes && (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-                  App Meta com permissões avançadas — clientes podem usar «Conectar conta Meta».
-                </div>
-              )}
-              <div>
-                <h3 className="font-semibold text-slate-900">Conectar com Facebook / Instagram (OAuth — opcional)</h3>
-                <p className="mt-1 text-sm text-slate-600">
-                  Só funciona para <strong>você (admin do app Meta)</strong> ou após Verificação comercial + app Ao vivo.
-                  <strong> Sem CNPJ:</strong> use <strong>Nova conta</strong> abaixo e cole token + ig_user_id.
-                </p>
-              </div>
-              <button type="button" onClick={handleConectarMeta} disabled={saving} className="btn-primary">
-                {saving ? "Redirecionando…" : "Conectar conta Meta"}
-              </button>
-              {metaOAuthMode === "instagram" && (
-                <div className="rounded-xl border border-amber-200 bg-amber-50/90 px-3 py-2 text-xs text-amber-950">
-                  <strong>Erro «Invalid platform app» no Instagram?</strong> O app ainda não é aceite no fluxo{" "}
-                  <code className="rounded bg-white/90 px-1">instagram.com/oauth</code>. Na API use{" "}
-                  <code className="rounded bg-white/90 px-1">META_OAUTH_MODE=facebook</code>, reinicie, e no Meta adicione{" "}
-                  <strong>Facebook Login</strong> com o mesmo <code className="rounded bg-white/90 px-1">redirect_uri</code>. O
-                  botão abre o login Facebook e liga a página com Instagram como antes.
-                </div>
-              )}
-              <p className="text-xs text-slate-500">
-                Na API: <code className="rounded bg-white/80 px-1">META_OAUTH_REDIRECT_URI</code> igual ao callback (ex.:{" "}
-                <code className="rounded bg-white/80 px-1">…/api/auth/meta/callback</code>),{" "}
-                <code className="rounded bg-white/80 px-1">PAINEL_PUBLIC_URL</code>. Se você usou o login da empresa no produto
-                Instagram (URL <code className="rounded bg-white/80 px-1">instagram.com/oauth/authorize</code>), defina também{" "}
-                <code className="rounded bg-white/80 px-1">META_OAUTH_MODE=instagram</code>.
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="font-display text-xl font-semibold text-slate-900">Contas Instagram</h2>
+              <p className="mt-2 text-sm text-slate-600 max-w-2xl">
+                Cada organização cadastra aqui o Instagram que vai postar e responder comentários/DM.
+                {useWorkspace
+                  ? " Para escalar: cada cliente entra no painel com o login dele e adiciona a própria conta — você não precisa fazer isso por ele."
+                  : " Cole o token Graph API e o ID da conta comercial."}
               </p>
             </div>
-          )}
+            {!editId && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditId("new");
+                  setForm(emptyContaForm());
+                }}
+                disabled={saving || needLogin}
+                className="btn-primary shrink-0"
+              >
+                + Adicionar conta
+              </button>
+            )}
+          </div>
+
+          <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700">
+            <p className="font-medium text-slate-900">Como conectar (sem botão Meta)</p>
+            <ol className="mt-2 list-decimal pl-5 space-y-1">
+              <li>Instagram comercial (Business/Creator) vinculado à Página do Facebook.</li>
+              <li>Token de Página com permissões de postagem e mensagens (app Meta do cliente ou seu setup).</li>
+              <li>
+                <strong>ig_user_id</strong> — ID numérico da conta Instagram comercial (Graph API).
+              </li>
+              <li>Preencha abaixo e salve. Postador e agente passam a usar esta conta.</li>
+            </ol>
+          </div>
 
           <ul className="mb-6 mt-4 space-y-3">
             {contas.map((c) => (
@@ -784,15 +692,21 @@ export function AdminPage() {
                 value={form.ig_user_id}
                 onChange={(e) => setForm((f) => ({ ...f, ig_user_id: e.target.value }))}
                 className="input-field font-mono text-sm"
-                placeholder="ID do usuário Instagram (ig_user_id)"
+                placeholder="ID numérico Instagram comercial (ex.: 17841400000000000)"
               />
+              <p className="text-xs text-slate-500 -mt-2">
+                Graph API → conta Instagram Business. Não é o @usuario.
+              </p>
               <input
                 type="password"
                 value={form.access_token}
                 onChange={(e) => setForm((f) => ({ ...f, access_token: e.target.value }))}
                 className="input-field font-mono text-sm"
-                placeholder={editId === "new" ? "Token de publicação Graph API (obrigatório)" : "Token postagem (vazio = manter)"}
+                placeholder={editId === "new" ? "Token de Página (long-lived) — obrigatório" : "Vazio = mantém token atual"}
               />
+              <p className="text-xs text-slate-500 -mt-2">
+                Permissões: instagram_basic, instagram_content_publish, pages_show_list (mínimo para Postador).
+              </p>
 
               <div className="rounded-xl border border-violet-200/90 bg-violet-50/50 p-4 space-y-3">
                 <h4 className="font-semibold text-slate-900">Agente Instagram (comentários + Direct)</h4>
@@ -823,8 +737,11 @@ export function AdminPage() {
                   value={form.agent_access_token}
                   onChange={(e) => setForm((f) => ({ ...f, agent_access_token: e.target.value }))}
                   className="input-field font-mono text-sm"
-                  placeholder="Vazio = mantém atual; se vazio no banco, usa token de postagem"
+                  placeholder="Token agente (vazio = usa token de postagem)"
                 />
+                <p className="text-xs text-slate-500 -mt-2">
+                  Para comentários/DM inclua instagram_manage_comments e instagram_manage_messages no token.
+                </p>
                 <label className="label-field">Refinamentos — comentários (opcional)</label>
                 <textarea
                   value={form.agent_prompt_comentarios}
@@ -864,17 +781,8 @@ export function AdminPage() {
             </div>
           )}
 
-          {!editId && (
-            <button
-              type="button"
-              onClick={() => {
-                setEditId("new");
-                setForm(emptyContaForm());
-              }}
-              className="btn-secondary border-indigo-300 font-semibold text-indigo-700 hover:border-indigo-400 hover:bg-indigo-50"
-            >
-              + Adicionar conta Instagram
-            </button>
+          {contas.length === 0 && !editId && (
+            <p className="text-sm text-slate-500">Nenhuma conta ainda. Clique em «+ Adicionar conta».</p>
           )}
         </div>
       </div>
