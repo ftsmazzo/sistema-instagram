@@ -16,6 +16,7 @@ import { consultarProximaData } from "../services/empresaConfigHelpers.js";
 import { isRedisConfigured, pingRedis } from "../services/redis.js";
 import { getInternalSecretConfigured, verifyInternalSecret } from "../util/internalAuth.js";
 import { AGENT_GRAPH_API_BASE, AGENT_GRAPH_API_VERSION, AGENT_TIMEZONE } from "../services/agentConfigDefaults.js";
+import { ensurePostagemByIgUser } from "../store/crmPostagens.js";
 
 function readHeaderSecret(request: { headers: Record<string, string | string[] | undefined> }): string | undefined {
   const raw =
@@ -448,5 +449,30 @@ export async function internalRoutes(app: FastifyInstance, _opts: FastifyPluginO
     }
 
     return reply.send(result);
+  });
+
+  /**
+   * Garante post no CRM quando webhook traz media_id ainda desconhecido (lazy sync).
+   * Body: { ig_user_id, media_id }
+   */
+  app.post("/ensure-postagem", async (request, reply) => {
+    if (!isDbConfigured()) {
+      return reply.status(503).send({ ok: false, error: "Banco não configurado." });
+    }
+
+    const body = (request.body ?? {}) as { ig_user_id?: string; media_id?: string };
+    const igUserId = typeof body.ig_user_id === "string" ? body.ig_user_id.trim() : "";
+    const mediaId = typeof body.media_id === "string" ? body.media_id.trim() : "";
+
+    if (!igUserId || !mediaId) {
+      return reply.status(400).send({ ok: false, error: "Informe ig_user_id e media_id." });
+    }
+
+    const result = await ensurePostagemByIgUser(igUserId, mediaId);
+    if (!result) {
+      return reply.status(404).send({ ok: false, error: "Conta ou mídia não encontrada no Graph." });
+    }
+
+    return reply.send({ ok: true, ...result });
   });
 }

@@ -6,6 +6,7 @@ import { healthRoutes } from "./routes/health.js";
 import { configRoutes } from "./routes/config.js";
 import { agentesRoutes } from "./routes/agentes.js";
 import { postadorRoutes } from "./routes/postador.js";
+import { postagensRoutes } from "./routes/postagens.js";
 import { authRoutes } from "./routes/auth.js";
 import { meWorkspaceRoutes } from "./routes/meWorkspace.js";
 import { internalRoutes } from "./routes/internal.js";
@@ -29,6 +30,7 @@ async function build() {
   await app.register(configRoutes, { prefix: "/api/config" });
   await app.register(agentesRoutes, { prefix: "/api/agentes" });
   await app.register(postadorRoutes, { prefix: "/api/postador" });
+  await app.register(postagensRoutes, { prefix: "/api/postagens" });
   await app.register(internalRoutes, { prefix: "/api/internal" });
 
   startCronJob(app);

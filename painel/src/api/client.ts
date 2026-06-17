@@ -80,6 +80,21 @@ export type ContaInstagramRes = {
   agent_prompt_direct?: string;
 };
 
+export type PostagemListItemRes = {
+  id: number;
+  id_post: string;
+  caption_post: string | null;
+  media_type: string | null;
+  media_url: string | null;
+  link_post: string | null;
+  data_post: string | null;
+  instagram_account_id: string | null;
+  comentarios_count: number;
+  leads_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
 export type AgendaConfigRes = {
   dias_semana: number[];
   horario_inicio: string;
@@ -565,6 +580,28 @@ export const api = {
         return res.json() as Promise<{ media_url: string }>;
       });
     },
+  },
+
+  postagens: {
+    list: (params?: { limit?: number; offset?: number; instagram_account_id?: string }) => {
+      const qs = new URLSearchParams();
+      if (params?.limit) qs.set("limit", String(params.limit));
+      if (params?.offset) qs.set("offset", String(params.offset));
+      if (params?.instagram_account_id) qs.set("instagram_account_id", params.instagram_account_id);
+      const q = qs.toString();
+      return fetchJson<{ postagens: PostagemListItemRes[]; total: number }>(
+        `/api/postagens${q ? `?${q}` : ""}`
+      );
+    },
+    sync: (body?: { instagram_account_id?: string; limit?: number }) =>
+      fetchJson<{
+        ok: boolean;
+        synced: number;
+        total_fetched: number;
+        account_id: string;
+        account_nome: string;
+        error?: string;
+      }>("/api/postagens/sync", { method: "POST", body: body ?? {} }),
   },
 
   agentes: {

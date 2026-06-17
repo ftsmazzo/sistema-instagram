@@ -11,6 +11,12 @@ const funnelSteps = [
 
 const quickLinks = [
   {
+    to: "/postagens",
+    title: "Posts Instagram",
+    desc: "Sincronize publicações do feed — contexto para os agentes venderem nos seus posts.",
+    accent: "from-violet-500 to-indigo-600",
+  },
+  {
     to: "/admin",
     title: "Administração",
     desc: "Conta Instagram, perfil da empresa, prompts e critérios de qualificação.",
@@ -106,7 +112,11 @@ export function HomePage() {
       </section>
 
       <p className="mt-10 text-center text-xs text-slate-400">
-        Publique no Instagram como sempre — em breve, sync automático dos posts para contexto dos agentes.
+        Publique no Instagram como sempre — sincronize os posts em{" "}
+        <Link to="/postagens" className="text-indigo-600 hover:underline">
+          Posts Instagram
+        </Link>{" "}
+        para os agentes terem contexto.
       </p>
     </div>
   );

@@ -7,6 +7,7 @@ import { PerfilPage } from "./pages/PerfilPage";
 import { WhatsAppPage } from "./pages/WhatsAppPage";
 import { Postador } from "./pages/Postador";
 import { CronogramaPage } from "./pages/CronogramaPage";
+import { PostagensPage } from "./pages/PostagensPage";
 import { LoginPage } from "./pages/LoginPage";
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
           <Route path="/admin" element={<AdminPage />} />
           <Route path="/postador" element={<Postador />} />
           <Route path="/cronograma" element={<CronogramaPage />} />
+          <Route path="/postagens" element={<PostagensPage />} />
           <Route path="/perfil" element={<PerfilPage />} />
           <Route path="/whatsapp" element={<WhatsAppPage />} />
         </Route>
