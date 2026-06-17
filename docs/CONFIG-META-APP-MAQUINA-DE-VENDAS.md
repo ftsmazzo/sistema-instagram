@@ -153,8 +153,8 @@ Detalhes do filtro no workflow: `docs/FILTRO-WEBHOOK-INSTAGRAM.md`.
 
 ### 3.1 Modo desenvolvimento (agora)
 
-- [ ] Adicionar contas Instagram/Facebook como **Testadores** ou **Administradores** do app
-- [ ] Só essas contas funcionam até aprovação em produção
+- [ ] **Não** onboardar clientes reais pelo app central em Dev — use app Meta **do cliente** + token manual no painel (ver `META-SEM-CNPJ-FABRIAIA.md`).
+- [ ] App FabriaIA em Dev serve para **suas** contas (você é admin) e testes internos.
 
 ### 3.2 Permissões para pedir na revisão (produção / clientes reais)
 
@@ -241,7 +241,7 @@ Para **cada organização** no painel:
 | **Invalid platform app** no login Instagram | `META_OAUTH_MODE=facebook` + produto **Facebook Login** + mesmo redirect |
 | **Redirect URI mismatch** | URL no Meta **idêntica** a `META_OAUTH_REDIRECT_URI` (https, sem barra extra) |
 | Webhook não verifica | Workflow n8n ativo; URL pública acessível; verify token correto |
-| Cliente conectou mas webhook não chega | Inscrever IG nos campos em Webhooks; conta Business; app em modo dev só testadores |
+| Cliente conectou mas webhook não chega | Inscrever IG nos campos em Webhooks; app correto (do cliente ou FabriaIA Live) |
 | `(#3) Application does not have the capability` no DM após comentário | Usar `POST /{page_id}/messages` com `recipient.comment_id`; token de **Página** + `instagram_manage_messages` (não pedir `pages_messaging` — scope inválido no OAuth) |
 | **Invalid Scopes: pages_messaging** no login | Remover `pages_messaging` do OAuth; usar só `instagram_manage_messages` + `pages_show_list` |
 | Token expira (~60 dias) | Cliente clica **Conectar Meta** de novo (renovação automática pode ser implementada depois) |

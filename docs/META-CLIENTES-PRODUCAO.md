@@ -84,13 +84,14 @@ No painel do app Meta, se houver banner **Required actions / Ações necessária
 
 1. **Painel FabriaIA → Administração** — caixa verde «clientes podem conectar» ou vermelha com lista do que falta.
 2. **Meta → Revisão do app** — permissões com **Advanced Access: Ativo**.
-3. **Teste com conta que NÃO é admin do app** (e-mail pessoal de um amigo) — deve passar do login Facebook sem erro.
+3. **Teste com conta que NÃO é admin do app** — só passa se app estiver Ao vivo com Advanced Access.
 
 ---
 
-## Alternativa temporária (só emergência)
+## NÃO faça
 
-Adicionar cliente como **Testador** no app Meta — **não escala**. Use só para demo enquanto a revisão não aprova.
+- **Não** adicionar cliente em Funções → Testador do Instagram no app FabriaIA (tela «Adicionar conta do Instagram»). Exige login IG profissional público; não escala e não é o fluxo do painel.
+- **Não** prometer OAuth central sem CNPJ verificado da FabriaIA.
 
 ---
 

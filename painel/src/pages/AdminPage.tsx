@@ -680,7 +680,7 @@ export function AdminPage() {
                   </p>
                   <p className="mt-1">
                     <strong>Administração → Nova conta</strong> → cole <code className="rounded bg-white/80 px-1">ig_user_id</code> +{" "}
-                    <strong>token Graph API</strong> do cliente. Postador e agente usam isso direto.
+                    <strong>token Graph API</strong> gerado no <strong>app Meta do cliente</strong> (não use Funções → Testador do Instagram).
                   </p>
                   <p className="mt-2 text-xs">{metaReadiness.nota_producao}</p>
                   <details className="mt-3">

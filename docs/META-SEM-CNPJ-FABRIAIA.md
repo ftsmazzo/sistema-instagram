@@ -28,40 +28,38 @@ Postador, cronograma e agente usam esses tokens — **não dependem** do botão 
 
 ---
 
-## De onde o cliente tira o token (sem você ser testador)
+## De onde vem o token (sem OAuth no painel)
 
-O **cliente** (ou alguém com acesso admin da Página Facebook + Instagram dele) precisa gerar o token. Opções:
+**Não use** Meta → Funções → Testador do Instagram. Essa tela exige login na conta IG, conta profissional, conta pública — é armadilha em app Dev.
 
-### A) Cliente tem CNPJ / empresa
+O token colado em **Administração → Nova conta** precisa ser gerado num app Meta que **já tenha direito** sobre aquela conta Instagram. Na prática:
 
-- Cliente cria **app Meta dele** (ou vocês configuram uma vez como serviço).
-- Cliente faz **Verificação comercial dele** + permissões Instagram.
-- Gera **token de Página** com permissões de postagem e mensagens.
-- Cola no painel dele (workspace dele).
+### Opção 1 — Cliente com empresa (recomendado)
 
-### B) Cliente não tem app — Graph API Explorer (suporte pontual)
+- Cliente cria **app Meta dele** (developers.facebook.com).
+- Cliente faz verificação **dele** + permissões Instagram.
+- Gera **token de Página** (long-lived) no app **dele**.
+- Cola no painel FabriaIA: `ig_user_id` + token.
 
-1. [developers.facebook.com](https://developers.facebook.com) — app em modo Dev (seu ou do cliente).
-2. **Ferramentas → Graph API Explorer**
-3. Selecionar app + usuário admin da Página
-4. Permissões: `instagram_basic`, `instagram_content_publish`, `instagram_manage_comments`, `instagram_manage_messages`, `pages_show_list`, `pages_read_engagement`
-5. Gerar token → trocar por token de **Página** (long-lived)
-6. Copiar **Page access token** + **Instagram Business Account ID** (`ig_user_id`)
+Você **não** precisa ser testador. O app é **dele**.
 
-**Limite:** em app **seu** em Dev, só funciona para contas **testadoras** do app. Para cliente real sem ser testador, o app usado na geração do token precisa ser **dele** (com verificação dele) ou app seu **em Live** (exige seu CNPJ).
+### Opção 2 — Só a sua conta no app FabriaIA (Dev)
 
-### C) Você opera como «setup manual» (honesto comercialmente)
+- **Você** é admin do app Máquina de Vendas → Graph API Explorer com **seu** Facebook admin da Página → gera token → cola no painel.
+- Funciona para **suas** contas. **Não** escala para cliente externo no app Dev sem app próprio dele.
 
-Produto vendido: **«configuramos seu Instagram no painel»** — não **«SaaS self-service com um clique»**.
+### Opção 3 — Graph API Explorer no app FabriaIA para cliente
+
+Só funciona se a conta IG do cliente estiver vinculada como **testador do Instagram** no app FabriaIA (fluxo que você viu e que **não recomendamos**). Evite.
 
 ---
 
 ## Webhooks (agente comentários/DM)
 
-Webhooks Instagram ficam ligados ao **app Meta** que assina a conta.
+Webhooks ficam no **app Meta que gerou/assina** aquela conta.
 
-- App **seu** em Dev → só contas testadoras recebem eventos.
-- Cliente em produção → webhook no **app do cliente** apontando para seu n8n, **ou** app seu em Live (CNPJ).
+- App **FabriaIA** em Dev → webhooks só para contas ligadas a **esse** app (na prática: suas contas ou app do cliente).
+- Cliente em produção → webhook no **app do cliente** apontando para seu n8n.
 
 ---
 

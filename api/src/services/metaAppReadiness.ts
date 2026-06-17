@@ -158,7 +158,7 @@ export async function buildMetaReadinessReport(): Promise<MetaReadinessReport> {
     const publicProfile = byName.get("public_profile");
     if (oauthMode === "facebook" && publicProfile && !isAdvanced(publicProfile)) {
       bloqueios.push(
-        "public_profile só tem Standard Access — causa exata do erro «Login indisponível» para quem não é testador."
+        "public_profile só tem Standard Access — login OAuth bloqueado para quem não é admin do app."
       );
     }
   } catch (err) {
