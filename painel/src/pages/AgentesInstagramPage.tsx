@@ -276,7 +276,7 @@ export function AgentesInstagramPage() {
                 placeholder="Token agente — DM e comentários (cole aqui o token de mensagens)"
               />
               <p className="text-xs text-slate-500">
-                Usado pelo n8n para responder comentário e Direct. Pode ser diferente do token de posts.
+                Usado pelo n8n para responder comentário e Direct. Token de Página <strong>EAA…</strong> (Facebook) ou Instagram Login <strong>IGAA…</strong> — a API escolhe o host Graph certo.
               </p>
               <textarea
                 value={form.agent_prompt_comentarios}

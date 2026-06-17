@@ -50,3 +50,32 @@ export function resolveInstagramGraphToken(
   const agent = normalizeGraphAccessToken(agentAccessToken);
   return primary || agent;
 }
+
+/** Token Instagram Login (IGAA / IGQV) — host graph.instagram.com, não graph.facebook.com. */
+export function isInstagramLoginToken(token: string | null | undefined): boolean {
+  const t = normalizeGraphAccessToken(token ?? "");
+  return /^(IGAA|IGQV)/i.test(t);
+}
+
+/** Token Facebook / Página (EAA…) — host graph.facebook.com. */
+export function isFacebookGraphToken(token: string | null | undefined): boolean {
+  const t = normalizeGraphAccessToken(token ?? "");
+  return /^EAA/i.test(t);
+}
+
+/** Escolhe graph.facebook.com ou graph.instagram.com conforme o prefixo do token. */
+export function resolveGraphApiBaseForToken(
+  token: string | null | undefined,
+  version = (process.env.AGENT_GRAPH_API_VERSION ?? "v24.0").replace(/^v?/, "v")
+): string {
+  if (isInstagramLoginToken(token)) {
+    return (
+      process.env.AGENT_INSTAGRAM_GRAPH_API_BASE?.trim() ||
+      `https://graph.instagram.com/${version}`
+    );
+  }
+  return (
+    process.env.AGENT_GRAPH_API_BASE?.trim() ||
+    `https://graph.facebook.com/${version}`
+  );
+}

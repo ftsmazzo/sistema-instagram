@@ -13,6 +13,12 @@ import {
 import { parseAgendaConfig } from "../services/empresaConfigHelpers.js";
 import { getWhatsappInstanceForOrg, clampDelayPrimeiraMsg } from "./whatsappInstance.js";
 import { resolveFacebookPageCredentials } from "../util/metaPageId.js";
+import {
+  isFacebookGraphToken,
+  isInstagramLoginToken,
+  normalizeGraphAccessToken,
+  resolveGraphApiBaseForToken,
+} from "../util/graphToken.js";
 
 export type AgentConfigIssue = {
   code: string;
@@ -32,7 +38,12 @@ export type AgentConfigCredentials = {
   page_id: string | null;
   token_source: "agent" | "publish" | "none";
   graph_api_version: string;
+  /** Host principal do token do agente (facebook ou instagram). */
   graph_api_base: string;
+  /** Sempre graph.facebook.com — private reply no Direct. */
+  facebook_graph_base: string;
+  /** Token EAA para POST /{page_id}/messages quando agente é IGAA. */
+  messenger_access_token: string | null;
 };
 
 export type AgentConfigPrompts = {
@@ -142,9 +153,12 @@ function empresaFromRow(row: WorkspaceRow): EmpresaPerfil {
   };
 }
 
+const FACEBOOK_GRAPH_API_BASE = `https://graph.facebook.com/${AGENT_GRAPH_API_VERSION}`;
+
 function buildCredentials(agentTok: string, publishTok: string, issues: AgentConfigIssue[]): AgentConfigCredentials {
-  const agent = agentTok.trim();
-  const publish = publishTok.trim();
+  const agent = normalizeGraphAccessToken(agentTok);
+  const publish = normalizeGraphAccessToken(publishTok);
+  const graphBaseFor = (tok: string) => resolveGraphApiBaseForToken(tok, AGENT_GRAPH_API_VERSION);
 
   // Agente (comentários/Direct) → agent_access_token; Postador/sync → access_token.
   if (agent) {
@@ -161,13 +175,13 @@ function buildCredentials(agentTok: string, publishTok: string, issues: AgentCon
         severity: "warning",
       });
     }
-    return {
+    return withMessengerFields({
       access_token: agent,
       page_id: null,
       token_source: "agent",
       graph_api_version: AGENT_GRAPH_API_VERSION,
-      graph_api_base: AGENT_GRAPH_API_BASE,
-    };
+      graph_api_base: graphBaseFor(agent),
+    });
   }
   if (publish) {
     issues.push({
@@ -175,13 +189,13 @@ function buildCredentials(agentTok: string, publishTok: string, issues: AgentCon
       message: "Token do agente vazio — usando token de publicação também no agente (não ideal).",
       severity: "warning",
     });
-    return {
+    return withMessengerFields({
       access_token: publish,
       page_id: null,
       token_source: "publish",
       graph_api_version: AGENT_GRAPH_API_VERSION,
-      graph_api_base: AGENT_GRAPH_API_BASE,
-    };
+      graph_api_base: graphBaseFor(publish),
+    });
   }
   issues.push({
     code: "NO_ACCESS_TOKEN",
@@ -194,6 +208,8 @@ function buildCredentials(agentTok: string, publishTok: string, issues: AgentCon
     token_source: "none",
     graph_api_version: AGENT_GRAPH_API_VERSION,
     graph_api_base: AGENT_GRAPH_API_BASE,
+    facebook_graph_base: FACEBOOK_GRAPH_API_BASE,
+    messenger_access_token: null,
   };
 }
 
@@ -207,36 +223,98 @@ async function enrichCredentialsWithPageId(
   const stored = facebookPageId.trim();
   const issues = [...result.issues];
   const ig = igUserId?.trim() || result.lookup.ig_user_id?.trim() || undefined;
+  const token = result.credentials.access_token;
 
-  const pageCreds = await resolveFacebookPageCredentials(result.credentials.access_token, {
-    graphBase: result.credentials.graph_api_base,
-    igUserId: ig,
-  });
+  let pageId: string | null = stored || null;
+  let accessToken = token;
 
-  let pageId = pageCreds?.pageId ?? null;
-  let accessToken = pageCreds?.pageAccessToken ?? result.credentials.access_token;
-
-  if (!pageId && stored) pageId = stored;
-
-  if (!pageId) {
+  if (isInstagramLoginToken(token)) {
     issues.push({
-      code: "PAGE_ID_MISSING",
+      code: "INSTAGRAM_LOGIN_TOKEN",
       message:
-        "ID da Página Facebook não encontrado — use token de Página (EAA…) ou User token com pages_show_list.",
+        "Token IGAA/IGQV (Instagram Login) — comentários usam graph.instagram.com. Private reply no Direct pode exigir token de Página (EAA…).",
       severity: "warning",
     });
-  } else if (stored && pageId !== stored) {
-    issues.push({
-      code: "PAGE_ID_RESOLVED",
-      message: `Page ID corrigido via Graph API (${pageId}).`,
-      severity: "warning",
+    if (!pageId) {
+      issues.push({
+        code: "PAGE_ID_MISSING",
+        message: "ID da Página Facebook não configurado — necessário para private reply após comentário.",
+        severity: "warning",
+      });
+    }
+  } else {
+    const pageCreds = await resolveFacebookPageCredentials(token, {
+      graphBase: result.credentials.graph_api_base,
+      igUserId: ig,
     });
+
+    pageId = pageCreds?.pageId ?? pageId;
+    accessToken = pageCreds?.pageAccessToken ?? accessToken;
+
+    if (!pageId) {
+      issues.push({
+        code: "PAGE_ID_MISSING",
+        message:
+          "ID da Página Facebook não encontrado — use token de Página (EAA…) ou User token com pages_show_list.",
+        severity: "warning",
+      });
+    } else if (stored && pageId !== stored) {
+      issues.push({
+        code: "PAGE_ID_RESOLVED",
+        message: `Page ID corrigido via Graph API (${pageId}).`,
+        severity: "warning",
+      });
+    }
+
+    if (pageCreds?.pageAccessToken && pageCreds.pageAccessToken !== token) {
+      issues.push({
+        code: "PAGE_TOKEN_RESOLVED",
+        message: "Token de Página obtido via /me/accounts para envio de Direct.",
+        severity: "warning",
+      });
+    }
   }
 
-  if (pageCreds?.pageAccessToken && pageCreds.pageAccessToken !== result.credentials.access_token) {
+  return {
+    ...result,
+    issues,
+    credentials: { ...result.credentials, page_id: pageId, access_token: accessToken },
+  };
+}
+
+function withMessengerFields(creds: AgentConfigCredentials): AgentConfigCredentials {
+  return {
+    ...creds,
+    facebook_graph_base: FACEBOOK_GRAPH_API_BASE,
+    messenger_access_token: creds.access_token,
+  };
+}
+
+/** Quando agente é IGAA, private reply usa token EAA de publicação. */
+function attachMessengerCredentials(
+  result: AgentConfigResult,
+  agentRaw: string,
+  publishRaw: string
+): AgentConfigResult {
+  const issues = [...result.issues];
+  const creds = result.credentials;
+  if (!creds.access_token) {
+    return {
+      ...result,
+      credentials: { ...creds, facebook_graph_base: FACEBOOK_GRAPH_API_BASE, messenger_access_token: null },
+    };
+  }
+
+  const agent = normalizeGraphAccessToken(agentRaw);
+  const publish = normalizeGraphAccessToken(publishRaw);
+  let messenger_access_token = creds.access_token;
+
+  if (isInstagramLoginToken(agent) && isFacebookGraphToken(publish)) {
+    messenger_access_token = publish;
     issues.push({
-      code: "PAGE_TOKEN_RESOLVED",
-      message: "Token de Página obtido via /me/accounts para envio de Direct.",
+      code: "MESSENGER_TOKEN_FROM_PUBLISH",
+      message:
+        "Token Instagram (IGAA) no agente — comentários em graph.instagram.com; private reply usa token EAA de publicação.",
       severity: "warning",
     });
   }
@@ -244,7 +322,11 @@ async function enrichCredentialsWithPageId(
   return {
     ...result,
     issues,
-    credentials: { ...result.credentials, page_id: pageId, access_token: accessToken },
+    credentials: {
+      ...creds,
+      facebook_graph_base: FACEBOOK_GRAPH_API_BASE,
+      messenger_access_token,
+    },
   };
 }
 
@@ -550,6 +632,8 @@ export function notFoundAgentConfig(params: ResolveAgentConfigParams): AgentConf
       token_source: "none",
       graph_api_version: AGENT_GRAPH_API_VERSION,
       graph_api_base: AGENT_GRAPH_API_BASE,
+      facebook_graph_base: FACEBOOK_GRAPH_API_BASE,
+      messenger_access_token: null,
     },
     prompts: null,
     runtime: null,
@@ -584,6 +668,8 @@ export async function resolveAgentConfig(params: ResolveAgentConfigParams): Prom
         token_source: "none",
         graph_api_version: AGENT_GRAPH_API_VERSION,
         graph_api_base: AGENT_GRAPH_API_BASE,
+      facebook_graph_base: FACEBOOK_GRAPH_API_BASE,
+      messenger_access_token: null,
       },
       prompts: null,
       runtime: null,
@@ -616,6 +702,8 @@ export async function resolveAgentConfig(params: ResolveAgentConfigParams): Prom
         token_source: "none",
         graph_api_version: AGENT_GRAPH_API_VERSION,
         graph_api_base: AGENT_GRAPH_API_BASE,
+      facebook_graph_base: FACEBOOK_GRAPH_API_BASE,
+      messenger_access_token: null,
       },
       prompts: null,
       runtime: null,
@@ -630,7 +718,8 @@ export async function resolveAgentConfig(params: ResolveAgentConfigParams): Prom
       source: "workspace",
     });
     const withPage = await enrichCredentialsWithPageId(base, row.facebook_page_id, row.ig_user_id);
-    return attachWhatsappConfig(withPage, row.organization_id);
+    const withMessenger = attachMessengerCredentials(withPage, row.agent_access_token, row.access_token);
+    return attachWhatsappConfig(withMessenger, row.organization_id);
   }
 
   if (igUserId) {
@@ -638,9 +727,12 @@ export async function resolveAgentConfig(params: ResolveAgentConfigParams): Prom
     if (legacy) {
       const conta = (await loadConfig()).contas_instagram.find((c) => c.ig_user_id?.trim() === igUserId);
       const withPage = await enrichCredentialsWithPageId(legacy, conta?.facebook_page_id ?? "", igUserId);
-      const orgId = withPage.organization?.id;
-      if (orgId && orgId !== "legacy") return attachWhatsappConfig(withPage, orgId);
-      return withPage;
+      const agentTok = conta?.agent_access_token ?? "";
+      const pubTok = conta?.access_token ?? "";
+      const withMessenger = attachMessengerCredentials(withPage, agentTok, pubTok);
+      const orgId = withMessenger.organization?.id;
+      if (orgId && orgId !== "legacy") return attachWhatsappConfig(withMessenger, orgId);
+      return withMessenger;
     }
   }
 
