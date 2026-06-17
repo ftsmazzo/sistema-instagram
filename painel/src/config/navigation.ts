@@ -21,6 +21,7 @@ export const navGroups: NavGroup[] = [
 
 export const navItems: NavItem[] = [
   { path: "/", label: "Início", groupId: "overview" },
+  { path: "/operacao", label: "Operação", groupId: "overview" },
   { path: "/postagens", label: "Posts Instagram", groupId: "agents" },
   { path: "/agentes", label: "Agentes Instagram", groupId: "agents" },
   { path: "/whatsapp", label: "WhatsApp & leads", groupId: "agents" },

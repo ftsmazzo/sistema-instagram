@@ -11,6 +11,12 @@ const funnelSteps = [
 
 const quickLinks = [
   {
+    to: "/operacao",
+    title: "Operação",
+    desc: "Funil de conversão, alertas de saúde e histórico de conversas por lead.",
+    accent: "from-sky-500 to-indigo-600",
+  },
+  {
     to: "/postagens",
     title: "Posts Instagram",
     desc: "Sincronize publicações do feed — contexto para os agentes venderem nos seus posts.",

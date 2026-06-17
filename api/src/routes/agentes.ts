@@ -13,6 +13,7 @@ import {
   setInstanceWebhook,
 } from "../services/evolution.js";
 import { listLeads } from "../store/leads.js";
+import { getFunnelStats, getLeadTimeline, getOperacaoHealth } from "../store/crmOperacao.js";
 import {
   backfillLeadWhatsappDigits,
   getWhatsappInstanceForOrg,
@@ -58,6 +59,34 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
     });
 
     return reply.send(result);
+  });
+
+  /** KPIs do funil (comentários → Direct → WhatsApp → handoff). */
+  app.get("/funnel", async (request, reply) => {
+    const u = request.user as { orgId: string };
+    const q = request.query as { days?: string };
+    const days = q.days ? Number(q.days) : 30;
+    const stats = await getFunnelStats(u.orgId, days);
+    return reply.send({ ok: true, ...stats });
+  });
+
+  /** Saúde operacional (tokens, agentes, Evolution). */
+  app.get("/operacao/health", async (request, reply) => {
+    const u = request.user as { orgId: string };
+    const health = await getOperacaoHealth(u.orgId);
+    return reply.send(health);
+  });
+
+  /** Timeline unificada de um lead (comentário + Direct + WhatsApp). */
+  app.get<{ Params: { id: string } }>("/leads/:id/timeline", async (request, reply) => {
+    const u = request.user as { orgId: string };
+    const leadId = Number(request.params.id);
+    if (!Number.isFinite(leadId) || leadId < 1) {
+      return reply.status(400).send({ error: "ID de lead inválido." });
+    }
+    const result = await getLeadTimeline(u.orgId, leadId);
+    if (!result) return reply.status(404).send({ error: "Lead não encontrado." });
+    return reply.send({ ok: true, ...result });
   });
 
   /** Configuração da instância WhatsApp / Evolution do workspace. */

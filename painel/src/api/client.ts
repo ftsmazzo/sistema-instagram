@@ -269,6 +269,40 @@ export type LeadListItemRes = {
   updated_at: string;
 };
 
+export type FunnelStatsRes = {
+  ok: boolean;
+  period_days: number;
+  comentarios: number;
+  direct_inbound: number;
+  direct_outbound: number;
+  whatsapp_inbound: number;
+  whatsapp_outbound: number;
+  leads_total: number;
+  leads_com_whatsapp: number;
+  leads_por_status: Record<string, number>;
+  handoffs: number;
+};
+
+export type TimelineItemRes = {
+  canal: "comentario" | "direct" | "whatsapp";
+  direction: "inbound" | "outbound";
+  text: string;
+  at: string;
+  ref: string | null;
+};
+
+export type OperacaoHealthRes = {
+  ok: boolean;
+  issues: { code: string; message: string; severity: "error" | "warning" | "info" }[];
+  instagram: { contas: number; agentes_ativos: number; com_token_agente_igaa: number };
+  whatsapp: {
+    evolution_configured: boolean;
+    agent_ativo: boolean;
+    instance_name: string | null;
+    connection_state: string | null;
+  };
+};
+
 export type AuthStatus = {
   database: boolean;
   hasUsers: boolean;
@@ -706,5 +740,14 @@ export const api = {
         current?: { enabled?: boolean; url?: string; events?: string[] } | null;
         error?: string;
       }>("/api/agentes/whatsapp/webhook"),
+    getFunnel: (days?: number) =>
+      fetchJson<FunnelStatsRes>(`/api/agentes/funnel${days ? `?days=${days}` : ""}`),
+    getOperacaoHealth: () => fetchJson<OperacaoHealthRes>("/api/agentes/operacao/health"),
+    getLeadTimeline: (leadId: number) =>
+      fetchJson<{
+        ok: boolean;
+        lead: { id: number; nome: string | null; id_instagram: string; whatsapp: string | null };
+        timeline: TimelineItemRes[];
+      }>(`/api/agentes/leads/${leadId}/timeline`),
   },
 };
