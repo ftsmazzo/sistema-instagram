@@ -22,6 +22,14 @@ function emptyContaForm() {
   };
 }
 
+function contaSummary(c: ContaInstagramRes, isDefault: boolean): string {
+  const parts = [c.nome || c.ig_user_id];
+  if (c.agent_ativo) parts.push("Agente ativo");
+  if (isDefault) parts.push("Padrão");
+  if (c.has_token) parts.push("Token ok");
+  return parts.join(" · ");
+}
+
 export function AgentesInstagramPage() {
   const { config, setConfig, loading, error, setError, useWorkspace, needLogin } = useWorkspaceConfig();
   const [saving, setSaving] = useState(false);
@@ -47,7 +55,7 @@ export function AgentesInstagramPage() {
 
   const handleSaveConta = () => {
     if (!form.nome.trim() || !form.ig_user_id.trim()) {
-      setError("Nome e ID do usuário são obrigatórios.");
+      setError("Nome e ig_user_id são obrigatórios.");
       return;
     }
     setSaving(true);
@@ -112,7 +120,7 @@ export function AgentesInstagramPage() {
   };
 
   const handleRemoveConta = (id: string) => {
-    if (!confirm("Remover esta conta? O token será perdido.")) return;
+    if (!confirm("Remover esta conta?")) return;
     const list = contas
       .filter((c) => c.id !== id)
       .map((c) => ({
@@ -160,6 +168,11 @@ export function AgentesInstagramPage() {
     });
   };
 
+  const cancelEdit = () => {
+    setEditId(null);
+    setForm(emptyContaForm());
+  };
+
   if (loading) {
     return (
       <PageShell title="Agentes Instagram" description="Carregando…" wide>
@@ -169,16 +182,11 @@ export function AgentesInstagramPage() {
   }
 
   return (
-    <PageShell
-      wide
-      title="Agentes Instagram"
-      description="Conta comercial, tokens Graph API e configuração dos agentes de comentário e Direct. Sincronize posts em Posts Instagram."
-    >
+    <PageShell wide title="Agentes Instagram" description="Conta Instagram e agente de comentário/Direct.">
       {needLogin && (
         <div className="alert-info mb-6">
-          <p className="font-semibold">Login necessário</p>
-          <Link to="/login" className="btn-primary mt-4 inline-flex">
-            Ir para login
+          <Link to="/login" className="btn-primary inline-flex">
+            Fazer login
           </Link>
         </div>
       )}
@@ -186,15 +194,9 @@ export function AgentesInstagramPage() {
       {error && <div className="alert-error mb-6">{error}</div>}
 
       {!needLogin && (
-        <div className="space-y-6">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="font-display text-xl font-semibold text-slate-900">Contas Instagram</h2>
-              <p className="mt-2 max-w-2xl text-sm text-slate-600">
-                Cadastre o Instagram comercial que recebe comentários e DMs. O webhook n8n usa o{" "}
-                <code className="rounded bg-slate-100 px-1 text-xs">ig_user_id</code> desta conta.
-              </p>
-            </div>
+        <section className="card space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-xl font-semibold text-slate-900">Conta Instagram</h2>
             {!editId && (
               <button
                 type="button"
@@ -210,136 +212,64 @@ export function AgentesInstagramPage() {
             )}
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3 text-sm text-slate-700">
-            <p className="font-medium text-slate-900">Como conectar (setup manual)</p>
-            <ol className="mt-2 list-decimal space-y-1 pl-5">
-              <li>Instagram Business/Creator vinculado à Página do Facebook.</li>
-              <li>Token de Página com permissões de mensagens e comentários.</li>
-              <li>
-                <strong>ig_user_id</strong> — ID numérico da conta (Graph API), não é o @usuario.
-              </li>
-              <li>Marque <strong>Agente ativo</strong> para o n8n processar webhooks desta conta.</li>
-            </ol>
-          </div>
-
-          <ul className="space-y-3">
-            {contas.map((c) => (
-              <li
-                key={c.id}
-                className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200/90 bg-slate-50/80 p-4 shadow-sm"
-              >
-                <span className="font-semibold text-slate-800">{c.nome || "Sem nome"}</span>
-                <span className="text-sm text-slate-500">({c.ig_user_id})</span>
-                {c.has_token && (
-                  <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Token</span>
-                )}
-                {c.has_agent_token && (
-                  <span className="rounded-md bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">Token agente</span>
-                )}
-                {c.agent_ativo && (
-                  <span className="rounded-md bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800">Agente ativo</span>
-                )}
-                {defaultId === c.id && (
-                  <span className="rounded-md bg-indigo-100 px-2 py-0.5 text-xs font-medium text-indigo-800">Padrão</span>
-                )}
-                <div className="ml-auto flex flex-wrap gap-2">
-                  {defaultId !== c.id && (
-                    <button
-                      type="button"
-                      onClick={() => handleSetDefault(c.id)}
-                      disabled={saving}
-                      className="btn-ghost text-indigo-600 hover:text-indigo-700"
-                    >
-                      Definir padrão
-                    </button>
-                  )}
-                  <button type="button" onClick={() => startEdit(c)} disabled={saving} className="btn-ghost">
-                    Editar
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveConta(c.id)}
-                    disabled={saving}
-                    className="btn-ghost text-red-600 hover:text-red-700"
-                  >
-                    Excluir
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-
-          {(editId === "new" || editId) && (
-            <div className="card space-y-4 bg-slate-50/50">
-              <h3 className="font-display text-lg font-semibold text-slate-900">
-                {editId === "new" ? "Nova conta" : "Editar conta"}
-              </h3>
+          {editId ? (
+            <div className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/40 p-4">
               <input
                 type="text"
                 value={form.nome}
                 onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))}
                 className="input-field"
-                placeholder="Nome (ex.: @minhaempresa)"
+                placeholder="Nome"
               />
               <input
                 type="text"
                 value={form.ig_user_id}
                 onChange={(e) => setForm((f) => ({ ...f, ig_user_id: e.target.value }))}
                 className="input-field font-mono text-sm"
-                placeholder="ID numérico Instagram comercial"
+                placeholder="ig_user_id"
               />
               <input
                 type="password"
                 value={form.access_token}
                 onChange={(e) => setForm((f) => ({ ...f, access_token: e.target.value }))}
                 className="input-field font-mono text-sm"
-                placeholder={editId === "new" ? "Token Graph API — obrigatório" : "Vazio = mantém token atual"}
+                placeholder={editId === "new" ? "Token Graph API" : "Token (vazio = mantém)"}
               />
-
-              <div className="space-y-3 rounded-xl border border-violet-200/90 bg-violet-50/50 p-4">
-                <h4 className="font-semibold text-slate-900">Agente (comentários + Direct)</h4>
-                <label className="flex items-center gap-2 text-sm font-medium text-slate-800">
-                  <input
-                    type="checkbox"
-                    checked={form.agent_ativo}
-                    onChange={(e) => setForm((f) => ({ ...f, agent_ativo: e.target.checked }))}
-                    className="rounded border-slate-300"
-                  />
-                  Agente ativo nesta conta
-                </label>
-                <label className="label-field">Nome do assistente</label>
+              <label className="flex items-center gap-2 text-sm">
                 <input
-                  type="text"
-                  value={form.agent_nome}
-                  onChange={(e) => setForm((f) => ({ ...f, agent_nome: e.target.value }))}
-                  className="input-field"
-                  placeholder="Ex.: Ana — opcional"
+                  type="checkbox"
+                  checked={form.agent_ativo}
+                  onChange={(e) => setForm((f) => ({ ...f, agent_ativo: e.target.checked }))}
                 />
-                <label className="label-field">Token do agente (opcional)</label>
-                <input
-                  type="password"
-                  value={form.agent_access_token}
-                  onChange={(e) => setForm((f) => ({ ...f, agent_access_token: e.target.value }))}
-                  className="input-field font-mono text-sm"
-                  placeholder="Vazio = usa token principal"
-                />
-                <label className="label-field">Refinamentos — comentários</label>
-                <textarea
-                  value={form.agent_prompt_comentarios}
-                  onChange={(e) => setForm((f) => ({ ...f, agent_prompt_comentarios: e.target.value }))}
-                  className="textarea-field min-h-[80px] font-mono text-xs"
-                  placeholder="Tom e regras extras. Vazio = prompt-base interno."
-                />
-                <label className="label-field">Refinamentos — Direct</label>
-                <textarea
-                  value={form.agent_prompt_direct}
-                  onChange={(e) => setForm((f) => ({ ...f, agent_prompt_direct: e.target.value }))}
-                  className="textarea-field min-h-[80px] font-mono text-xs"
-                  placeholder="Complementos de abordagem. Vazio = prompt-base interno."
-                />
-              </div>
-
-              <div className="flex flex-wrap gap-2">
+                Agente ativo
+              </label>
+              <input
+                type="text"
+                value={form.agent_nome}
+                onChange={(e) => setForm((f) => ({ ...f, agent_nome: e.target.value }))}
+                className="input-field"
+                placeholder="Nome do assistente (opcional)"
+              />
+              <input
+                type="password"
+                value={form.agent_access_token}
+                onChange={(e) => setForm((f) => ({ ...f, agent_access_token: e.target.value }))}
+                className="input-field font-mono text-sm"
+                placeholder="Token agente (opcional)"
+              />
+              <textarea
+                value={form.agent_prompt_comentarios}
+                onChange={(e) => setForm((f) => ({ ...f, agent_prompt_comentarios: e.target.value }))}
+                className="textarea-field min-h-[72px] font-mono text-xs"
+                placeholder="Refinamentos — comentários (opcional)"
+              />
+              <textarea
+                value={form.agent_prompt_direct}
+                onChange={(e) => setForm((f) => ({ ...f, agent_prompt_direct: e.target.value }))}
+                className="textarea-field min-h-[72px] font-mono text-xs"
+                placeholder="Refinamentos — Direct (opcional)"
+              />
+              <div className="flex flex-wrap gap-2 pt-1">
                 <button
                   type="button"
                   onClick={handleSaveConta}
@@ -351,26 +281,52 @@ export function AgentesInstagramPage() {
                   }
                   className="btn-primary"
                 >
-                  {saving ? "Salvando…" : editId === "new" ? "Adicionar conta" : "Salvar alterações"}
+                  {saving ? "Salvando…" : editId === "new" ? "Adicionar" : "Salvar"}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditId(null);
-                    setForm(emptyContaForm());
-                  }}
-                  className="btn-secondary"
-                >
+                <button type="button" onClick={cancelEdit} className="btn-secondary">
                   Cancelar
                 </button>
               </div>
             </div>
+          ) : (
+            <ul className="space-y-2">
+              {contas.map((c) => (
+                <li
+                  key={c.id}
+                  className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/40 px-4 py-3"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium text-slate-900">{c.nome || c.ig_user_id}</p>
+                    <p className="text-xs text-slate-500">{contaSummary(c, defaultId === c.id)}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {defaultId !== c.id && (
+                      <button
+                        type="button"
+                        onClick={() => handleSetDefault(c.id)}
+                        disabled={saving}
+                        className="btn-ghost text-xs"
+                      >
+                        Padrão
+                      </button>
+                    )}
+                    <button type="button" onClick={() => startEdit(c)} disabled={saving} className="btn-secondary text-sm">
+                      Editar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveConta(c.id)}
+                      disabled={saving}
+                      className="btn-ghost text-sm text-red-600"
+                    >
+                      Excluir
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
           )}
-
-          {contas.length === 0 && !editId && (
-            <p className="text-sm text-slate-500">Nenhuma conta ainda. Clique em «+ Adicionar conta».</p>
-          )}
-        </div>
+        </section>
       )}
     </PageShell>
   );

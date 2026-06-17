@@ -26,14 +26,17 @@ export function ConfigSectionCard({
   return (
     <section className="card space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h2 className="font-display text-xl font-semibold text-slate-900">{title}</h2>
-          <p className="mt-1 text-sm text-slate-600">{description}</p>
-        </div>
+        <h2 className="font-display text-xl font-semibold text-slate-900">{title}</h2>
+        {!editing && (
+          <button type="button" onClick={onEdit} className="btn-secondary shrink-0">
+            Editar
+          </button>
+        )}
       </div>
 
       {editing ? (
         <>
+          <p className="text-sm text-slate-600">{description}</p>
           <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50/40 p-4">{children}</div>
           <div className="flex flex-wrap gap-3">
             <button type="button" onClick={onSave} disabled={saving} className="btn-primary">
@@ -45,11 +48,8 @@ export function ConfigSectionCard({
           </div>
         </>
       ) : (
-        <div className="flex flex-wrap items-start gap-4 rounded-xl border border-slate-200 bg-slate-50/40 p-4">
-          <div className="min-w-0 flex-1 space-y-1.5 text-sm text-slate-600">{summary}</div>
-          <button type="button" onClick={onEdit} className="btn-secondary ml-auto shrink-0">
-            Editar
-          </button>
+        <div className="rounded-xl border border-slate-200 bg-slate-50/40 p-4">
+          <div className="space-y-1.5 text-sm text-slate-600">{summary}</div>
         </div>
       )}
     </section>

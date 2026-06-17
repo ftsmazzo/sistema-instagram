@@ -19,14 +19,20 @@ export function AdminPage() {
   const [saved, setSaved] = useState(false);
   const [editingSection, setEditingSection] = useState<EmpresaSection | null>(null);
   const [empresa, setEmpresa] = useState<EmpresaPerfilRes>(emptyEmpresa);
+  const savedEmpresa = mergeEmpresa(config?.empresa);
 
   useEffect(() => {
     if (config?.empresa) setEmpresa(mergeEmpresa(config.empresa));
   }, [config?.empresa]);
 
   const cancelEdit = () => {
-    if (config?.empresa) setEmpresa(mergeEmpresa(config.empresa));
+    setEmpresa(savedEmpresa);
     setEditingSection(null);
+  };
+
+  const startEdit = (section: EmpresaSection) => {
+    setEmpresa(savedEmpresa);
+    setEditingSection(section);
   };
 
   const handleSaveEmpresa = (onSuccess?: () => void) => {
@@ -63,7 +69,7 @@ export function AdminPage() {
     <PageShell
       wide
       title="Empresa"
-      description="Perfil da marca, regras de qualificação e configurações comerciais usadas pelos agentes Instagram e WhatsApp."
+      description="Perfil, qualificação e atendimento comercial."
     >
       {needLogin && (
         <div className="alert-info mb-6">
@@ -86,11 +92,11 @@ export function AdminPage() {
             title="Perfil da empresa"
             description="Contexto da marca que os agentes usam para falar como sua empresa."
             editing={editingSection === "perfil"}
-            onEdit={() => setEditingSection("perfil")}
+            onEdit={() => startEdit("perfil")}
             onCancel={cancelEdit}
             onSave={() => handleSaveEmpresa(() => setEditingSection(null))}
             saving={saving}
-            summary={perfilSummary(empresa)}
+            summary={perfilSummary(savedEmpresa)}
           >
             <label className="label-field">Nome (razão social / registro)</label>
             <input
@@ -144,11 +150,11 @@ export function AdminPage() {
             title="Qualificação de leads"
             description="O que o agente deve descobrir antes de passar para WhatsApp ou consultor humano."
             editing={editingSection === "qualificacao"}
-            onEdit={() => setEditingSection("qualificacao")}
+            onEdit={() => startEdit("qualificacao")}
             onCancel={cancelEdit}
             onSave={() => handleSaveEmpresa(() => setEditingSection(null))}
             saving={saving}
-            summary={qualificacaoSummary(empresa)}
+            summary={qualificacaoSummary(savedEmpresa)}
           >
             <label className="label-field">Objetivo de qualificação</label>
             <textarea
@@ -170,11 +176,11 @@ export function AdminPage() {
             title="Atendimento comercial"
             description="Links, agenda e handoff usados pelos agentes WhatsApp e Instagram Direct."
             editing={editingSection === "comercial"}
-            onEdit={() => setEditingSection("comercial")}
+            onEdit={() => startEdit("comercial")}
             onCancel={cancelEdit}
             onSave={() => handleSaveEmpresa(() => setEditingSection(null))}
             saving={saving}
-            summary={comercialSummary(empresa)}
+            summary={comercialSummary(savedEmpresa)}
           >
             <label className="label-field">Link de produto / serviço</label>
             <input
@@ -202,7 +208,6 @@ export function AdminPage() {
             />
             <fieldset className="space-y-2 rounded-lg border border-slate-200 bg-white/60 p-4">
               <legend className="px-1 text-sm font-semibold text-slate-800">Horários para agendamento</legend>
-              <p className="text-xs text-slate-600">Usado quando o agente propõe visita, reunião ou demonstração.</p>
               <div className="flex flex-wrap gap-2">
                 {AGENDA_DIAS.map((d) => {
                   const on = empresa.agenda_config.dias_semana.includes(d.id);
