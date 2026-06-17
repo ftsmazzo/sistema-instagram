@@ -171,7 +171,7 @@ function buildCredentials(agentTok: string, publishTok: string, issues: AgentCon
     } else if (agent !== publish) {
       issues.push({
         code: "TOKENS_SPLIT",
-        message: "Tokens separados: agente para DM/comentários, publicação para posts.",
+        message: "Dois tokens: IGAA no agente (comentários/Direct IG) + EAA na publicação (posts e private reply).",
         severity: "warning",
       });
     }
@@ -282,7 +282,12 @@ async function enrichCredentialsWithPageId(
   };
 }
 
-function withMessengerFields(creds: AgentConfigCredentials): AgentConfigCredentials {
+type AgentConfigCredentialsCore = Omit<
+  AgentConfigCredentials,
+  "facebook_graph_base" | "messenger_access_token"
+>;
+
+function withMessengerFields(creds: AgentConfigCredentialsCore): AgentConfigCredentials {
   return {
     ...creds,
     facebook_graph_base: FACEBOOK_GRAPH_API_BASE,
