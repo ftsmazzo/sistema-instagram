@@ -10,6 +10,7 @@ import { postagensRoutes } from "./routes/postagens.js";
 import { authRoutes } from "./routes/auth.js";
 import { meWorkspaceRoutes } from "./routes/meWorkspace.js";
 import { internalRoutes } from "./routes/internal.js";
+import { qualificacaoRoutes } from "./routes/qualificacao.js";
 import { startCronJob } from "./services/cron.js";
 
 const PORT = Number(process.env.PORT) || 3000;
@@ -31,6 +32,7 @@ async function build() {
   await app.register(agentesRoutes, { prefix: "/api/agentes" });
   await app.register(postadorRoutes, { prefix: "/api/postador" });
   await app.register(postagensRoutes, { prefix: "/api/postagens" });
+  await app.register(qualificacaoRoutes, { prefix: "/api/qualificacao" });
   await app.register(internalRoutes, { prefix: "/api/internal" });
 
   startCronJob(app);

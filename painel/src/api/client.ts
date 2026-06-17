@@ -139,6 +139,26 @@ export type EmpresaPerfilRes = {
   postador_brand?: PostadorBrandKitRes;
 };
 
+export type QualificacaoCriterioRes = {
+  id: string;
+  label: string;
+  pergunta_guia: string;
+  obrigatorio: boolean;
+};
+
+export type QualificacaoPlaybookRes = {
+  id: string;
+  label: string;
+  descricao: string;
+  emoji: string;
+  segmento: string;
+  tom_voz: string;
+  sobre_exemplo: string;
+  objetivo_qualificacao: string;
+  resultado_esperado: string;
+  criterios: QualificacaoCriterioRes[];
+};
+
 export type Config = {
   empresa: EmpresaPerfilRes;
   contas_instagram: ContaInstagramRes[];
@@ -331,6 +351,12 @@ export const api = {
       body,
     }),
   getConfig: () => fetchJson<Config>("/api/config"),
+  getQualificacaoPlaybooks: (segmento?: string) => {
+    const qs = segmento?.trim() ? `?segmento=${encodeURIComponent(segmento.trim())}` : "";
+    return fetchJson<{ playbooks: QualificacaoPlaybookRes[]; suggested_playbook_id: string | null }>(
+      `/api/qualificacao/playbooks${qs}`
+    );
+  },
   putConfig: (body: {
     empresa?: Partial<EmpresaPerfilRes>;
     contas_instagram?: ContaInstagramInput[];

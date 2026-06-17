@@ -10,6 +10,7 @@ import {
 import { useWorkspaceConfig } from "../hooks/useWorkspaceConfig";
 import { AGENDA_DIAS, emptyEmpresa, mergeEmpresa } from "../lib/empresaForm";
 import { api, getAuthToken, type EmpresaPerfilRes } from "../api/client";
+import { QualificacaoPlaybookPicker } from "../components/config/QualificacaoPlaybookPicker";
 
 type EmpresaSection = "perfil" | "qualificacao" | "comercial";
 
@@ -148,7 +149,7 @@ export function AdminPage() {
 
           <ConfigSectionCard
             title="Qualificação de leads"
-            description="O que o agente deve descobrir antes de passar para WhatsApp ou consultor humano."
+            description="Escolha um modelo, marque o que importa e salve — o agente qualifica com conversa humana até o WhatsApp."
             editing={editingSection === "qualificacao"}
             onEdit={() => startEdit("qualificacao")}
             onCancel={cancelEdit}
@@ -156,20 +157,27 @@ export function AdminPage() {
             saving={saving}
             summary={qualificacaoSummary(savedEmpresa)}
           >
+            <QualificacaoPlaybookPicker
+              empresa={empresa}
+              onApply={(patch) => setEmpresa((x) => ({ ...x, ...patch }))}
+            />
             <label className="label-field">Objetivo de qualificação</label>
             <textarea
               value={empresa.objetivo_qualificacao}
               onChange={(e) => setEmpresa((x) => ({ ...x, objetivo_qualificacao: e.target.value }))}
               className="textarea-field min-h-[88px]"
-              placeholder="Ex.: descobrir interesse real, urgência e obter WhatsApp com naturalidade."
+              placeholder="O que precisa estar claro antes de mandar pro WhatsApp?"
             />
-            <label className="label-field">Critérios (um por linha)</label>
+            <label className="label-field">Critérios (um por linha — o agente descobre na conversa)</label>
             <textarea
               value={empresa.criterios_qualificacao ?? ""}
               onChange={(e) => setEmpresa((x) => ({ ...x, criterios_qualificacao: e.target.value }))}
               className="textarea-field min-h-[88px] font-mono text-sm"
-              placeholder={"Nome do lead\nInteresse / necessidade\nPrazo ou urgência\nOrçamento ou perfil"}
+              placeholder={"Nome do lead\nInteresse / necessidade\nPrazo ou urgência\nWhatsApp"}
             />
+            <p className="text-xs text-slate-500">
+              Dica: em <strong>Atendimento comercial</strong> configure link, WhatsApp do consultor e horários — o agente usa tudo junto.
+            </p>
           </ConfigSectionCard>
 
           <ConfigSectionCard

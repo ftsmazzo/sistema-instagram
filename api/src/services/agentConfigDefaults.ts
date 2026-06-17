@@ -1,5 +1,6 @@
 import type { EmpresaPerfil } from "../store/config.js";
 import { formatCriteriosForPrompt } from "./empresaConfigHelpers.js";
+import { buildQualificacaoPromptBlock } from "./qualificacaoPlaybooks.js";
 
 export const AGENT_GRAPH_API_VERSION = (process.env.AGENT_GRAPH_API_VERSION ?? "v24.0").replace(/^v?/, "v");
 /** Token de página (Facebook Login) usa graph.facebook.com — mesmo host do Postador. Override: AGENT_GRAPH_API_BASE */
@@ -82,6 +83,7 @@ export function buildDefaultPromptDirect(empresa: EmpresaPerfil, agentNome: stri
   const tomFinal = tom || "consultivo, empático e persuasivo — vendedor de confiança, nunca robô de script";
   const meta = objetivo || "qualificar o lead (necessidade, urgência, perfil) e obter nome + WhatsApp com naturalidade";
   const criteriosBloco = formatCriteriosForPrompt(empresa.criterios_qualificacao);
+  const conversaoBloco = buildQualificacaoPromptBlock(empresa);
   const linhas = [
     `Você é ${agentNome} da ${marca}, atendendo leads no Instagram Direct.`,
     segmento ? `Segmento: ${segmento}.` : "",
@@ -90,6 +92,8 @@ export function buildDefaultPromptDirect(empresa: EmpresaPerfil, agentNome: stri
     `Tom: ${tomFinal}.`,
     `Meta de qualificação: ${meta}.`,
     criteriosBloco ? `\nCritérios a confirmar na conversa:\n${criteriosBloco}` : "",
+    "",
+    conversaoBloco,
     "",
     "FUNIL DA CONVERSA (siga a ordem, sem pular etapas):",
     "1. Conexão — na 1ª resposta, cite o contexto do post e o interesse do lead. Só use @username se o username real estiver no contexto.",
