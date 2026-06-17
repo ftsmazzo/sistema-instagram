@@ -1,10 +1,8 @@
 # Checklist — App Meta **Máquina de Vendas** (FabriaIA)
 
 > **IMPORTANTE — leia antes de onboardar clientes**  
-> Preencher `META_APP_ID`, redirect OAuth e URLs na API **só faz o botão «Conectar Meta» funcionar para você (admin do app)**.  
-> **Clientes reais** só conseguem conectar depois de **Verificação comercial + Revisão do app (Advanced Access) + modo Ao vivo** no [developers.facebook.com](https://developers.facebook.com).  
-> Sem isso aparece: *«Login do Facebook indisponível… estamos atualizando detalhes adicionais»*.  
-> Guia detalhado: **`docs/META-CLIENTES-PRODUCAO.md`**. No painel: **Administração** mostra o diagnóstico «Clientes ainda NÃO conseguem conectar».
+> **Sem CNPJ / Verificação comercial da FabriaIA?** → OAuth «Conectar Meta» **não serve clientes reais**. Use **token manual**: `docs/META-SEM-CNPJ-FABRIAIA.md`.  
+> **Com CNPJ verificado?** → OAuth central: `docs/META-CLIENTES-PRODUCAO.md`.
 
 Um **único app** na Meta serve **todos os clientes** da plataforma. Cada cliente só clica **Conectar conta Meta** no painel — não cria app no Developer.
 
@@ -217,7 +215,9 @@ Para **cada organização** no painel:
 5. [ ] No app Meta (Webhooks): **inscrever** a conta Instagram do cliente nos campos `messages` + `comments` (se a Meta não inscrever sozinha após OAuth)
 6. [ ] Ativar **Agente** na conta (Administração) e configurar WhatsApp se usar Fase 2
 
-**Não é necessário:** novo app Meta, copiar token do Graph API Explorer, Developer Console por cliente.
+**Alternativa sem OAuth (sem CNPJ FabriaIA):** Administração → **Nova conta** → colar `ig_user_id` + tokens manualmente. Ver `docs/META-SEM-CNPJ-FABRIAIA.md`.
+
+**OAuth central exige:** app Meta da FabriaIA em Live + Verificação comercial **da FabriaIA**.
 
 ---
 

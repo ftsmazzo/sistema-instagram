@@ -1,6 +1,10 @@
-# Liberar clientes reais no «Conectar Meta» (sem testador um a um)
+# Liberar clientes reais no «Conectar Meta» (OAuth central)
 
-## O problema
+> **Se você NÃO tem CNPJ / não faz Verificação comercial da FabriaIA:**  
+> **pare de usar este guia como caminho principal.** Leia **`docs/META-SEM-CNPJ-FABRIAIA.md`** — o fluxo correto é **token + ig_user_id manual** em Administração.  
+> OAuth «Conectar Meta» num app seu **não escala** sem Business Verification.
+
+## O problema (só para quem TEM CNPJ verificado na Meta)
 
 Você configurou links, variáveis e conectou **sua** conta — mas o **cliente** vê:
 

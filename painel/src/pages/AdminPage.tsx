@@ -166,7 +166,7 @@ export function AdminPage() {
         /invalid platform app/i.test(base)
           ? "\n\nDesbloqueio: na API defina META_OAUTH_MODE=facebook (ou remova a variável), reinicie o serviço. No app Meta adicione o produto «Facebook Login» e o mesmo redirect OAuth (…/api/auth/meta/callback). O login passa pelo Facebook e continua a gravar Instagram no workspace."
           : /indisponível|unavailable|atualizando detalhes/i.test(base)
-            ? "\n\nIsso NÃO é bug do painel: o app Meta ainda não está liberado para clientes reais (modo Desenvolvimento ou sem Advanced Access). Veja o painel «Liberar clientes» abaixo — é preciso Verificação comercial + Revisão do app + modo Ao vivo na Meta."
+            ? "\n\nSem CNPJ / app em Dev: não use OAuth para clientes. Administração → Nova conta → cole ig_user_id + token Graph API (ver docs/META-SEM-CNPJ-FABRIAIA.md)."
             : "";
       setError(base + extra);
     }
@@ -673,48 +673,31 @@ export function AdminPage() {
           {useWorkspace && metaOAuth && (
             <div className="card mt-4 space-y-3 border-indigo-200/80 bg-indigo-50/40">
               {metaReadiness && !metaReadiness.pronto_para_clientes && (
-                <div className="rounded-xl border-2 border-red-300 bg-red-50 px-4 py-3 text-sm text-red-950">
-                  <p className="font-bold">Clientes ainda NÃO conseguem conectar — app Meta não está em produção</p>
-                  <p className="mt-2">{metaReadiness.nota_producao}</p>
-                  {metaReadiness.bloqueios.length > 0 && (
-                    <ul className="mt-2 list-disc pl-5 space-y-1">
-                      {metaReadiness.bloqueios.map((b) => (
-                        <li key={b}>{b}</li>
-                      ))}
-                    </ul>
-                  )}
-                  <p className="mt-3 font-medium">O que fazer na Meta (uma vez, para todos os clientes):</p>
-                  <ol className="mt-1 list-decimal pl-5 space-y-1">
-                    {metaReadiness.proximos_passos.map((s) => (
-                      <li key={s}>{s}</li>
-                    ))}
-                  </ol>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <a href={metaReadiness.links.business_verification} target="_blank" rel="noreferrer" className="text-xs font-medium text-red-900 underline">
-                      Verificação comercial
-                    </a>
-                    <a href={metaReadiness.links.app_review} target="_blank" rel="noreferrer" className="text-xs font-medium text-red-900 underline">
-                      Revisão do app
-                    </a>
-                    <a href={metaReadiness.links.publish} target="_blank" rel="noreferrer" className="text-xs font-medium text-red-900 underline">
-                      Publicar (modo Ao vivo)
-                    </a>
-                    <a href={metaReadiness.links.facebook_login} target="_blank" rel="noreferrer" className="text-xs font-medium text-red-900 underline">
-                      Facebook Login
-                    </a>
-                  </div>
-                  {metaReadiness.permissoes.length > 0 && (
-                    <details className="mt-3">
-                      <summary className="cursor-pointer text-xs font-medium">Permissões lidas na Graph API</summary>
-                      <ul className="mt-2 max-h-40 overflow-y-auto text-xs font-mono">
-                        {metaReadiness.permissoes.map((p) => (
-                          <li key={p.permission}>
-                            {p.permission}: {p.access_level} ({p.status})
-                          </li>
+                <div className="rounded-xl border-2 border-amber-400 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                  <p className="font-bold">OAuth «Conectar Meta» não libera clientes sozinhos (app Meta em Dev / sem Advanced Access)</p>
+                  <p className="mt-2 font-semibold text-amber-900">
+                    Sem CNPJ da FabriaIA? Não insista no OAuth — use o fluxo que já funciona:
+                  </p>
+                  <p className="mt-1">
+                    <strong>Administração → Nova conta</strong> → cole <code className="rounded bg-white/80 px-1">ig_user_id</code> +{" "}
+                    <strong>token Graph API</strong> do cliente. Postador e agente usam isso direto.
+                  </p>
+                  <p className="mt-2 text-xs">{metaReadiness.nota_producao}</p>
+                  <details className="mt-3">
+                    <summary className="cursor-pointer font-medium text-amber-900">Só se você tiver CNPJ e Verificação comercial aprovada</summary>
+                    {metaReadiness.bloqueios.length > 0 && (
+                      <ul className="mt-2 list-disc pl-5 space-y-1">
+                        {metaReadiness.bloqueios.map((b) => (
+                          <li key={b}>{b}</li>
                         ))}
                       </ul>
-                    </details>
-                  )}
+                    )}
+                    <ol className="mt-2 list-decimal pl-5 space-y-1">
+                      {metaReadiness.proximos_passos.slice(1).map((s) => (
+                        <li key={s}>{s}</li>
+                      ))}
+                    </ol>
+                  </details>
                 </div>
               )}
               {metaReadiness?.pronto_para_clientes && (
@@ -723,10 +706,10 @@ export function AdminPage() {
                 </div>
               )}
               <div>
-                <h3 className="font-semibold text-slate-900">Conectar com Facebook / Instagram</h3>
+                <h3 className="font-semibold text-slate-900">Conectar com Facebook / Instagram (OAuth — opcional)</h3>
                 <p className="mt-1 text-sm text-slate-600">
-                  Abre o login da Meta: escolha a <strong>página</strong> que tem o Instagram comercial vinculado. Os tokens de
-                  postagem e de agente serão preenchidos automaticamente (o mesmo token de página, com as permissões do app).
+                  Só funciona para <strong>você (admin do app Meta)</strong> ou após Verificação comercial + app Ao vivo.
+                  <strong> Sem CNPJ:</strong> use <strong>Nova conta</strong> abaixo e cole token + ig_user_id.
                 </p>
               </div>
               <button type="button" onClick={handleConectarMeta} disabled={saving} className="btn-primary">

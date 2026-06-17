@@ -89,7 +89,7 @@ export async function buildMetaReadinessReport(): Promise<MetaReadinessReport> {
   const proximos_passos: string[] = [];
 
   const notaProducao =
-    "Links e variáveis na API só ligam o botão «Conectar Meta». Clientes reais só entram depois de Verificação comercial + Revisão do app + modo Ao vivo na Meta.";
+    "OAuth «Conectar Meta» num app central só escala com Verificação comercial (CNPJ) da dona do app. Sem CNPJ: use Administração → Nova conta → token + ig_user_id manual (docs/META-SEM-CNPJ-FABRIAIA.md).";
 
   if (!isMetaOAuthConfigured() || !env || !appId) {
     bloqueios.push("OAuth Meta não configurado na API (META_APP_ID, META_APP_SECRET, META_OAUTH_REDIRECT_URI).");
@@ -125,10 +125,9 @@ export async function buildMetaReadinessReport(): Promise<MetaReadinessReport> {
   }
 
   proximos_passos.push(
-    "Meta → Verificação comercial (Business Verification): concluir — obrigatório para Advanced Access.",
-    "Meta → Revisão do app → pedir Advanced Access das permissões Instagram (gravação de tela + texto de uso).",
-    "Meta → Publicar → alternar app para modo Ao vivo (Live) depois das aprovações.",
-    "Meta → Painel inicial: resolver tudo em «Ações necessárias» / Required actions (se aparecer banner vermelho)."
+    "SEM CNPJ FabriaIA: ignore OAuth para clientes — Administração → Nova conta → cole ig_user_id + token (ver docs/META-SEM-CNPJ-FABRIAIA.md).",
+    "COM CNPJ: Meta → Verificação comercial → Revisão do app (Advanced Access) → modo Ao vivo.",
+    "Meta → Painel inicial: resolver «Ações necessárias» se houver banner."
   );
 
   let permissoes: MetaReadinessReport["permissoes"] = [];
