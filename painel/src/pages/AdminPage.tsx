@@ -1,32 +1,55 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { PageShell } from "../components/layout/PageShell";
+import {
+  ConfigSectionCard,
+  comercialSummary,
+  perfilSummary,
+  qualificacaoSummary,
+} from "../components/config/ConfigSectionCard";
 import { useWorkspaceConfig } from "../hooks/useWorkspaceConfig";
 import { AGENDA_DIAS, emptyEmpresa, mergeEmpresa } from "../lib/empresaForm";
 import { api, getAuthToken, type EmpresaPerfilRes } from "../api/client";
 
+type EmpresaSection = "perfil" | "qualificacao" | "comercial";
+
 export function AdminPage() {
   const { config, setConfig, loading, error, setError, useWorkspace, needLogin } = useWorkspaceConfig();
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [editingSection, setEditingSection] = useState<EmpresaSection | null>(null);
   const [empresa, setEmpresa] = useState<EmpresaPerfilRes>(emptyEmpresa);
 
   useEffect(() => {
     if (config?.empresa) setEmpresa(mergeEmpresa(config.empresa));
   }, [config?.empresa]);
 
-  const handleSaveEmpresa = () => {
+  const cancelEdit = () => {
+    if (config?.empresa) setEmpresa(mergeEmpresa(config.empresa));
+    setEditingSection(null);
+  };
+
+  const handleSaveEmpresa = (onSuccess?: () => void) => {
     setSaving(true);
     setError(null);
     const p =
       useWorkspace && getAuthToken()
         ? api.putMeWorkspace({ empresa })
         : api.putConfig({ empresa });
-    p.then((res) =>
-      setConfig((c) => (c ? { ...c, empresa: res.received?.empresa ?? c.empresa } : null))
-    )
+    p.then((res) => {
+      setConfig((c) => (c ? { ...c, empresa: res.received?.empresa ?? c.empresa } : null));
+      setSaved(true);
+      onSuccess?.();
+    })
       .catch((e) => setError(e instanceof Error ? e.message : "Erro ao salvar"))
       .finally(() => setSaving(false));
   };
+
+  useEffect(() => {
+    if (!saved) return;
+    const t = setTimeout(() => setSaved(false), 4000);
+    return () => clearTimeout(t);
+  }, [saved]);
 
   if (loading) {
     return (
@@ -53,16 +76,22 @@ export function AdminPage() {
       )}
 
       {error && <div className="alert-error mb-6">{error}</div>}
+      {saved && (
+        <div className="alert-success mb-6 text-sm">Configurações salvas.</div>
+      )}
 
       {!needLogin && (
-        <div className="space-y-8">
-          <section className="card space-y-4">
-            <div>
-              <h2 className="font-display text-xl font-semibold text-slate-900">Perfil da empresa</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Contexto da marca que os agentes usam para falar como sua empresa — sem repetir tudo nos prompts.
-              </p>
-            </div>
+        <div className="space-y-6">
+          <ConfigSectionCard
+            title="Perfil da empresa"
+            description="Contexto da marca que os agentes usam para falar como sua empresa."
+            editing={editingSection === "perfil"}
+            onEdit={() => setEditingSection("perfil")}
+            onCancel={cancelEdit}
+            onSave={() => handleSaveEmpresa(() => setEditingSection(null))}
+            saving={saving}
+            summary={perfilSummary(empresa)}
+          >
             <label className="label-field">Nome (razão social / registro)</label>
             <input
               type="text"
@@ -109,15 +138,18 @@ export function AdminPage() {
               className="textarea-field min-h-[100px]"
               placeholder="1–3 frases: o que faz, para quem, diferencial."
             />
-          </section>
+          </ConfigSectionCard>
 
-          <section className="card space-y-4">
-            <div>
-              <h2 className="font-display text-xl font-semibold text-slate-900">Qualificação de leads</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                O que o agente deve descobrir antes de passar para WhatsApp ou consultor humano.
-              </p>
-            </div>
+          <ConfigSectionCard
+            title="Qualificação de leads"
+            description="O que o agente deve descobrir antes de passar para WhatsApp ou consultor humano."
+            editing={editingSection === "qualificacao"}
+            onEdit={() => setEditingSection("qualificacao")}
+            onCancel={cancelEdit}
+            onSave={() => handleSaveEmpresa(() => setEditingSection(null))}
+            saving={saving}
+            summary={qualificacaoSummary(empresa)}
+          >
             <label className="label-field">Objetivo de qualificação</label>
             <textarea
               value={empresa.objetivo_qualificacao}
@@ -132,15 +164,18 @@ export function AdminPage() {
               className="textarea-field min-h-[88px] font-mono text-sm"
               placeholder={"Nome do lead\nInteresse / necessidade\nPrazo ou urgência\nOrçamento ou perfil"}
             />
-          </section>
+          </ConfigSectionCard>
 
-          <section className="card space-y-4">
-            <div>
-              <h2 className="font-display text-xl font-semibold text-slate-900">Atendimento comercial</h2>
-              <p className="mt-1 text-sm text-slate-600">
-                Links, agenda e handoff usados pelos agentes WhatsApp e Instagram Direct.
-              </p>
-            </div>
+          <ConfigSectionCard
+            title="Atendimento comercial"
+            description="Links, agenda e handoff usados pelos agentes WhatsApp e Instagram Direct."
+            editing={editingSection === "comercial"}
+            onEdit={() => setEditingSection("comercial")}
+            onCancel={cancelEdit}
+            onSave={() => handleSaveEmpresa(() => setEditingSection(null))}
+            saving={saving}
+            summary={comercialSummary(empresa)}
+          >
             <label className="label-field">Link de produto / serviço</label>
             <input
               type="url"
@@ -165,8 +200,7 @@ export function AdminPage() {
               className="input-field font-mono text-sm"
               placeholder="16999998888 — recebe alerta quando lead for qualificado"
             />
-
-            <fieldset className="space-y-2 rounded-lg border border-slate-200 bg-slate-50/50 p-4">
+            <fieldset className="space-y-2 rounded-lg border border-slate-200 bg-white/60 p-4">
               <legend className="px-1 text-sm font-semibold text-slate-800">Horários para agendamento</legend>
               <p className="text-xs text-slate-600">Usado quando o agente propõe visita, reunião ou demonstração.</p>
               <div className="flex flex-wrap gap-2">
@@ -246,13 +280,7 @@ export function AdminPage() {
                 </label>
               </div>
             </fieldset>
-          </section>
-
-          <div className="flex justify-end">
-            <button type="button" onClick={handleSaveEmpresa} disabled={saving} className="btn-primary">
-              {saving ? "Salvando…" : "Salvar configurações"}
-            </button>
-          </div>
+          </ConfigSectionCard>
         </div>
       )}
     </PageShell>
