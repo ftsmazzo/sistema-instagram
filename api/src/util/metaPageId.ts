@@ -5,27 +5,33 @@ type GraphError = { message?: string; code?: number };
 type MeAccountsResponse = {
   data?: Array<{
     id?: string;
+    access_token?: string;
     instagram_business_account?: { id?: string };
   }>;
   error?: GraphError;
 };
 type MeResponse = { id?: string; error?: GraphError };
 
+export type FacebookPageCredentials = {
+  pageId: string;
+  pageAccessToken: string;
+};
+
 /**
- * Resolve o ID da Página Facebook para POST /{page_id}/messages.
- * Prioriza página cujo instagram_business_account.id bate com igUserId.
+ * Resolve Page ID + Page Access Token para POST /{page_id}/messages.
+ * Se o token já for de Página, reutiliza o mesmo token.
  */
-export async function resolveFacebookPageId(
+export async function resolveFacebookPageCredentials(
   accessToken: string,
   options?: { graphBase?: string; igUserId?: string }
-): Promise<string | null> {
+): Promise<FacebookPageCredentials | null> {
   const token = accessToken.trim();
   if (!token) return null;
 
   const base = (options?.graphBase || DEFAULT_GRAPH_BASE).replace(/\/$/, "");
   const igTarget = options?.igUserId?.trim() || null;
 
-  const fromAccounts = await fetchPageIdFromAccounts(token, base, igTarget);
+  const fromAccounts = await fetchPageFromAccounts(token, base, igTarget);
   if (fromAccounts) return fromAccounts;
 
   const fromMe = await fetchPageIdFromMe(token, base);
@@ -33,10 +39,54 @@ export async function resolveFacebookPageId(
 
   if (igTarget) {
     const linked = await pageHasInstagramAccount(fromMe, igTarget, token, base);
-    return linked ? fromMe : null;
+    if (linked) return { pageId: fromMe, pageAccessToken: token };
+    return null;
   }
 
-  return fromMe;
+  return { pageId: fromMe, pageAccessToken: token };
+}
+
+/** @deprecated Use resolveFacebookPageCredentials */
+export async function resolveFacebookPageId(
+  accessToken: string,
+  options?: { graphBase?: string; igUserId?: string }
+): Promise<string | null> {
+  const creds = await resolveFacebookPageCredentials(accessToken, options);
+  return creds?.pageId ?? null;
+}
+
+async function fetchPageFromAccounts(
+  token: string,
+  base: string,
+  igTarget: string | null
+): Promise<FacebookPageCredentials | null> {
+  try {
+    const u = new URL(`${base}/me/accounts`);
+    u.searchParams.set("fields", "id,access_token,instagram_business_account{id}");
+    u.searchParams.set("access_token", token);
+    const res = await fetch(u.toString());
+    const json = (await res.json()) as MeAccountsResponse;
+    if (!res.ok || json.error || !json.data?.length) return null;
+
+    const pick = (p: NonNullable<MeAccountsResponse["data"]>[number]) => {
+      const pageId = p.id?.trim();
+      const pageAccessToken = p.access_token?.trim();
+      if (!pageId || !pageAccessToken) return null;
+      return { pageId, pageAccessToken };
+    };
+
+    if (igTarget) {
+      const match = json.data.find((p) => p.instagram_business_account?.id?.trim() === igTarget);
+      if (match) return pick(match);
+    }
+
+    const firstWithIg = json.data.find((p) => p.instagram_business_account?.id?.trim());
+    if (firstWithIg) return pick(firstWithIg);
+
+    return pick(json.data[0]);
+  } catch {
+    return null;
+  }
 }
 
 async function fetchPageIdFromAccounts(

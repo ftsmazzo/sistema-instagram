@@ -13,6 +13,7 @@ function emptyContaForm() {
   return {
     nome: "",
     ig_user_id: "",
+    facebook_page_id: "",
     access_token: "",
     agent_access_token: "",
     agent_ativo: false,
@@ -27,6 +28,7 @@ function contaSummary(c: ContaInstagramRes, isDefault: boolean): string {
   if (c.agent_ativo) parts.push("Agente ativo");
   if (isDefault) parts.push("Padrão");
   if (c.has_token) parts.push("Token ok");
+  if (c.facebook_page_id?.trim()) parts.push(`Page ${c.facebook_page_id.trim()}`);
   return parts.join(" · ");
 }
 
@@ -67,6 +69,7 @@ export function AgentesInstagramPage() {
               id: c.id,
               nome: c.nome,
               ig_user_id: c.ig_user_id,
+              facebook_page_id: c.facebook_page_id,
               agent_ativo: c.agent_ativo,
               agent_nome: c.agent_nome,
               agent_prompt_comentarios: c.agent_prompt_comentarios,
@@ -75,6 +78,7 @@ export function AgentesInstagramPage() {
             {
               nome: form.nome.trim(),
               ig_user_id: form.ig_user_id.trim(),
+              facebook_page_id: form.facebook_page_id.trim() || undefined,
               access_token: form.access_token.trim() || undefined,
               agent_access_token: form.agent_access_token.trim() || undefined,
               agent_ativo: form.agent_ativo,
@@ -89,6 +93,7 @@ export function AgentesInstagramPage() {
                   id: c.id,
                   nome: form.nome.trim(),
                   ig_user_id: form.ig_user_id.trim(),
+                  facebook_page_id: form.facebook_page_id.trim() || undefined,
                   access_token: form.access_token.trim() || undefined,
                   agent_access_token: form.agent_access_token.trim() || undefined,
                   agent_ativo: form.agent_ativo,
@@ -100,6 +105,7 @@ export function AgentesInstagramPage() {
                   id: c.id,
                   nome: c.nome,
                   ig_user_id: c.ig_user_id,
+                  facebook_page_id: c.facebook_page_id,
                   agent_ativo: c.agent_ativo,
                   agent_nome: c.agent_nome,
                   agent_prompt_comentarios: c.agent_prompt_comentarios,
@@ -127,6 +133,7 @@ export function AgentesInstagramPage() {
         id: c.id,
         nome: c.nome,
         ig_user_id: c.ig_user_id,
+        facebook_page_id: c.facebook_page_id,
         agent_ativo: c.agent_ativo,
         agent_nome: c.agent_nome,
         agent_prompt_comentarios: c.agent_prompt_comentarios,
@@ -159,6 +166,7 @@ export function AgentesInstagramPage() {
     setForm({
       nome: conta.nome,
       ig_user_id: conta.ig_user_id,
+      facebook_page_id: conta.facebook_page_id ?? "",
       access_token: "",
       agent_access_token: "",
       agent_ativo: Boolean(conta.agent_ativo),
@@ -226,15 +234,25 @@ export function AgentesInstagramPage() {
                 value={form.ig_user_id}
                 onChange={(e) => setForm((f) => ({ ...f, ig_user_id: e.target.value }))}
                 className="input-field font-mono text-sm"
-                placeholder="ig_user_id"
+                placeholder="ig_user_id (Instagram Business)"
+              />
+              <input
+                type="text"
+                value={form.facebook_page_id}
+                onChange={(e) => setForm((f) => ({ ...f, facebook_page_id: e.target.value }))}
+                className="input-field font-mono text-sm"
+                placeholder="Page ID Facebook (para Direct — deixe vazio para auto)"
               />
               <input
                 type="password"
                 value={form.access_token}
                 onChange={(e) => setForm((f) => ({ ...f, access_token: e.target.value }))}
                 className="input-field font-mono text-sm"
-                placeholder={editId === "new" ? "Token de Página (EAA…)" : "Token (vazio = mantém)"}
+                placeholder={editId === "new" ? "Token Graph — posts/sync (EAA…)" : "Token Graph (vazio = mantém)"}
               />
+              <p className="text-xs text-slate-500">
+                Posts e sincronização de mídia. Não precisa ser o mesmo do agente.
+              </p>
               <label className="flex items-center gap-2 text-sm">
                 <input
                   type="checkbox"
@@ -255,8 +273,11 @@ export function AgentesInstagramPage() {
                 value={form.agent_access_token}
                 onChange={(e) => setForm((f) => ({ ...f, agent_access_token: e.target.value }))}
                 className="input-field font-mono text-sm"
-                placeholder="Token agente (opcional)"
+                placeholder="Token agente — DM e comentários (cole aqui o token de mensagens)"
               />
+              <p className="text-xs text-slate-500">
+                Usado pelo n8n para responder comentário e Direct. Pode ser diferente do token de posts.
+              </p>
               <textarea
                 value={form.agent_prompt_comentarios}
                 onChange={(e) => setForm((f) => ({ ...f, agent_prompt_comentarios: e.target.value }))}

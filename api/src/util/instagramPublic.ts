@@ -5,6 +5,7 @@ export type ContaInstagramPublic = {
   id: string;
   nome: string;
   ig_user_id: string;
+  facebook_page_id: string;
   has_token: boolean;
   has_agent_token: boolean;
   agent_ativo: boolean;
@@ -18,6 +19,7 @@ export function toContaInstagramPublic(c: ContaInstagram): ContaInstagramPublic 
     id: c.id,
     nome: c.nome,
     ig_user_id: c.ig_user_id,
+    facebook_page_id: (c.facebook_page_id ?? "").trim(),
     has_token: Boolean(c.access_token?.trim()),
     has_agent_token: Boolean((c.agent_access_token ?? "").trim()),
     agent_ativo: Boolean(c.agent_ativo),

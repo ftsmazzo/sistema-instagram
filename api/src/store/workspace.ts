@@ -273,10 +273,8 @@ export async function saveWorkspaceConfig(
         const nome = (c.nome ?? "").trim() || "Conta";
         const igUser = (c.ig_user_id ?? "").trim();
         let pageId = (c.facebook_page_id?.trim() || existing?.facebook_page_id) ?? "";
-        if (pageId && igUser && pageId === igUser) pageId = "";
         if (!pageId && token) {
           pageId = (await resolveFacebookPageId(token, { igUserId: igUser })) ?? "";
-          if (pageId && igUser && pageId === igUser) pageId = "";
         }
         const isUpdate = existing !== undefined;
         const agentAtivo = isUpdate

@@ -19,8 +19,8 @@ O botão **Conectar conta Meta** (OAuth) só escala para clientes reais quando *
 2. Preencher:
    - **Nome**
    - **ig_user_id** (ID da conta Instagram comercial)
-   - **Token de publicação** (Graph API — postador)
-   - **Token do agente** (opcional; se vazio, usa o de postagem)
+   - **Token de publicação** (Graph API — sync de posts / Postador)
+   - **Token do agente** (DM e comentários — prioridade no n8n; se vazio, cai no de publicação)
 3. Marcar **Agente ativo** se for usar comentários/Direct
 4. **Salvar**
 

@@ -12,7 +12,7 @@ import {
 } from "../services/agentConfigDefaults.js";
 import { parseAgendaConfig } from "../services/empresaConfigHelpers.js";
 import { getWhatsappInstanceForOrg, clampDelayPrimeiraMsg } from "./whatsappInstance.js";
-import { resolveFacebookPageId } from "../util/metaPageId.js";
+import { resolveFacebookPageCredentials } from "../util/metaPageId.js";
 
 export type AgentConfigIssue = {
   code: string;
@@ -145,39 +145,40 @@ function empresaFromRow(row: WorkspaceRow): EmpresaPerfil {
 function buildCredentials(agentTok: string, publishTok: string, issues: AgentConfigIssue[]): AgentConfigCredentials {
   const agent = agentTok.trim();
   const publish = publishTok.trim();
-  // Token de página (OAuth Facebook) — o Postador usa access_token; priorizar o mesmo no agente n8n.
-  if (publish) {
-    if (!agent) {
+
+  // Agente (comentários/Direct) → agent_access_token; Postador/sync → access_token.
+  if (agent) {
+    if (!publish) {
       issues.push({
-        code: "AGENT_TOKEN_MISSING",
-        message: "Token do agente vazio — usando token de publicação (mesmo do Postador).",
+        code: "PUBLISH_TOKEN_MISSING",
+        message: "Token de publicação vazio — Postador/sync de posts pode falhar.",
         severity: "warning",
       });
     } else if (agent !== publish) {
       issues.push({
-        code: "AGENT_TOKEN_DIFFERS_PUBLISH",
-        message: "Token do agente difere do de publicação — usando token de publicação para Graph API.",
+        code: "TOKENS_SPLIT",
+        message: "Tokens separados: agente para DM/comentários, publicação para posts.",
         severity: "warning",
       });
     }
     return {
-      access_token: publish,
+      access_token: agent,
       page_id: null,
-      token_source: "publish",
+      token_source: "agent",
       graph_api_version: AGENT_GRAPH_API_VERSION,
       graph_api_base: AGENT_GRAPH_API_BASE,
     };
   }
-  if (agent) {
+  if (publish) {
     issues.push({
-      code: "PUBLISH_TOKEN_MISSING",
-      message: "Token de publicação ausente; usando token do agente como fallback.",
+      code: "AGENT_TOKEN_MISSING",
+      message: "Token do agente vazio — usando token de publicação também no agente (não ideal).",
       severity: "warning",
     });
     return {
-      access_token: agent,
+      access_token: publish,
       page_id: null,
-      token_source: "agent",
+      token_source: "publish",
       graph_api_version: AGENT_GRAPH_API_VERSION,
       graph_api_base: AGENT_GRAPH_API_BASE,
     };
@@ -203,29 +204,47 @@ async function enrichCredentialsWithPageId(
   igUserId?: string
 ): Promise<AgentConfigResult> {
   if (!result.credentials.access_token) return result;
-  const ig = igUserId?.trim() || result.lookup.ig_user_id?.trim() || "";
   const stored = facebookPageId.trim();
-  let pageId: string | null = stored && stored !== ig ? stored : null;
   const issues = [...result.issues];
+  const ig = igUserId?.trim() || result.lookup.ig_user_id?.trim() || undefined;
+
+  const pageCreds = await resolveFacebookPageCredentials(result.credentials.access_token, {
+    graphBase: result.credentials.graph_api_base,
+    igUserId: ig,
+  });
+
+  let pageId = pageCreds?.pageId ?? null;
+  let accessToken = pageCreds?.pageAccessToken ?? result.credentials.access_token;
+
+  if (!pageId && stored) pageId = stored;
+
   if (!pageId) {
-    pageId = await resolveFacebookPageId(result.credentials.access_token, {
-      graphBase: result.credentials.graph_api_base,
-      igUserId: ig || undefined,
+    issues.push({
+      code: "PAGE_ID_MISSING",
+      message:
+        "ID da Página Facebook não encontrado — use token de Página (EAA…) ou User token com pages_show_list.",
+      severity: "warning",
     });
-    if (pageId && ig && pageId === ig) pageId = null;
-    if (!pageId) {
-      issues.push({
-        code: "PAGE_ID_MISSING",
-        message:
-          "ID da Página Facebook não encontrado — informe facebook_page_id no painel ou use token de Página com instagram_manage_messages.",
-        severity: "warning",
-      });
-    }
+  } else if (stored && pageId !== stored) {
+    issues.push({
+      code: "PAGE_ID_RESOLVED",
+      message: `Page ID corrigido via Graph API (${pageId}).`,
+      severity: "warning",
+    });
   }
+
+  if (pageCreds?.pageAccessToken && pageCreds.pageAccessToken !== result.credentials.access_token) {
+    issues.push({
+      code: "PAGE_TOKEN_RESOLVED",
+      message: "Token de Página obtido via /me/accounts para envio de Direct.",
+      severity: "warning",
+    });
+  }
+
   return {
     ...result,
     issues,
-    credentials: { ...result.credentials, page_id: pageId },
+    credentials: { ...result.credentials, page_id: pageId, access_token: accessToken },
   };
 }
 

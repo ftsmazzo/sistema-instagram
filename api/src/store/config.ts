@@ -208,10 +208,8 @@ export async function saveConfig(
       );
       const igUserId = (c.ig_user_id ?? existing?.ig_user_id ?? "").trim();
       let facebookPageId = (c.facebook_page_id?.trim() || existing?.facebook_page_id) ?? "";
-      if (facebookPageId && igUserId && facebookPageId === igUserId) facebookPageId = "";
       if (!facebookPageId && token) {
         facebookPageId = (await resolveFacebookPageId(token, { igUserId })) ?? "";
-        if (facebookPageId && igUserId && facebookPageId === igUserId) facebookPageId = "";
       }
       return {
         id: c.id ?? genContaId(),
