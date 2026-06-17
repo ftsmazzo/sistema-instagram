@@ -14,10 +14,8 @@ import { parseAgendaConfig } from "../services/empresaConfigHelpers.js";
 import { getWhatsappInstanceForOrg, clampDelayPrimeiraMsg } from "./whatsappInstance.js";
 import { resolveFacebookPageCredentials } from "../util/metaPageId.js";
 import {
-  isFacebookGraphToken,
   isInstagramLoginToken,
   normalizeGraphAccessToken,
-  resolveGraphApiBaseForToken,
 } from "../util/graphToken.js";
 
 export type AgentConfigIssue = {
@@ -154,14 +152,29 @@ function empresaFromRow(row: WorkspaceRow): EmpresaPerfil {
 }
 
 const FACEBOOK_GRAPH_API_BASE = `https://graph.facebook.com/${AGENT_GRAPH_API_VERSION}`;
+const INSTAGRAM_GRAPH_API_BASE = `https://graph.instagram.com/${AGENT_GRAPH_API_VERSION}`;
+
+/** Agente (comentários/Direct no n8n) sempre graph.instagram.com — Graph Facebook só no Postador/sync. */
+function agentGraphApiBase(): string {
+  return (
+    process.env.AGENT_INSTAGRAM_GRAPH_API_BASE?.trim() || INSTAGRAM_GRAPH_API_BASE
+  );
+}
 
 function buildCredentials(agentTok: string, publishTok: string, issues: AgentConfigIssue[]): AgentConfigCredentials {
   const agent = normalizeGraphAccessToken(agentTok);
   const publish = normalizeGraphAccessToken(publishTok);
-  const graphBaseFor = (tok: string) => resolveGraphApiBaseForToken(tok, AGENT_GRAPH_API_VERSION);
 
-  // Agente (comentários/Direct) → agent_access_token; Postador/sync → access_token.
+  // Agente (comentários/Direct) → agent_access_token (IGAA); Postador/sync → access_token (EAA).
   if (agent) {
+    if (!isInstagramLoginToken(agent)) {
+      issues.push({
+        code: "AGENT_TOKEN_NOT_IGAA",
+        message:
+          "Token do agente deve ser IGAA/IGQV (Instagram Login) — comentários e Direct usam graph.instagram.com.",
+        severity: "error",
+      });
+    }
     if (!publish) {
       issues.push({
         code: "PUBLISH_TOKEN_MISSING",
@@ -171,7 +184,7 @@ function buildCredentials(agentTok: string, publishTok: string, issues: AgentCon
     } else if (agent !== publish) {
       issues.push({
         code: "TOKENS_SPLIT",
-        message: "Dois tokens: IGAA no agente (comentários/Direct IG) + EAA na publicação (posts e private reply).",
+        message: "Dois tokens: IGAA no agente (comentários/Direct) + EAA na publicação (posts/sync).",
         severity: "warning",
       });
     }
@@ -180,21 +193,22 @@ function buildCredentials(agentTok: string, publishTok: string, issues: AgentCon
       page_id: null,
       token_source: "agent",
       graph_api_version: AGENT_GRAPH_API_VERSION,
-      graph_api_base: graphBaseFor(agent),
+      graph_api_base: agentGraphApiBase(),
     });
   }
   if (publish) {
     issues.push({
       code: "AGENT_TOKEN_MISSING",
-      message: "Token do agente vazio — usando token de publicação também no agente (não ideal).",
-      severity: "warning",
+      message:
+        "Token do agente (IGAA) vazio — configure agent_access_token para comentários/Direct. Publicação não substitui o agente.",
+      severity: "error",
     });
     return withMessengerFields({
-      access_token: publish,
+      access_token: null,
       page_id: null,
-      token_source: "publish",
+      token_source: "none",
       graph_api_version: AGENT_GRAPH_API_VERSION,
-      graph_api_base: graphBaseFor(publish),
+      graph_api_base: agentGraphApiBase(),
     });
   }
   issues.push({
@@ -229,16 +243,11 @@ async function enrichCredentialsWithPageId(
   let accessToken = token;
 
   if (isInstagramLoginToken(token)) {
-    issues.push({
-      code: "INSTAGRAM_LOGIN_TOKEN",
-      message:
-        "Token IGAA/IGQV (Instagram Login) — comentários usam graph.instagram.com. Private reply no Direct pode exigir token de Página (EAA…).",
-      severity: "warning",
-    });
+    // IGAA: comentários, private reply e Direct contínuo via graph.instagram.com/{ig_user_id}/messages.
     if (!pageId) {
       issues.push({
-        code: "PAGE_ID_MISSING",
-        message: "ID da Página Facebook não configurado — necessário para private reply após comentário.",
+        code: "PAGE_ID_OPTIONAL",
+        message: "page_id opcional com token IGAA — mensagens usam ig_user_id no graph.instagram.com.",
         severity: "warning",
       });
     }
@@ -295,42 +304,20 @@ function withMessengerFields(creds: AgentConfigCredentialsCore): AgentConfigCred
   };
 }
 
-/** Quando agente é IGAA, private reply usa token EAA de publicação. */
+/** Campos legados para Postador (graph.facebook.com). O n8n do agente não usa messenger_access_token. */
 function attachMessengerCredentials(
   result: AgentConfigResult,
-  agentRaw: string,
+  _agentRaw: string,
   publishRaw: string
 ): AgentConfigResult {
-  const issues = [...result.issues];
   const creds = result.credentials;
-  if (!creds.access_token) {
-    return {
-      ...result,
-      credentials: { ...creds, facebook_graph_base: FACEBOOK_GRAPH_API_BASE, messenger_access_token: null },
-    };
-  }
-
-  const agent = normalizeGraphAccessToken(agentRaw);
   const publish = normalizeGraphAccessToken(publishRaw);
-  let messenger_access_token = creds.access_token;
-
-  if (isInstagramLoginToken(agent) && isFacebookGraphToken(publish)) {
-    messenger_access_token = publish;
-    issues.push({
-      code: "MESSENGER_TOKEN_FROM_PUBLISH",
-      message:
-        "Token Instagram (IGAA) no agente — comentários em graph.instagram.com; private reply usa token EAA de publicação.",
-      severity: "warning",
-    });
-  }
-
   return {
     ...result,
-    issues,
     credentials: {
       ...creds,
       facebook_graph_base: FACEBOOK_GRAPH_API_BASE,
-      messenger_access_token,
+      messenger_access_token: publish || null,
     },
   };
 }
