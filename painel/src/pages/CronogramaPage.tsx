@@ -51,7 +51,7 @@ export function CronogramaPage() {
     return () => clearInterval(t);
   }, []);
 
-  const cancelAgendado = (id: number) => {
+  const cancelAgendado = (id: string) => {
     if (!window.confirm("Excluir este agendamento?")) return;
     api.postador
       .deleteAgendado(id)
@@ -59,7 +59,7 @@ export function CronogramaPage() {
       .catch((e) => alert(`Erro ao cancelar: ${e instanceof Error ? e.message : "desconhecido"}`));
   };
 
-  const removeHistorico = (id: number) => {
+  const removeHistorico = (id: string) => {
     if (!window.confirm("Remover esta publicação do histórico?")) return;
     api.postador
       .deleteCronograma(id)
