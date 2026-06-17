@@ -89,10 +89,10 @@ export function QualificacaoPlaybookPicker({ empresa, onApply }: Props) {
   if (playbooks.length === 0) return null;
 
   return (
-    <div className="space-y-4 rounded-xl border border-violet-200 bg-violet-50/50 p-4">
+    <div className="space-y-4 rounded-xl border border-brand-200 bg-brand-50/50 p-4">
       <div>
-        <p className="text-sm font-semibold text-violet-950">Modelo rápido (1 clique)</p>
-        <p className="mt-1 text-xs text-violet-900/80">
+        <p className="text-sm font-semibold text-brand-950">Modelo rápido (1 clique)</p>
+        <p className="mt-1 text-xs text-brand-900/80">
           Escolha o tipo de negócio. O agente ganha objetivo, tom e perguntas humanas — você só ajusta o que quiser.
         </p>
       </div>
@@ -108,14 +108,14 @@ export function QualificacaoPlaybookPicker({ empresa, onApply }: Props) {
               onClick={() => setSelectedId(p.id)}
               className={`rounded-lg border p-3 text-left text-sm transition ${
                 active
-                  ? "border-violet-500 bg-white ring-2 ring-violet-300"
-                  : "border-slate-200 bg-white hover:border-violet-300"
+                  ? "border-brand-500 bg-white ring-2 ring-brand-300"
+                  : "border-slate-200 bg-white hover:border-brand-300"
               }`}
             >
               <span className="font-medium text-slate-900">
                 {p.emoji} {p.label}
                 {suggested && !active ? (
-                  <span className="ml-1 text-xs font-normal text-violet-600">sugerido</span>
+                  <span className="ml-1 text-xs font-normal text-brand-600">sugerido</span>
                 ) : null}
               </span>
               <span className="mt-1 block text-xs text-slate-600">{p.descricao}</span>
@@ -138,7 +138,7 @@ export function QualificacaoPlaybookPicker({ empresa, onApply }: Props) {
                 <label
                   key={c.id}
                   className={`flex cursor-pointer gap-2 rounded-lg border px-3 py-2 text-sm ${
-                    on ? "border-violet-300 bg-white" : "border-slate-200 bg-slate-50 opacity-80"
+                    on ? "border-brand-300 bg-white" : "border-slate-200 bg-slate-50 opacity-80"
                   }`}
                 >
                   <input
@@ -151,7 +151,7 @@ export function QualificacaoPlaybookPicker({ empresa, onApply }: Props) {
                   <span>
                     <span className="font-medium text-slate-900">{c.label}</span>
                     {c.obrigatorio ? (
-                      <span className="ml-1 text-xs text-violet-600">obrigatório</span>
+                      <span className="ml-1 text-xs text-brand-600">obrigatório</span>
                     ) : null}
                     <span className="mt-0.5 block text-xs text-slate-600">Ex.: “{c.pergunta_guia}”</span>
                   </span>

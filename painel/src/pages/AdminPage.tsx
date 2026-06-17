@@ -14,11 +14,35 @@ import { QualificacaoPlaybookPicker } from "../components/config/QualificacaoPla
 
 type EmpresaSection = "perfil" | "qualificacao" | "comercial";
 
+const EMPRESA_STEPS: { id: EmpresaSection; label: string; hint: string }[] = [
+  { id: "perfil", label: "Perfil", hint: "Marca e contexto" },
+  { id: "qualificacao", label: "Qualificação", hint: "O que descobrir no lead" },
+  { id: "comercial", label: "Comercial", hint: "Link, agenda e handoff" },
+];
+
+function empresaStepComplete(section: EmpresaSection, e: EmpresaPerfilRes): boolean {
+  if (section === "perfil") {
+    return Boolean((e.nome_fantasia || e.nome).trim() && e.segmento.trim());
+  }
+  if (section === "qualificacao") {
+    return Boolean(
+      e.objetivo_qualificacao.trim() ||
+        (e.criterios_qualificacao ?? "").split("\n").some((l) => l.trim())
+    );
+  }
+  return Boolean(
+    (e.link_produto_servico ?? "").trim() ||
+      (e.handoff_whatsapp ?? "").trim() ||
+      e.agenda_config.dias_semana.length > 0
+  );
+}
+
 export function AdminPage() {
   const { config, setConfig, loading, error, setError, useWorkspace, needLogin } = useWorkspaceConfig();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [editingSection, setEditingSection] = useState<EmpresaSection | null>(null);
+  const [activeSection, setActiveSection] = useState<EmpresaSection>("perfil");
   const [empresa, setEmpresa] = useState<EmpresaPerfilRes>(emptyEmpresa);
   const savedEmpresa = mergeEmpresa(config?.empresa);
 
@@ -33,8 +57,16 @@ export function AdminPage() {
 
   const startEdit = (section: EmpresaSection) => {
     setEmpresa(savedEmpresa);
+    setActiveSection(section);
     setEditingSection(section);
   };
+
+  const goToSection = (section: EmpresaSection) => {
+    if (editingSection) cancelEdit();
+    setActiveSection(section);
+  };
+
+  const completedCount = EMPRESA_STEPS.filter((s) => empresaStepComplete(s.id, savedEmpresa)).length;
 
   const handleSaveEmpresa = (onSuccess?: () => void) => {
     setSaving(true);
@@ -89,7 +121,60 @@ export function AdminPage() {
 
       {!needLogin && (
         <div className="space-y-6">
+          <div className="card border-brand-100 bg-brand-50/30">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Configuração da máquina de vendas</p>
+                <p className="mt-0.5 text-xs text-slate-600">
+                  {completedCount} de {EMPRESA_STEPS.length} etapas preenchidas — os agentes usam estes dados no Direct e WhatsApp.
+                </p>
+              </div>
+              <Link to="/operacao" className="text-sm font-semibold text-brand-600 hover:underline">
+                Ver operação →
+              </Link>
+            </div>
+            <ol className="mt-4 grid gap-2 sm:grid-cols-3">
+              {EMPRESA_STEPS.map((step, index) => {
+                const done = empresaStepComplete(step.id, savedEmpresa);
+                const active = activeSection === step.id;
+                return (
+                  <li key={step.id}>
+                    <button
+                      type="button"
+                      onClick={() => goToSection(step.id)}
+                      className={`flex w-full items-center gap-3 rounded-xl border px-4 py-3 text-left text-sm transition ${
+                        active
+                          ? "border-brand-300 bg-white shadow-sm ring-1 ring-brand-200"
+                          : "border-slate-200/80 bg-white/70 hover:border-brand-200"
+                      }`}
+                    >
+                      <span
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                          done
+                            ? "bg-brand-600 text-white"
+                            : active
+                              ? "bg-brand-100 text-brand-800"
+                              : "bg-slate-100 text-slate-500"
+                        }`}
+                      >
+                        {done ? "✓" : index + 1}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block font-semibold text-slate-900">{step.label}</span>
+                        <span className="block truncate text-xs text-slate-500">
+                          {done ? "Configurado" : step.hint}
+                        </span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+
+          {activeSection === "perfil" && (
           <ConfigSectionCard
+            step={1}
             title="Perfil da empresa"
             description="Contexto da marca que os agentes usam para falar como sua empresa."
             editing={editingSection === "perfil"}
@@ -146,8 +231,11 @@ export function AdminPage() {
               placeholder="1–3 frases: o que faz, para quem, diferencial."
             />
           </ConfigSectionCard>
+          )}
 
+          {activeSection === "qualificacao" && (
           <ConfigSectionCard
+            step={2}
             title="Qualificação de leads"
             description="Escolha um modelo, marque o que importa e salve — Direct inicia; WhatsApp qualifica a fundo e fecha."
             editing={editingSection === "qualificacao"}
@@ -179,8 +267,11 @@ export function AdminPage() {
               Dica: critérios valem para <strong>Direct e WhatsApp</strong>. Em <strong>Atendimento comercial</strong> configure link, consultor e horários.
             </p>
           </ConfigSectionCard>
+          )}
 
+          {activeSection === "comercial" && (
           <ConfigSectionCard
+            step={3}
             title="Atendimento comercial"
             description="Links, agenda e handoff usados pelos agentes WhatsApp e Instagram Direct."
             editing={editingSection === "comercial"}
@@ -234,7 +325,7 @@ export function AdminPage() {
                         })
                       }
                       className={`rounded-md px-2.5 py-1 text-xs font-medium ring-1 ${
-                        on ? "bg-violet-100 text-violet-900 ring-violet-300" : "bg-white text-slate-600 ring-slate-300"
+                        on ? "bg-brand-100 text-brand-900 ring-brand-300" : "bg-white text-slate-600 ring-slate-300"
                       }`}
                     >
                       {d.label}
@@ -294,6 +385,7 @@ export function AdminPage() {
               </div>
             </fieldset>
           </ConfigSectionCard>
+          )}
         </div>
       )}
     </PageShell>

@@ -10,6 +10,7 @@ type ConfigSectionCardProps = {
   saving: boolean;
   summary: ReactNode;
   children: ReactNode;
+  step?: number;
 };
 
 export function ConfigSectionCard({
@@ -22,11 +23,26 @@ export function ConfigSectionCard({
   saving,
   summary,
   children,
+  step,
 }: ConfigSectionCardProps) {
   return (
-    <section className="card space-y-4">
+    <section className={`card space-y-4 ${editing ? "ring-1 ring-brand-200" : ""}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <h2 className="font-display text-xl font-semibold text-slate-900">{title}</h2>
+        <div className="flex min-w-0 items-start gap-3">
+          {step != null ? (
+            <span
+              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                editing ? "bg-brand-600 text-white" : "bg-brand-100 text-brand-800"
+              }`}
+            >
+              {step}
+            </span>
+          ) : null}
+          <div className="min-w-0">
+            <h2 className="font-display text-xl font-semibold text-slate-900">{title}</h2>
+            {!editing ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
+          </div>
+        </div>
         {!editing && (
           <button type="button" onClick={onEdit} className="btn-secondary shrink-0">
             Editar
@@ -37,7 +53,7 @@ export function ConfigSectionCard({
       {editing ? (
         <>
           <p className="text-sm text-slate-600">{description}</p>
-          <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50/40 p-4">{children}</div>
+          <div className="space-y-4 rounded-xl border border-brand-100 bg-brand-50/20 p-4">{children}</div>
           <div className="flex flex-wrap gap-3">
             <button type="button" onClick={onSave} disabled={saving} className="btn-primary">
               {saving ? "Salvando…" : "Salvar"}
