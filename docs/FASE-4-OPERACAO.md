@@ -93,7 +93,7 @@ Atualização: ao abrir Operação (fila de follow-ups) + cron a cada 1 min.
 
 ### Templates de cadência por segmento
 
-Presets prontos: **Imobiliária**, **Clínica/saúde**, **Serviços B2B**, **E-commerce**.  
+Presets prontos: **Imobiliária**, **Clínica/saúde**, **Beleza (barbearia/salão/estética)**, **Profissionais liberais (advogado, contador…)**, **Serviços B2B**, **E-commerce**.  
 O sistema sugere um preset com base no **segmento** configurado em Empresa.
 
 | Método | Rota |

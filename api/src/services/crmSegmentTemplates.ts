@@ -33,7 +33,7 @@ export const CADENCIA_PRESETS: CadenciaPreset[] = [
   {
     id: "clinica",
     label: "Clínica / saúde — agendar consulta",
-    segmentos: ["clínica", "clinica", "saúde", "saude", "médic", "medic", "odont", "estética", "estetica"],
+    segmentos: ["clínica", "clinica", "saúde", "saude", "médic", "medic", "odont", "fisioter", "psicolog", "nutric"],
     etapas: [
       {
         horas_apos_parada: 24,
@@ -49,6 +49,83 @@ export const CADENCIA_PRESETS: CadenciaPreset[] = [
         horas_apos_parada: 168,
         mensagem:
           "Oi {nome}, última mensagem por aqui. Se ainda quiser cuidar de {objetivo}, é só responder. Fico à disposição, {empresa}.",
+      },
+    ],
+  },
+  {
+    id: "beleza",
+    label: "Beleza — barbearia, salão e estética",
+    segmentos: [
+      "beleza",
+      "barbearia",
+      "barber",
+      "salão",
+      "salao",
+      "estética",
+      "estetica",
+      "cabeleir",
+      "manicure",
+      "unha",
+      "spa",
+      "sobrancelha",
+      "depila",
+      "make",
+      "maquiagem",
+    ],
+    etapas: [
+      {
+        horas_apos_parada: 24,
+        mensagem:
+          "Oi {nome}! Vi seu interesse em {objetivo} — posso reservar um horário na {empresa}? Me diz se prefere manhã, tarde ou fim de semana 🙂",
+      },
+      {
+        horas_apos_parada: 72,
+        mensagem:
+          "Oi {nome}, tudo bem? Ainda tenho horários essa semana para {objetivo}. Quer que eu te encaixe? Me avisa o melhor dia!",
+      },
+      {
+        horas_apos_parada: 168,
+        mensagem:
+          "Último contato por aqui, {nome}. Se {objetivo} ainda fizer sentido, responde que te mando os horários disponíveis. {empresa} 💇",
+      },
+    ],
+  },
+  {
+    id: "profissionais",
+    label: "Profissionais liberais — advogado, contador e similares",
+    segmentos: [
+      "advogad",
+      "jurídic",
+      "juridic",
+      "contab",
+      "contador",
+      "escritório contábil",
+      "escritorio contabil",
+      "contabilidade",
+      "notarial",
+      "cartório",
+      "cartorio",
+      "engenheir",
+      "arquitet",
+      "corretor de seguro",
+      "consultor financeiro",
+      "financeiro",
+    ],
+    etapas: [
+      {
+        horas_apos_parada: 24,
+        mensagem:
+          "Oi {nome}! Sobre {objetivo} — posso agendar uma conversa rápida para entender seu caso e te orientar? Prefere call ou mensagem?",
+      },
+      {
+        horas_apos_parada: 72,
+        mensagem:
+          "Oi {nome}, retomando nosso contato sobre {objetivo}. A {empresa} pode te passar um panorama inicial — quer que eu te explique os próximos passos?",
+      },
+      {
+        horas_apos_parada: 168,
+        mensagem:
+          "Última mensagem por aqui, {nome}. Se {objetivo} ainda for uma prioridade, responda que priorizo seu atendimento. {empresa}",
       },
     ],
   },
