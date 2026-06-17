@@ -86,6 +86,7 @@ export function AdminPage() {
   /** API com META_APP_ID + SECRET + redirect (botão conectar). */
   const [metaOAuth, setMetaOAuth] = useState(false);
   const [metaOAuthMode, setMetaOAuthMode] = useState<"facebook" | "instagram">("facebook");
+  const [metaReadiness, setMetaReadiness] = useState<Awaited<ReturnType<typeof api.getMetaReadiness>> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,6 +115,13 @@ export function AdminPage() {
             setEmpresa(mergeEmpresa(data.empresa));
             setUseWorkspace(true);
             setNeedLogin(false);
+            if (status.metaOAuthConfigured) {
+              void api.getMetaReadiness().then((r) => {
+                if (!cancelled) setMetaReadiness(r);
+              }).catch(() => {
+                if (!cancelled) setMetaReadiness(null);
+              });
+            }
           } catch {
             clearAuthToken();
             setNeedLogin(true);
@@ -157,7 +165,9 @@ export function AdminPage() {
       const extra =
         /invalid platform app/i.test(base)
           ? "\n\nDesbloqueio: na API defina META_OAUTH_MODE=facebook (ou remova a variável), reinicie o serviço. No app Meta adicione o produto «Facebook Login» e o mesmo redirect OAuth (…/api/auth/meta/callback). O login passa pelo Facebook e continua a gravar Instagram no workspace."
-          : "";
+          : /indisponível|unavailable|atualizando detalhes/i.test(base)
+            ? "\n\nIsso NÃO é bug do painel: o app Meta ainda não está liberado para clientes reais (modo Desenvolvimento ou sem Advanced Access). Veja o painel «Liberar clientes» abaixo — é preciso Verificação comercial + Revisão do app + modo Ao vivo na Meta."
+            : "";
       setError(base + extra);
     }
     const next = new URLSearchParams(searchParams);
@@ -662,6 +672,56 @@ export function AdminPage() {
 
           {useWorkspace && metaOAuth && (
             <div className="card mt-4 space-y-3 border-indigo-200/80 bg-indigo-50/40">
+              {metaReadiness && !metaReadiness.pronto_para_clientes && (
+                <div className="rounded-xl border-2 border-red-300 bg-red-50 px-4 py-3 text-sm text-red-950">
+                  <p className="font-bold">Clientes ainda NÃO conseguem conectar — app Meta não está em produção</p>
+                  <p className="mt-2">{metaReadiness.nota_producao}</p>
+                  {metaReadiness.bloqueios.length > 0 && (
+                    <ul className="mt-2 list-disc pl-5 space-y-1">
+                      {metaReadiness.bloqueios.map((b) => (
+                        <li key={b}>{b}</li>
+                      ))}
+                    </ul>
+                  )}
+                  <p className="mt-3 font-medium">O que fazer na Meta (uma vez, para todos os clientes):</p>
+                  <ol className="mt-1 list-decimal pl-5 space-y-1">
+                    {metaReadiness.proximos_passos.map((s) => (
+                      <li key={s}>{s}</li>
+                    ))}
+                  </ol>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <a href={metaReadiness.links.business_verification} target="_blank" rel="noreferrer" className="text-xs font-medium text-red-900 underline">
+                      Verificação comercial
+                    </a>
+                    <a href={metaReadiness.links.app_review} target="_blank" rel="noreferrer" className="text-xs font-medium text-red-900 underline">
+                      Revisão do app
+                    </a>
+                    <a href={metaReadiness.links.publish} target="_blank" rel="noreferrer" className="text-xs font-medium text-red-900 underline">
+                      Publicar (modo Ao vivo)
+                    </a>
+                    <a href={metaReadiness.links.facebook_login} target="_blank" rel="noreferrer" className="text-xs font-medium text-red-900 underline">
+                      Facebook Login
+                    </a>
+                  </div>
+                  {metaReadiness.permissoes.length > 0 && (
+                    <details className="mt-3">
+                      <summary className="cursor-pointer text-xs font-medium">Permissões lidas na Graph API</summary>
+                      <ul className="mt-2 max-h-40 overflow-y-auto text-xs font-mono">
+                        {metaReadiness.permissoes.map((p) => (
+                          <li key={p.permission}>
+                            {p.permission}: {p.access_level} ({p.status})
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+                </div>
+              )}
+              {metaReadiness?.pronto_para_clientes && (
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
+                  App Meta com permissões avançadas — clientes podem usar «Conectar conta Meta».
+                </div>
+              )}
               <div>
                 <h3 className="font-semibold text-slate-900">Conectar com Facebook / Instagram</h3>
                 <p className="mt-1 text-sm text-slate-600">

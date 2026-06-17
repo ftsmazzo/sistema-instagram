@@ -37,6 +37,8 @@ export function getMetaOAuthEnv(): MetaOAuthEnv | null {
           "instagram_business_content_publish",
         ].join(",")
       : [
+          "public_profile",
+          "email",
           "pages_show_list",
           "pages_read_engagement",
           "instagram_basic",

@@ -1,5 +1,11 @@
 # Checklist — App Meta **Máquina de Vendas** (FabriaIA)
 
+> **IMPORTANTE — leia antes de onboardar clientes**  
+> Preencher `META_APP_ID`, redirect OAuth e URLs na API **só faz o botão «Conectar Meta» funcionar para você (admin do app)**.  
+> **Clientes reais** só conseguem conectar depois de **Verificação comercial + Revisão do app (Advanced Access) + modo Ao vivo** no [developers.facebook.com](https://developers.facebook.com).  
+> Sem isso aparece: *«Login do Facebook indisponível… estamos atualizando detalhes adicionais»*.  
+> Guia detalhado: **`docs/META-CLIENTES-PRODUCAO.md`**. No painel: **Administração** mostra o diagnóstico «Clientes ainda NÃO conseguem conectar».
+
 Um **único app** na Meta serve **todos os clientes** da plataforma. Cada cliente só clica **Conectar conta Meta** no painel — não cria app no Developer.
 
 Use este guia para configurar o app **Máquina de Vendas** uma vez. Depois, escalar é só OAuth + webhook por conta Instagram.

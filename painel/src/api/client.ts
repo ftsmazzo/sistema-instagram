@@ -301,6 +301,27 @@ export const api = {
   getMe: () => fetchJson<{ user: { id: string; email: string; organization_id: string } }>("/api/auth/me"),
   getMeWorkspace: () => fetchJson<Config>("/api/me/workspace"),
   getMetaOAuthUrl: () => fetchJson<{ url: string }>("/api/me/integrations/meta/oauth-url"),
+  getMetaReadiness: () =>
+    fetchJson<{
+      configured: boolean;
+      app_id: string | null;
+      oauth_mode: "facebook" | "instagram";
+      redirect_uri: string | null;
+      painel_public_url: string | null;
+      pronto_para_clientes: boolean;
+      bloqueios: string[];
+      avisos: string[];
+      permissoes: Array<{ permission: string; status: string; access_level: string }>;
+      links: {
+        app_dashboard: string;
+        app_review: string;
+        business_verification: string;
+        facebook_login: string;
+        publish: string;
+      };
+      proximos_passos: string[];
+      nota_producao: string;
+    }>("/api/me/integrations/meta/readiness"),
   putMeWorkspace: (body: {
     empresa?: Partial<EmpresaPerfilRes>;
     contas_instagram?: ContaInstagramInput[];

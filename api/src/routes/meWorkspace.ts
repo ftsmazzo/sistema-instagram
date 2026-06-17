@@ -4,6 +4,7 @@ import { loadWorkspaceConfigStore, saveWorkspaceConfig } from "../store/workspac
 import { emptyEmpresa, type ContaInstagramInput, type EmpresaPerfil } from "../store/config.js";
 import { toContaInstagramPublic } from "../util/instagramPublic.js";
 import { buildMetaAuthorizeUrl, getMetaOAuthEnv, signMetaOAuthState } from "../services/metaOAuth.js";
+import { buildMetaReadinessReport } from "../services/metaAppReadiness.js";
 
 export async function meWorkspaceRoutes(app: FastifyInstance, _opts: FastifyPluginOptions) {
   app.addHook("preHandler", async (request, reply) => {
@@ -29,6 +30,12 @@ export async function meWorkspaceRoutes(app: FastifyInstance, _opts: FastifyPlug
     const state = signMetaOAuthState(u.orgId, u.sub, env.stateSecret);
     const url = buildMetaAuthorizeUrl(env, state);
     return reply.send({ url });
+  });
+
+  /** Diagnóstico: por que clientes veem «Login indisponível» e o que falta no app Meta. */
+  app.get("/integrations/meta/readiness", async (_request, reply) => {
+    const report = await buildMetaReadinessReport();
+    return reply.send(report);
   });
 
   app.get("/workspace", async (request, reply) => {
