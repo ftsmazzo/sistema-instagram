@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { api, clearAuthToken, getAuthToken, setAuthToken, type AuthStatus } from "../api/client";
+import { BRAND } from "../config/brand";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -73,8 +74,8 @@ export function LoginPage() {
       />
       <div className="relative w-full max-w-md">
         <div className="mb-8 text-center">
-          <p className="font-display text-2xl font-semibold tracking-tight text-white">Máquina de vendas</p>
-          <p className="mt-1 text-sm text-slate-400">FabriaIA · Acesso ao painel</p>
+          <p className="font-display text-2xl font-semibold tracking-tight text-white">{BRAND.name}</p>
+          <p className="mt-1 text-sm text-slate-400">{BRAND.tagline} · {BRAND.parent}</p>
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-white/95 p-8 shadow-lift backdrop-blur-sm">

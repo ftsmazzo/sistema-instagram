@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { BRAND } from "../../config/brand";
 import { navGroups, itemsByGroup } from "../../config/navigation";
 import { clearAuthToken, getAuthToken } from "../../api/client";
 
@@ -18,15 +19,22 @@ export function AppLayout() {
     return loc.pathname === path || loc.pathname.startsWith(`${path}/`);
   };
 
+  const brandInitial = BRAND.name.charAt(0).toUpperCase();
+
   return (
     <div className="min-h-screen flex bg-slate-50 font-sans text-slate-900">
       <aside className="flex w-64 shrink-0 flex-col border-r border-slate-200 bg-white text-slate-700 shadow-sm z-10 relative">
         <div className="border-b border-slate-100 px-6 py-6">
           <Link to="/" className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold shadow-md shadow-indigo-600/20">F</div>
-            <span className="font-display text-lg font-bold tracking-tight text-slate-900">Fabria IA</span>
+            <div className="h-8 w-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold shadow-md shadow-indigo-600/20">
+              {brandInitial}
+            </div>
+            <div>
+              <span className="font-display text-lg font-bold tracking-tight text-slate-900">{BRAND.name}</span>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">{BRAND.parent}</p>
+            </div>
           </Link>
-          <p className="mt-1.5 text-[10px] font-semibold uppercase tracking-widest text-slate-400 pl-10">Agente Instagram</p>
+          <p className="mt-2 pl-10 text-[11px] leading-snug text-slate-500">{BRAND.tagline}</p>
           <div className="mt-6">
             {hasToken ? (
               <button
@@ -70,7 +78,7 @@ export function AppLayout() {
                               : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
                           }`}
                         >
-                          <div className={`w-1.5 h-1.5 rounded-full ${active ? 'bg-indigo-600' : 'bg-transparent'}`}></div>
+                          <div className={`w-1.5 h-1.5 rounded-full ${active ? "bg-indigo-600" : "bg-transparent"}`} />
                           {label}
                         </Link>
                       </li>
@@ -82,10 +90,12 @@ export function AppLayout() {
           })}
         </nav>
         <div className="border-t border-slate-100 bg-slate-50/50 p-4">
-           <div className="rounded-lg bg-white border border-slate-200 p-3 shadow-sm">
-             <p className="text-xs font-semibold text-slate-800">Pronto para uso comercial.</p>
-             <p className="text-[11px] text-slate-500 mt-1 leading-tight">O sistema agora roda no backend de forma autônoma.</p>
-           </div>
+          <div className="rounded-lg bg-white border border-slate-200 p-3 shadow-sm">
+            <p className="text-xs font-semibold text-slate-800">Agência comercial no Instagram</p>
+            <p className="text-[11px] text-slate-500 mt-1 leading-tight">
+              Comentário, Direct e WhatsApp trabalhando nos seus posts — 24 horas por dia.
+            </p>
+          </div>
         </div>
       </aside>
       <main className="min-h-0 min-w-0 flex-1 overflow-x-auto">
