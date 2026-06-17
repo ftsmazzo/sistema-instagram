@@ -1,4 +1,5 @@
 import { AGENT_GRAPH_API_BASE } from "./agentConfigDefaults.js";
+import { normalizeGraphAccessToken } from "../util/graphToken.js";
 
 export type InstagramMediaItem = {
   id: string;
@@ -33,7 +34,7 @@ export async function fetchInstagramMediaPage(
   after?: string | null
 ): Promise<{ items: InstagramMediaItem[]; nextAfter: string | null }> {
   const igId = igUserId.trim();
-  const accessToken = token.trim();
+  const accessToken = normalizeGraphAccessToken(token);
   if (!igId || !accessToken) {
     throw new Error("Conta Instagram sem ig_user_id ou token configurado.");
   }
@@ -45,7 +46,13 @@ export async function fetchInstagramMediaPage(
   const json = (await res.json()) as GraphMediaResponse;
 
   if (json.error?.message) {
-    throw new Error(json.error.message);
+    const msg = json.error.message;
+    if (/cannot parse access token/i.test(msg)) {
+      throw new Error(
+        "Token Graph inválido ou mal colado. Em Agentes Instagram, edite a conta e cole só o token de Página (EAA…), sem aspas, JSON ou URL."
+      );
+    }
+    throw new Error(msg);
   }
   if (!res.ok) {
     throw new Error(`Graph API retornou HTTP ${res.status}`);
@@ -59,7 +66,7 @@ export async function fetchInstagramMediaPage(
 
 export async function fetchInstagramMediaById(mediaId: string, token: string): Promise<InstagramMediaItem | null> {
   const id = mediaId.trim();
-  const accessToken = token.trim();
+  const accessToken = normalizeGraphAccessToken(token);
   if (!id || !accessToken) return null;
 
   const res = await fetch(graphUrl(`/${id}?fields=${MEDIA_FIELDS}`, accessToken));

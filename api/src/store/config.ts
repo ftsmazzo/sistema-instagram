@@ -8,6 +8,7 @@ const CONFIG_PATH = join(DATA_DIR, "config.json");
 import type { AgendaConfig } from "../services/empresaConfigHelpers.js";
 import { DEFAULT_AGENDA_CONFIG, parseAgendaConfig } from "../services/empresaConfigHelpers.js";
 import type { PostadorBrandKit } from "../services/postadorBrand.js";
+import { normalizeGraphAccessToken } from "../util/graphToken.js";
 
 export type ContaInstagram = {
   id: string;
@@ -197,8 +198,12 @@ export async function saveConfig(
     const input = config.contas_instagram;
     contas = input.map((c) => {
       const existing = c.id ? contas.find((x) => x.id === c.id) : null;
-      const token = (c.access_token?.trim() || existing?.access_token) ?? "";
-      const agentTok = (c.agent_access_token?.trim() || existing?.agent_access_token) ?? "";
+      const token = normalizeGraphAccessToken(
+        (c.access_token?.trim() ? c.access_token : existing?.access_token) ?? ""
+      );
+      const agentTok = normalizeGraphAccessToken(
+        (c.agent_access_token?.trim() ? c.agent_access_token : existing?.agent_access_token) ?? ""
+      );
       return {
         id: c.id ?? genContaId(),
         nome: (c.nome ?? existing?.nome ?? "").trim() || "Conta",

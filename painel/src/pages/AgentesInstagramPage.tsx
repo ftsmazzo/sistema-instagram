@@ -233,7 +233,7 @@ export function AgentesInstagramPage() {
                 value={form.access_token}
                 onChange={(e) => setForm((f) => ({ ...f, access_token: e.target.value }))}
                 className="input-field font-mono text-sm"
-                placeholder={editId === "new" ? "Token Graph API" : "Token (vazio = mantém)"}
+                placeholder={editId === "new" ? "Token de Página (EAA…)" : "Token (vazio = mantém)"}
               />
               <label className="flex items-center gap-2 text-sm">
                 <input

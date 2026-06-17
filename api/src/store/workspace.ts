@@ -2,6 +2,7 @@ import { getPool, isDbConfigured, ensureTables } from "../db/index.js";
 import { parseAgendaConfig } from "../services/empresaConfigHelpers.js";
 import { parsePostadorBrandKit } from "../services/postadorBrand.js";
 import type { ConfigStore, ContaInstagram, ContaInstagramInput, EmpresaPerfil } from "./config.js";
+import { normalizeGraphAccessToken } from "../util/graphToken.js";
 
 function genAccountId(): string {
   return `conta-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -262,8 +263,12 @@ export async function saveWorkspaceConfig(
         }
         nextIds.add(id);
         const existing = existingById.get(id);
-        const token = (c.access_token?.trim() || existing?.access_token) ?? "";
-        const agentTok = (c.agent_access_token?.trim() || existing?.agent_access_token) ?? "";
+        const token = normalizeGraphAccessToken(
+          (c.access_token?.trim() ? c.access_token : existing?.access_token) ?? ""
+        );
+        const agentTok = normalizeGraphAccessToken(
+          (c.agent_access_token?.trim() ? c.agent_access_token : existing?.agent_access_token) ?? ""
+        );
         const nome = (c.nome ?? "").trim() || "Conta";
         const igUser = (c.ig_user_id ?? "").trim();
         const pageId = (c.facebook_page_id?.trim() || existing?.facebook_page_id) ?? "";

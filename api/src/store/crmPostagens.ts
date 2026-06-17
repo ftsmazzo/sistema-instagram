@@ -5,6 +5,7 @@ import {
   resolveMediaPreviewUrl,
   type InstagramMediaItem,
 } from "../services/instagramSync.js";
+import { isPlausibleGraphToken, resolveInstagramGraphToken } from "../util/graphToken.js";
 
 function hashtagsFromCaption(caption: string): string | null {
   const tags = caption.match(/#[^\s#]+/g);
@@ -51,10 +52,6 @@ export type InstagramAccountForSync = {
   access_token: string;
   agent_access_token: string;
 };
-
-function resolveToken(account: InstagramAccountForSync): string {
-  return (account.agent_access_token || account.access_token || "").trim();
-}
 
 async function upsertPostagemRow(params: {
   organizationId: string;
@@ -184,9 +181,14 @@ export async function syncPostagensFromInstagram(params: {
     throw new Error("Nenhuma conta Instagram cadastrada. Configure em Administração.");
   }
 
-  const token = resolveToken(account);
+  const token = resolveInstagramGraphToken(account.access_token, account.agent_access_token);
   if (!token) {
-    throw new Error("Conta sem token Graph API. Cadastre o token em Administração → Contas Instagram.");
+    throw new Error("Conta sem token Graph API. Cadastre o token em Agentes Instagram.");
+  }
+  if (!isPlausibleGraphToken(token)) {
+    throw new Error(
+      "Token Graph inválido ou mal colado. Cole apenas o token de Página (ex.: EAA…), sem aspas, JSON, URL ou prefixo Bearer. Edite a conta e salve de novo."
+    );
   }
   if (!account.ig_user_id?.trim()) {
     throw new Error("Conta sem ig_user_id configurado.");
@@ -236,7 +238,7 @@ export async function ensurePostagemFromInstagram(params: {
   const account = acc.rows[0];
   if (!account) return null;
 
-  const token = resolveToken(account);
+  const token = resolveInstagramGraphToken(account.access_token, account.agent_access_token);
   if (!token) return null;
 
   const item = await fetchInstagramMediaById(params.mediaId, token);
