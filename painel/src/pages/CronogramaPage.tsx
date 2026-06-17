@@ -51,22 +51,6 @@ export function CronogramaPage() {
     return () => clearInterval(t);
   }, []);
 
-  const cancelAgendado = (id: string) => {
-    if (!window.confirm("Excluir este agendamento?")) return;
-    api.postador
-      .deleteAgendado(id)
-      .then(() => load())
-      .catch((e) => alert(`Erro ao cancelar: ${e instanceof Error ? e.message : "desconhecido"}`));
-  };
-
-  const removeHistorico = (id: string) => {
-    if (!window.confirm("Remover esta publicação do histórico?")) return;
-    api.postador
-      .deleteCronograma(id)
-      .then(() => load())
-      .catch((e) => alert(`Erro ao remover: ${e instanceof Error ? e.message : "desconhecido"}`));
-  };
-
   return (
     <PageShell title="Agenda" description="Posts agendados e histórico de publicações." wide>
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -121,7 +105,15 @@ export function CronogramaPage() {
                     <span className="text-xs font-medium text-slate-500">{item.media_type}</span>
                     <button
                       type="button"
-                      onClick={() => cancelAgendado(item.id)}
+                      onClick={() => {
+                        if (!window.confirm("Excluir este agendamento?")) return;
+                        api.postador
+                          .deleteAgendado(item.id)
+                          .then(() => load())
+                          .catch((e) =>
+                            alert(`Erro ao cancelar: ${e instanceof Error ? e.message : "desconhecido"}`)
+                          );
+                      }}
                       className="rounded-md bg-red-50 px-2.5 py-1 text-xs font-semibold text-red-600 transition-colors hover:bg-red-100"
                     >
                       Cancelar
@@ -173,7 +165,15 @@ export function CronogramaPage() {
                   <div className="mt-2 flex justify-end border-t border-slate-50 pt-2">
                     <button
                       type="button"
-                      onClick={() => removeHistorico(item.id)}
+                      onClick={() => {
+                        if (!window.confirm("Remover esta publicação do histórico?")) return;
+                        api.postador
+                          .deleteCronograma(item.id)
+                          .then(() => load())
+                          .catch((e) =>
+                            alert(`Erro ao remover: ${e instanceof Error ? e.message : "desconhecido"}`)
+                          );
+                      }}
                       className="text-[10px] font-bold uppercase tracking-wider text-slate-400 transition-colors hover:text-red-500"
                     >
                       Remover do histórico
