@@ -12,6 +12,7 @@ import {
 } from "../services/agentConfigDefaults.js";
 import { parseAgendaConfig } from "../services/empresaConfigHelpers.js";
 import { getWhatsappInstanceForOrg, clampDelayPrimeiraMsg } from "./whatsappInstance.js";
+import { resolveFacebookPageId } from "../util/metaPageId.js";
 
 export type AgentConfigIssue = {
   code: string;
@@ -195,39 +196,28 @@ function buildCredentials(agentTok: string, publishTok: string, issues: AgentCon
   };
 }
 
-/** Com token de página, GET /me retorna o ID da Página Facebook. */
-async function fetchPageIdFromToken(accessToken: string, graphBase: string): Promise<string | null> {
-  const token = accessToken.trim();
-  if (!token) return null;
-  try {
-    const base = graphBase.replace(/\/$/, "");
-    const u = new URL(`${base}/me`);
-    u.searchParams.set("fields", "id");
-    u.searchParams.set("access_token", token);
-    const res = await fetch(u.toString());
-    const json = (await res.json()) as { id?: string; error?: { message?: string } };
-    if (!res.ok || json.error || !json.id?.trim()) return null;
-    return json.id.trim();
-  } catch {
-    return null;
-  }
-}
 
 async function enrichCredentialsWithPageId(
   result: AgentConfigResult,
-  facebookPageId: string
+  facebookPageId: string,
+  igUserId?: string
 ): Promise<AgentConfigResult> {
   if (!result.credentials.access_token) return result;
+  const ig = igUserId?.trim() || result.lookup.ig_user_id?.trim() || "";
   const stored = facebookPageId.trim();
-  let pageId = stored || null;
+  let pageId: string | null = stored && stored !== ig ? stored : null;
   const issues = [...result.issues];
   if (!pageId) {
-    pageId = await fetchPageIdFromToken(result.credentials.access_token, result.credentials.graph_api_base);
+    pageId = await resolveFacebookPageId(result.credentials.access_token, {
+      graphBase: result.credentials.graph_api_base,
+      igUserId: ig || undefined,
+    });
+    if (pageId && ig && pageId === ig) pageId = null;
     if (!pageId) {
       issues.push({
         code: "PAGE_ID_MISSING",
         message:
-          "ID da Página Facebook não encontrado — reconecte a conta Meta no painel (OAuth grava facebook_page_id).",
+          "ID da Página Facebook não encontrado — informe facebook_page_id no painel ou use token de Página com instagram_manage_messages.",
         severity: "warning",
       });
     }
@@ -620,7 +610,7 @@ export async function resolveAgentConfig(params: ResolveAgentConfigParams): Prom
       instagram_account_id: row.instagram_account_id,
       source: "workspace",
     });
-    const withPage = await enrichCredentialsWithPageId(base, row.facebook_page_id);
+    const withPage = await enrichCredentialsWithPageId(base, row.facebook_page_id, row.ig_user_id);
     return attachWhatsappConfig(withPage, row.organization_id);
   }
 
@@ -628,7 +618,7 @@ export async function resolveAgentConfig(params: ResolveAgentConfigParams): Prom
     const legacy = await resolveFromLegacyAppConfig(igUserId);
     if (legacy) {
       const conta = (await loadConfig()).contas_instagram.find((c) => c.ig_user_id?.trim() === igUserId);
-      const withPage = await enrichCredentialsWithPageId(legacy, conta?.facebook_page_id ?? "");
+      const withPage = await enrichCredentialsWithPageId(legacy, conta?.facebook_page_id ?? "", igUserId);
       const orgId = withPage.organization?.id;
       if (orgId && orgId !== "legacy") return attachWhatsappConfig(withPage, orgId);
       return withPage;

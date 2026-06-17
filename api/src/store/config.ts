@@ -9,6 +9,7 @@ import type { AgendaConfig } from "../services/empresaConfigHelpers.js";
 import { DEFAULT_AGENDA_CONFIG, parseAgendaConfig } from "../services/empresaConfigHelpers.js";
 import type { PostadorBrandKit } from "../services/postadorBrand.js";
 import { normalizeGraphAccessToken } from "../util/graphToken.js";
+import { resolveFacebookPageId } from "../util/metaPageId.js";
 
 export type ContaInstagram = {
   id: string;
@@ -196,7 +197,8 @@ export async function saveConfig(
 
   if (config.contas_instagram) {
     const input = config.contas_instagram;
-    contas = input.map((c) => {
+    contas = await Promise.all(
+      input.map(async (c) => {
       const existing = c.id ? contas.find((x) => x.id === c.id) : null;
       const token = normalizeGraphAccessToken(
         (c.access_token?.trim() ? c.access_token : existing?.access_token) ?? ""
@@ -204,11 +206,18 @@ export async function saveConfig(
       const agentTok = normalizeGraphAccessToken(
         (c.agent_access_token?.trim() ? c.agent_access_token : existing?.agent_access_token) ?? ""
       );
+      const igUserId = (c.ig_user_id ?? existing?.ig_user_id ?? "").trim();
+      let facebookPageId = (c.facebook_page_id?.trim() || existing?.facebook_page_id) ?? "";
+      if (facebookPageId && igUserId && facebookPageId === igUserId) facebookPageId = "";
+      if (!facebookPageId && token) {
+        facebookPageId = (await resolveFacebookPageId(token, { igUserId })) ?? "";
+        if (facebookPageId && igUserId && facebookPageId === igUserId) facebookPageId = "";
+      }
       return {
         id: c.id ?? genContaId(),
         nome: (c.nome ?? existing?.nome ?? "").trim() || "Conta",
-        ig_user_id: (c.ig_user_id ?? existing?.ig_user_id ?? "").trim(),
-        facebook_page_id: (c.facebook_page_id?.trim() || existing?.facebook_page_id) ?? "",
+        ig_user_id: igUserId,
+        facebook_page_id: facebookPageId,
         access_token: token,
         agent_access_token: agentTok,
         agent_ativo: c.agent_ativo ?? existing?.agent_ativo ?? false,
@@ -216,7 +225,8 @@ export async function saveConfig(
         agent_prompt_comentarios: (c.agent_prompt_comentarios ?? existing?.agent_prompt_comentarios ?? "").trim(),
         agent_prompt_direct: (c.agent_prompt_direct ?? existing?.agent_prompt_direct ?? "").trim(),
       };
-    });
+    })
+    );
   }
 
   if (config.instagram_default_id !== undefined) {

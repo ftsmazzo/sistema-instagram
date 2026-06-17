@@ -3,6 +3,7 @@ import { parseAgendaConfig } from "../services/empresaConfigHelpers.js";
 import { parsePostadorBrandKit } from "../services/postadorBrand.js";
 import type { ConfigStore, ContaInstagram, ContaInstagramInput, EmpresaPerfil } from "./config.js";
 import { normalizeGraphAccessToken } from "../util/graphToken.js";
+import { resolveFacebookPageId } from "../util/metaPageId.js";
 
 function genAccountId(): string {
   return `conta-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -271,7 +272,12 @@ export async function saveWorkspaceConfig(
         );
         const nome = (c.nome ?? "").trim() || "Conta";
         const igUser = (c.ig_user_id ?? "").trim();
-        const pageId = (c.facebook_page_id?.trim() || existing?.facebook_page_id) ?? "";
+        let pageId = (c.facebook_page_id?.trim() || existing?.facebook_page_id) ?? "";
+        if (pageId && igUser && pageId === igUser) pageId = "";
+        if (!pageId && token) {
+          pageId = (await resolveFacebookPageId(token, { igUserId: igUser })) ?? "";
+          if (pageId && igUser && pageId === igUser) pageId = "";
+        }
         const isUpdate = existing !== undefined;
         const agentAtivo = isUpdate
           ? c.agent_ativo !== undefined
