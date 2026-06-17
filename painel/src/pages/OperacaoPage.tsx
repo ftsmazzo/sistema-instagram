@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+﻿import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
@@ -15,7 +15,12 @@ import {
   type PipelineMetricsRes,
   type TimelineItemRes,
 } from "../api/client";
+import { LeadDetailPanel } from "../components/operacao/LeadDetailPanel";
+import { OperacaoCadenciaSection } from "../components/operacao/OperacaoCadenciaSection";
 import { PageShell } from "../components/layout/PageShell";
+import { Drawer } from "../components/ui/Drawer";
+import { Stat } from "../components/ui/Stat";
+import { TabPanel, Tabs } from "../components/ui/Tabs";
 
 const LEAD_STATUSES = [
   { id: "novo", label: "Novo" },
@@ -27,6 +32,7 @@ const LEAD_STATUSES = [
 ];
 
 type ViewFilter = "todos" | "followup" | "quente";
+type OperacaoTab = "leads" | "prioridades" | "cadencia" | "relatorio";
 
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString("pt-BR", {
@@ -38,7 +44,7 @@ function formatDateTime(iso: string): string {
 }
 
 function formatPct(v: number | null): string {
-  if (v === null) return "—";
+  if (v === null) return "\u2014";
   return `${v}%`;
 }
 
@@ -125,16 +131,6 @@ function followUpStatusLabel(status: string): string {
   return map[status] ?? status;
 }
 
-function KpiCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
-  return (
-    <div className="card flex flex-col gap-1 border-slate-200/80 p-4">
-      <span className="text-xs font-semibold uppercase tracking-wider text-slate-500">{label}</span>
-      <span className="font-display text-3xl font-bold text-slate-900">{value}</span>
-      {sub ? <span className="text-xs text-slate-500">{sub}</span> : null}
-    </div>
-  );
-}
-
 export function OperacaoPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -165,6 +161,7 @@ export function OperacaoPage() {
   const [cadenciaPresets, setCadenciaPresets] = useState<CadenciaPresetRes[]>([]);
   const [cadenciaSegmento, setCadenciaSegmento] = useState("");
   const [cadenciaPresetSugerido, setCadenciaPresetSugerido] = useState<string | null>(null);
+  const [tab, setTab] = useState<OperacaoTab>("leads");
 
   const followUpByLead = useMemo(() => {
     const map = new Map<number, FollowUpItemRes>();
@@ -254,15 +251,15 @@ export function OperacaoPage() {
     load();
   }, [load]);
 
-  const openTimeline = async (leadId: number) => {
-    if (selectedId === leadId) {
-      setSelectedId(null);
-      setTimeline([]);
-      setLeadDetail(null);
-      setCoach(null);
-      setLeadScheduled([]);
-      return;
-    }
+  const closeDrawer = () => {
+    setSelectedId(null);
+    setTimeline([]);
+    setLeadDetail(null);
+    setCoach(null);
+    setLeadScheduled([]);
+  };
+
+  const openLead = async (leadId: number) => {
     setSelectedId(leadId);
     setTimelineLoading(true);
     setCoach(null);
@@ -288,6 +285,11 @@ export function OperacaoPage() {
     } finally {
       setTimelineLoading(false);
     }
+  };
+
+  const handlePresetSchedule = (preset: number | "tomorrow9") => {
+    if (preset === "tomorrow9") setWaScheduleDraft(schedulePresetTomorrow9());
+    else setWaScheduleDraft(schedulePresetHours(preset));
   };
 
   const saveLeadCrm = async () => {
@@ -411,653 +413,347 @@ export function OperacaoPage() {
     }
   };
 
+  const selectedLead = leads.find((l) => l.id === selectedId);
+
   return (
     <PageShell
       title="Operação"
-      description="CRM de conversão — follow-ups, pipeline e sugestões para fechar vendas (não postagem)."
+      description="CRM de conversão — leads, prioridades, cadência e relatórios."
       wide
     >
       {loading ? (
-        <p className="text-sm text-slate-600">Carregando…</p>
+        <div className="grid gap-3 sm:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-24 animate-pulse rounded-2xl bg-slate-100" />
+          ))}
+        </div>
       ) : (
-        <div className="space-y-8">
-          {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
-          )}
-
-          {weekly && (
-            <section>
-              <h2 className="mb-4 text-lg font-semibold text-slate-900">Semana — conversão</h2>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                <KpiCard label="Novos leads" value={weekly.novos_leads} />
-                <KpiCard label="Convertidos" value={weekly.convertidos} />
-                <KpiCard label="Handoffs" value={weekly.handoffs} />
-                <KpiCard label="Follow-ups enviados" value={weekly.followups_enviados} />
-                <KpiCard label="Cadência auto" value={weekly.cadencia_agendada} sub="msgs agendadas" />
-                <KpiCard label="Comentários" value={weekly.comentarios} />
-              </div>
-            </section>
-          )}
-
-          {cadencia && (
-            <section className="card border-indigo-200/80">
-              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900">Cadência automática (retomar venda)</h2>
-                  <p className="text-sm text-slate-600 mt-1">
-                    Se o lead não responder após sua última mensagem, o CRM agenda D+1 / D+3 / D+7 no WhatsApp.
-                    Se responder, a série é cancelada. Alertas vão pro WhatsApp do consultor (Empresa).
-                  </p>
-                </div>
-                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={cadencia.ativo}
-                    onChange={(e) => setCadencia({ ...cadencia, ativo: e.target.checked })}
-                  />
-                  Ativa
-                </label>
-              </div>
-              {cadenciaPresets.length > 0 && (
-                <div className="mb-4 rounded-lg border border-indigo-100 bg-indigo-50/40 p-3">
-                  <p className="text-xs font-semibold text-indigo-900 mb-2">
-                    Templates por segmento
-                    {cadenciaSegmento ? (
-                      <span className="font-normal text-indigo-700"> — segmento: {cadenciaSegmento}</span>
-                    ) : null}
-                    {cadenciaPresetSugerido ? (
-                      <span className="ml-1 rounded-full bg-indigo-200 px-1.5 py-0.5 text-[10px] text-indigo-900">
-                        sugerido: {cadenciaPresets.find((p) => p.id === cadenciaPresetSugerido)?.label ?? cadenciaPresetSugerido}
-                      </span>
-                    ) : null}
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {cadenciaPresets.map((preset) => (
-                      <button
-                        key={preset.id}
-                        type="button"
-                        disabled={cadenciaSaving}
-                        onClick={() => applyCadenciaPreset(preset.id)}
-                        className={`rounded-full px-3 py-1 text-xs font-semibold disabled:opacity-50 ${
-                          preset.id === cadenciaPresetSugerido
-                            ? "bg-indigo-600 text-white"
-                            : "bg-white text-indigo-800 border border-indigo-200 hover:bg-indigo-100"
-                        }`}
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-              <div className="grid gap-4 sm:grid-cols-2 mb-4">
-                <label className="text-xs text-slate-600">
-                  Horas sem resposta (início da cadência)
-                  <input
-                    type="number"
-                    min={4}
-                    max={168}
-                    className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm"
-                    value={cadencia.horas_sem_resposta}
-                    onChange={(e) =>
-                      setCadencia({ ...cadencia, horas_sem_resposta: Number(e.target.value) || 24 })
-                    }
-                  />
-                </label>
-                <label className="text-xs text-slate-600">
-                  Alerta consultor após follow-up (horas)
-                  <input
-                    type="number"
-                    min={2}
-                    max={72}
-                    className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm"
-                    value={cadencia.alerta_consultor_horas}
-                    onChange={(e) =>
-                      setCadencia({ ...cadencia, alerta_consultor_horas: Number(e.target.value) || 12 })
-                    }
-                  />
-                </label>
-              </div>
-              <div className="space-y-3">
-                {cadencia.etapas.map((etapa, idx) => (
-                  <label key={idx} className="block text-xs text-slate-600">
-                    Etapa {idx + 1} — +{etapa.horas_apos_parada}h após parada
-                    <textarea
-                      className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm min-h-[60px]"
-                      value={etapa.mensagem}
-                      onChange={(e) => {
-                        const etapas = [...cadencia.etapas];
-                        etapas[idx] = { ...etapa, mensagem: e.target.value };
-                        setCadencia({ ...cadencia, etapas });
-                      }}
-                    />
-                    <span className="text-[10px] text-slate-400">Variáveis: {"{nome}"} {"{objetivo}"} {"{empresa}"}</span>
-                  </label>
-                ))}
-              </div>
-              <button
-                type="button"
-                disabled={cadenciaSaving}
-                onClick={saveCadencia}
-                className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-              >
-                {cadenciaSaving ? "Salvando…" : "Salvar cadência"}
-              </button>
-            </section>
-          )}
+        <>
+          {error && <div className="alert-error mb-6">{error}</div>}
 
           {pipeline && (
-            <section>
-              <h2 className="mb-4 text-lg font-semibold text-slate-900">Pipeline de conversão</h2>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
-                <KpiCard label="Coment. → Lead" value={formatPct(pipeline.taxa_comentario_para_lead)} sub="captura no CRM" />
-                <KpiCard label="Lead → WhatsApp" value={formatPct(pipeline.taxa_lead_para_whatsapp)} sub="handoff de canal" />
-                <KpiCard label="WA → Handoff" value={formatPct(pipeline.taxa_whatsapp_para_handoff)} sub="humano acionado" />
-                <KpiCard label="Handoff → Venda" value={formatPct(pipeline.taxa_handoff_para_convertido)} sub="convertidos" />
-                <KpiCard label="Leads ativos" value={pipeline.leads_ativos} />
-                <KpiCard label="Parados 72h+" value={pipeline.leads_parados_72h} sub="risco de esfriar" />
-                <KpiCard label="Follow-ups" value={pipeline.follow_ups_pendentes} sub="ações sugeridas" />
-                <KpiCard label="WA agendados" value={pipeline.wa_followups_agendados} sub="envio programado" />
-              </div>
-            </section>
-          )}
-
-          {scheduledOrg.length > 0 && (
-            <section className="card border-emerald-200/80 bg-emerald-50/30">
-              <h2 className="mb-3 text-lg font-semibold text-slate-900">WhatsApp programados</h2>
-              <p className="mb-3 text-sm text-slate-600">
-                Mensagens de retomada de venda — enviadas automaticamente pela Evolution (cron a cada 1 min).
-              </p>
-              <ul className="space-y-2">
-                {scheduledOrg.slice(0, 10).map((item) => (
-                  <li
-                    key={item.id}
-                    className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-emerald-100 bg-white px-3 py-2 text-sm cursor-pointer hover:bg-emerald-50/50"
-                    onClick={() => openTimeline(item.lead_id)}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="font-medium text-slate-900">
-                        {item.lead_nome ?? "Lead"} · {formatDateTime(item.agendado_para)}
-                        {item.origin_hint?.startsWith("cadencia") ? (
-                          <span className="ml-2 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-800">
-                            Cadência auto
-                          </span>
-                        ) : null}
-                      </p>
-                      <p className="text-xs text-slate-600 truncate">{item.message_text}</p>
-                    </div>
-                    <button
-                      type="button"
-                      className="text-xs font-semibold text-red-600 shrink-0"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        cancelScheduled(item.id);
-                      }}
-                    >
-                      Cancelar
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
-          {followUps.length > 0 && (
-            <section className="card border-amber-200/80 bg-amber-50/30">
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900">Ações prioritárias</h2>
-                  <p className="text-sm text-slate-600">
-                    Leads que precisam de atenção humana para não perder a venda.
-                    {pipeline?.ai_disponivel ? " Use IA no detalhe do lead para mensagem pronta." : " Configure OPENAI_API_KEY na API para sugestões com IA."}
-                  </p>
-                </div>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-amber-200/60 text-slate-600">
-                      <th className="py-2 pr-3 font-medium">Score</th>
-                      <th className="py-2 pr-3 font-medium">Prioridade</th>
-                      <th className="py-2 pr-3 font-medium">Lead</th>
-                      <th className="py-2 pr-3 font-medium">Etapa</th>
-                      <th className="py-2 pr-3 font-medium">Motivo</th>
-                      <th className="py-2 font-medium">Ação sugerida</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {followUps.slice(0, 8).map((f) => (
-                      <tr
-                        key={f.lead_id}
-                        className="border-b border-amber-100/80 cursor-pointer hover:bg-white/60"
-                        onClick={() => openTimeline(f.lead_id)}
-                      >
-                        <td className="py-2 pr-3">
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-xs font-bold tabular-nums ${scoreClass(f.crm_score)}`}
-                            title={f.crm_score_motivo ?? undefined}
-                          >
-                            {f.crm_score ?? "—"}
-                          </span>
-                        </td>
-                        <td className="py-2 pr-3">
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${priorityClass(f.priority)}`}>
-                            {priorityLabel(f.priority)}
-                          </span>
-                        </td>
-                        <td className="py-2 pr-3">
-                          <div className="font-medium text-slate-900">{f.nome ?? "—"}</div>
-                          <div className="text-xs text-slate-500">
-                            {f.username_instagram ? `@${f.username_instagram}` : f.whatsapp ?? "—"}
-                          </div>
-                        </td>
-                        <td className="py-2 pr-3 text-xs">{f.funil_etapa}</td>
-                        <td className="py-2 pr-3 text-xs text-slate-700 max-w-[200px]">{f.motivo}</td>
-                        <td className="py-2 text-xs text-indigo-800">{f.acao_sugerida}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          )}
-
-          {health && (
-            <section className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <h2 className="text-lg font-semibold text-slate-900">Saúde do sistema</h2>
-                <span
-                  className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                    health.ok ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"
-                  }`}
-                >
-                  {health.ok ? "Operacional" : "Atenção necessária"}
-                </span>
-              </div>
-              {health.issues.length === 0 ? (
-                <p className="text-sm text-emerald-700">Agentes e Evolution OK — foco em converter leads.</p>
-              ) : (
-                <ul className="grid gap-2 sm:grid-cols-2">
-                  {health.issues.map((issue) => (
-                    <li key={issue.code + issue.message} className={`rounded-lg border px-3 py-2 text-sm ${issueClass(issue.severity)}`}>
-                      {issue.message}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
-          )}
-
-          {funnel && (
-            <section>
-              <h2 className="mb-4 text-lg font-semibold text-slate-900">Volume — últimos {funnel.period_days} dias</h2>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
-                <KpiCard label="Comentários" value={funnel.comentarios} />
-                <KpiCard label="Direct (lead)" value={funnel.direct_inbound} sub={`${funnel.direct_outbound} respostas bot`} />
-                <KpiCard label="Leads CRM" value={funnel.leads_total} sub={`${funnel.leads_com_whatsapp} com WhatsApp`} />
-                <KpiCard label="WA inbound" value={funnel.whatsapp_inbound} sub={`${funnel.whatsapp_outbound} outbound`} />
-                <KpiCard label="Handoffs" value={funnel.handoffs} />
-                <KpiCard
-                  label="Qualificados"
-                  value={funnel.leads_por_status.qualificado ?? 0}
-                  sub={`${funnel.leads_por_status.convertido ?? 0} convertidos`}
-                />
-              </div>
-            </section>
-          )}
-
-          <section className="card">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Leads — gestão comercial</h2>
-                <p className="text-sm text-gray-600">Abra o lead para conversa, notas, status e coach de vendas.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {(["todos", "followup", "quente"] as ViewFilter[]).map((f) => (
-                  <button
-                    key={f}
-                    type="button"
-                    onClick={() => setViewFilter(f)}
-                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                      viewFilter === f ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                    }`}
-                  >
-                    {f === "todos" ? "Todos" : f === "followup" ? "Com follow-up" : "Quentes"}
-                  </button>
-                ))}
-                <Link to="/whatsapp" className="text-sm font-semibold text-indigo-600 hover:underline self-center">
-                  WhatsApp →
-                </Link>
-              </div>
+            <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Stat label="Leads ativos" value={pipeline.leads_ativos} accent />
+              <Stat label="Follow-ups" value={pipeline.follow_ups_pendentes} sub="precisam ação" />
+              <Stat label="Parados 72h+" value={pipeline.leads_parados_72h} sub="risco de esfriar" />
+              <Stat
+                label="Handoff → venda"
+                value={formatPct(pipeline.taxa_handoff_para_convertido)}
+                sub="taxa de conversão"
+              />
             </div>
+          )}
 
-            {visibleLeads.length === 0 ? (
-              <p className="text-sm text-gray-500">Nenhum lead neste filtro.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-200 text-gray-600">
-                      <th className="py-2 pr-4 font-medium">Score</th>
-                      <th className="py-2 pr-4 font-medium">Nome</th>
-                      <th className="py-2 pr-4 font-medium">Instagram</th>
-                      <th className="py-2 pr-4 font-medium">Status</th>
-                      <th className="py-2 pr-4 font-medium">Temperatura</th>
-                      <th className="py-2 pr-4 font-medium">Atualizado</th>
-                      <th className="py-2 font-medium" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {visibleLeads.map((lead) => {
-                      const fu = followUpByLead.get(lead.id);
-                      const score = leadScoreValue(lead, fu);
-                      return (
-                        <Fragment key={lead.id}>
-                          <tr
-                            className={`border-b border-gray-100 cursor-pointer hover:bg-slate-50 ${
-                              selectedId === lead.id ? "bg-indigo-50/50" : ""
-                            }`}
-                            onClick={() => openTimeline(lead.id)}
-                          >
-                            <td className="py-2 pr-4">
-                              <span
-                                className={`rounded-full px-2 py-0.5 text-xs font-bold tabular-nums ${scoreClass(score)}`}
-                                title={lead.crm_score_motivo ?? fu?.crm_score_motivo ?? undefined}
-                              >
-                                {score ?? "—"}
-                              </span>
-                            </td>
-                            <td className="py-2 pr-4">{lead.nome ?? "—"}</td>
-                            <td className="py-2 pr-4">
-                              {lead.username_instagram ? `@${lead.username_instagram}` : "—"}
-                            </td>
-                            <td className="py-2 pr-4">
-                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs">{statusLabel(lead.status)}</span>
-                            </td>
-                            <td className="py-2 pr-4">
-                            {fu ? (
-                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${tempClass(fu.temperature)}`}>
-                                {fu.temperature}
-                              </span>
-                            ) : (
-                              <span className="text-xs text-slate-400">—</span>
-                            )}
-                          </td>
-                            <td className="py-2 pr-4 text-xs text-gray-500">{formatDateTime(lead.updated_at)}</td>
-                            <td className="py-2 text-xs font-medium text-indigo-600">
-                              {selectedId === lead.id ? "Fechar" : "Abrir"}
-                            </td>
-                          </tr>
-                          {selectedId === lead.id && (
-                            <tr>
-                              <td colSpan={7} className="bg-slate-50 px-4 py-4">
-                                {timelineLoading ? (
-                                  <p className="text-sm text-slate-500">Carregando…</p>
+          <Tabs
+            tabs={[
+              { id: "leads", label: "Leads", badge: leads.length || undefined },
+              { id: "prioridades", label: "Prioridades", badge: followUps.length || undefined },
+              { id: "cadencia", label: "Cadência" },
+              { id: "relatorio", label: "Relatório" },
+            ]}
+            activeId={tab}
+            onChange={(id) => setTab(id as OperacaoTab)}
+          />
+
+          <TabPanel className="!mt-6">
+            {tab === "leads" && (
+              <section className="card !p-0 overflow-hidden">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
+                  <p className="text-sm text-slate-600">Clique no lead para abrir o painel lateral.</p>
+                  <div className="flex flex-wrap gap-2">
+                    {(["todos", "followup", "quente"] as ViewFilter[]).map((f) => (
+                      <button
+                        key={f}
+                        type="button"
+                        onClick={() => setViewFilter(f)}
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                          viewFilter === f ? "bg-brand-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                        }`}
+                      >
+                        {f === "todos" ? "Todos" : f === "followup" ? "Com follow-up" : "Quentes"}
+                      </button>
+                    ))}
+                    <Link to="/whatsapp" className="self-center text-sm font-semibold text-brand-600 hover:underline">
+                      WhatsApp →
+                    </Link>
+                  </div>
+                </div>
+                {visibleLeads.length === 0 ? (
+                  <p className="px-5 py-8 text-sm text-slate-500">Nenhum lead neste filtro.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-slate-100 bg-slate-50/80 text-slate-600">
+                          <th className="px-5 py-3 font-medium">Score</th>
+                          <th className="py-3 pr-4 font-medium">Nome</th>
+                          <th className="py-3 pr-4 font-medium">Instagram</th>
+                          <th className="py-3 pr-4 font-medium">Status</th>
+                          <th className="py-3 pr-4 font-medium">Temp.</th>
+                          <th className="py-3 pr-4 font-medium">Atualizado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {visibleLeads.map((lead) => {
+                          const fu = followUpByLead.get(lead.id);
+                          const score = leadScoreValue(lead, fu);
+                          return (
+                            <tr
+                              key={lead.id}
+                              className={`cursor-pointer border-b border-slate-50 transition hover:bg-brand-50/40 ${
+                                selectedId === lead.id ? "bg-brand-50/60" : ""
+                              }`}
+                              onClick={() => openLead(lead.id)}
+                            >
+                              <td className="px-5 py-3">
+                                <span className={`rounded-full px-2 py-0.5 text-xs font-bold tabular-nums ${scoreClass(score)}`}>
+                                  {score ?? "—"}
+                                </span>
+                              </td>
+                              <td className="py-3 pr-4 font-medium text-slate-900">{lead.nome ?? "—"}</td>
+                              <td className="py-3 pr-4 text-slate-600">
+                                {lead.username_instagram ? `@${lead.username_instagram}` : "—"}
+                              </td>
+                              <td className="py-3 pr-4">
+                                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs">{statusLabel(lead.status)}</span>
+                              </td>
+                              <td className="py-3 pr-4">
+                                {fu ? (
+                                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${tempClass(fu.temperature)}`}>
+                                    {fu.temperature}
+                                  </span>
                                 ) : (
-                                  <div className="grid gap-6 lg:grid-cols-2">
-                                    <div className="space-y-4">
-                                      {leadDetail && (
-                                        <div className="rounded-lg border border-slate-200 bg-white p-4 text-sm space-y-2">
-                                          <p><span className="text-slate-500">Objetivo:</span> {leadDetail.objetivo ?? "—"}</p>
-                                          <p><span className="text-slate-500">Origem:</span> {leadDetail.origem_interacao ?? "—"}</p>
-                                          {leadDetail.url_interesse && (
-                                            <p>
-                                              <span className="text-slate-500">Interesse:</span>{" "}
-                                              <a href={leadDetail.url_interesse} target="_blank" rel="noreferrer" className="text-indigo-600 underline">
-                                                link
-                                              </a>
-                                            </p>
-                                          )}
-                                          {leadDetail.handoff_motivo && (
-                                            <p><span className="text-slate-500">Handoff:</span> {leadDetail.handoff_motivo}</p>
-                                          )}
-                                          {followUpByLead.get(lead.id) && (
-                                            <p className="text-amber-800 text-xs border-t border-slate-100 pt-2">
-                                              {followUpByLead.get(lead.id)!.acao_sugerida}
-                                            </p>
-                                          )}
-                                        </div>
-                                      )}
-
-                                      <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
-                                        <h3 className="font-semibold text-emerald-950">Agendar WhatsApp (retomar venda)</h3>
-                                        {!leadDetail?.whatsapp ? (
-                                          <p className="text-xs text-amber-800">Lead sem WhatsApp — capture o número antes de agendar.</p>
-                                        ) : (
-                                          <>
-                                            <label className="block text-xs text-slate-600">
-                                              Mensagem
-                                              <textarea
-                                                className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm min-h-[90px] bg-white"
-                                                value={waMessageDraft}
-                                                onChange={(e) => setWaMessageDraft(e.target.value)}
-                                                onClick={(e) => e.stopPropagation()}
-                                                placeholder="Olá! Vi que você demonstrou interesse…"
-                                              />
-                                            </label>
-                                            <label className="block text-xs text-slate-600">
-                                              Enviar em
-                                              <input
-                                                type="datetime-local"
-                                                className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm bg-white"
-                                                value={waScheduleDraft}
-                                                onChange={(e) => setWaScheduleDraft(e.target.value)}
-                                                onClick={(e) => e.stopPropagation()}
-                                              />
-                                            </label>
-                                            <div className="flex flex-wrap gap-2">
-                                              <button
-                                                type="button"
-                                                className="rounded-full bg-white border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-900"
-                                                onClick={(e) => { e.stopPropagation(); setWaScheduleDraft(schedulePresetHours(2)); }}
-                                              >
-                                                +2h
-                                              </button>
-                                              <button
-                                                type="button"
-                                                className="rounded-full bg-white border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-900"
-                                                onClick={(e) => { e.stopPropagation(); setWaScheduleDraft(schedulePresetHours(24)); }}
-                                              >
-                                                +24h
-                                              </button>
-                                              <button
-                                                type="button"
-                                                className="rounded-full bg-white border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-900"
-                                                onClick={(e) => { e.stopPropagation(); setWaScheduleDraft(schedulePresetTomorrow9()); }}
-                                              >
-                                                Amanhã 9h
-                                              </button>
-                                            </div>
-                                            <div className="flex flex-wrap gap-2">
-                                              <button
-                                                type="button"
-                                                disabled={schedulingWa}
-                                                onClick={(e) => { e.stopPropagation(); scheduleWaFollowUp("manual"); }}
-                                                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-                                              >
-                                                {schedulingWa ? "Agendando…" : "Programar envio"}
-                                              </button>
-                                              {coach?.mensagem_sugerida && (
-                                                <button
-                                                  type="button"
-                                                  disabled={schedulingWa}
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setWaMessageDraft(coach.mensagem_sugerida);
-                                                    scheduleWaFollowUp("ai_coach", coach.mensagem_sugerida);
-                                                  }}
-                                                  className="rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-900 disabled:opacity-50"
-                                                >
-                                                  Agendar msg da IA
-                                                </button>
-                                              )}
-                                            </div>
-                                            {leadScheduled.filter((x) => x.status === "pendente").length > 0 && (
-                                              <ul className="border-t border-emerald-100 pt-2 space-y-1">
-                                                {leadScheduled
-                                                  .filter((x) => x.status === "pendente" || x.status === "falhou")
-                                                  .slice(0, 5)
-                                                  .map((item) => (
-                                                    <li key={item.id} className="flex justify-between gap-2 text-xs">
-                                                      <span className="text-slate-700">
-                                                        {followUpStatusLabel(item.status)} · {formatDateTime(item.agendado_para)}
-                                                      </span>
-                                                      {item.status === "pendente" && (
-                                                        <button
-                                                          type="button"
-                                                          className="text-red-600 font-semibold"
-                                                          onClick={(e) => { e.stopPropagation(); cancelScheduled(item.id); }}
-                                                        >
-                                                          Cancelar
-                                                        </button>
-                                                      )}
-                                                    </li>
-                                                  ))}
-                                              </ul>
-                                            )}
-                                          </>
-                                        )}
-                                      </div>
-
-                                      <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
-                                        <h3 className="font-semibold text-slate-900">Gestão do lead</h3>
-                                        <label className="block text-xs text-slate-600">
-                                          Status
-                                          <select
-                                            className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm"
-                                            value={statusDraft}
-                                            onChange={(e) => setStatusDraft(e.target.value)}
-                                            onClick={(e) => e.stopPropagation()}
-                                          >
-                                            {LEAD_STATUSES.map((s) => (
-                                              <option key={s.id} value={s.id}>{s.label}</option>
-                                            ))}
-                                          </select>
-                                        </label>
-                                        <label className="block text-xs text-slate-600">
-                                          Próximo follow-up
-                                          <input
-                                            type="datetime-local"
-                                            className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm"
-                                            value={followupDraft}
-                                            onChange={(e) => setFollowupDraft(e.target.value)}
-                                            onClick={(e) => e.stopPropagation()}
-                                          />
-                                        </label>
-                                        <label className="block text-xs text-slate-600">
-                                          Notas do consultor
-                                          <textarea
-                                            className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm min-h-[80px]"
-                                            value={notasDraft}
-                                            onChange={(e) => setNotasDraft(e.target.value)}
-                                            onClick={(e) => e.stopPropagation()}
-                                            placeholder="Objeções, orçamento discutido, próximo passo…"
-                                          />
-                                        </label>
-                                        <div className="flex flex-wrap gap-2">
-                                          <button
-                                            type="button"
-                                            disabled={savingLead}
-                                            onClick={(e) => { e.stopPropagation(); saveLeadCrm(); }}
-                                            className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-                                          >
-                                            {savingLead ? "Salvando…" : "Salvar CRM"}
-                                          </button>
-                                          <button
-                                            type="button"
-                                            disabled={coachLoading || !pipeline?.ai_disponivel}
-                                            onClick={(e) => { e.stopPropagation(); requestAiCoach(); }}
-                                            className="rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-900 disabled:opacity-50"
-                                          >
-                                            {coachLoading ? "Gerando…" : "Sugestão IA (vendas)"}
-                                          </button>
-                                        </div>
-                                      </div>
-
-                                      {coach && (
-                                        <div className="rounded-lg border border-violet-200 bg-violet-50/50 p-4 text-sm space-y-2">
-                                          <div className="flex flex-wrap gap-2 items-center">
-                                            <span className="font-semibold text-violet-950">Coach de conversão</span>
-                                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${tempClass(coach.temperatura)}`}>
-                                              {coach.temperatura}
-                                            </span>
-                                            <span className={`text-xs font-medium ${riscoClass(coach.risco_perda)}`}>
-                                              Risco: {coach.risco_perda}
-                                            </span>
-                                          </div>
-                                          <p className="text-slate-700">{coach.resumo}</p>
-                                          <p><span className="font-medium text-slate-800">Próxima ação:</span> {coach.proxima_acao}</p>
-                                          {coach.oportunidade && (
-                                            <p className="text-emerald-800 text-xs">{coach.oportunidade}</p>
-                                          )}
-                                          {coach.mensagem_sugerida && (
-                                            <div className="rounded bg-white border border-violet-100 p-3">
-                                              <p className="text-xs text-slate-500 mb-1">Mensagem sugerida (WhatsApp/Direct)</p>
-                                              <p className="whitespace-pre-wrap text-slate-800">{coach.mensagem_sugerida}</p>
-                                              <button
-                                                type="button"
-                                                className="mt-2 text-xs font-semibold text-indigo-600"
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setWaMessageDraft(coach.mensagem_sugerida);
-                                                  copyMessage(coach.mensagem_sugerida);
-                                                }}
-                                              >
-                                                Usar na agenda · Copiar
-                                              </button>
-                                            </div>
-                                          )}
-                                        </div>
-                                      )}
-                                    </div>
-
-                                    <div>
-                                      <h3 className="mb-2 text-sm font-semibold text-slate-700">Histórico de conversa</h3>
-                                      {timeline.length === 0 ? (
-                                        <p className="text-sm text-slate-500">Sem mensagens registradas.</p>
-                                      ) : (
-                                        <ol className="space-y-3 max-h-[420px] overflow-y-auto">
-                                          {timeline.map((item, idx) => (
-                                            <li
-                                              key={`${item.ref}-${idx}`}
-                                              className={`flex gap-3 text-sm ${
-                                                item.direction === "outbound" ? "justify-end" : "justify-start"
-                                              }`}
-                                            >
-                                              <div
-                                                className={`max-w-[85%] rounded-lg px-3 py-2 ${
-                                                  item.direction === "outbound"
-                                                    ? item.canal === "visita"
-                                                      ? "bg-amber-600 text-white"
-                                                      : "bg-indigo-600 text-white"
-                                                    : "bg-white border border-slate-200 text-slate-800"
-                                                }`}
-                                              >
-                                                <p className="text-[10px] font-semibold uppercase opacity-80 mb-1">
-                                                  {canalLabel(item.canal)} · {formatDateTime(item.at)}
-                                                </p>
-                                                <p className="whitespace-pre-wrap break-words">{item.text}</p>
-                                              </div>
-                                            </li>
-                                          ))}
-                                        </ol>
-                                      )}
-                                    </div>
-                                  </div>
+                                  "—"
                                 )}
                               </td>
+                              <td className="py-3 pr-4 text-xs text-slate-500">{formatDateTime(lead.updated_at)}</td>
                             </tr>
-                          )}
-                        </Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {tab === "prioridades" && (
+              <div className="space-y-6">
+                {followUps.length > 0 ? (
+                  <section className="card border-amber-200/70 bg-amber-50/20">
+                    <h2 className="mb-3 text-lg font-semibold text-slate-900">Ações prioritárias</h2>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full text-left text-sm">
+                        <thead>
+                          <tr className="border-b border-amber-200/50 text-slate-600">
+                            <th className="py-2 pr-3 font-medium">Score</th>
+                            <th className="py-2 pr-3 font-medium">Prioridade</th>
+                            <th className="py-2 pr-3 font-medium">Lead</th>
+                            <th className="py-2 pr-3 font-medium">Motivo</th>
+                            <th className="py-2 font-medium">Ação</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {followUps.map((f) => (
+                            <tr
+                              key={f.lead_id}
+                              className="cursor-pointer border-b border-amber-100/60 hover:bg-white/70"
+                              onClick={() => openLead(f.lead_id)}
+                            >
+                              <td className="py-2 pr-3">
+                                <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${scoreClass(f.crm_score)}`}>
+                                  {f.crm_score ?? "—"}
+                                </span>
+                              </td>
+                              <td className="py-2 pr-3">
+                                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${priorityClass(f.priority)}`}>
+                                  {priorityLabel(f.priority)}
+                                </span>
+                              </td>
+                              <td className="py-2 pr-3">
+                                <div className="font-medium">{f.nome ?? "—"}</div>
+                                <div className="text-xs text-slate-500">
+                                  {f.username_instagram ? `@${f.username_instagram}` : f.whatsapp ?? ""}
+                                </div>
+                              </td>
+                              <td className="py-2 pr-3 text-xs max-w-[200px]">{f.motivo}</td>
+                              <td className="py-2 text-xs text-brand-800">{f.acao_sugerida}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                ) : (
+                  <p className="text-sm text-slate-500">Nenhuma ação prioritária no momento.</p>
+                )}
+
+                {scheduledOrg.length > 0 && (
+                  <section className="card border-emerald-200/70 bg-emerald-50/20">
+                    <h2 className="mb-3 text-lg font-semibold text-slate-900">WhatsApp programados</h2>
+                    <ul className="space-y-2">
+                      {scheduledOrg.map((item) => (
+                        <li
+                          key={item.id}
+                          className="flex cursor-pointer flex-wrap items-start justify-between gap-2 rounded-xl border border-emerald-100 bg-white px-3 py-2 text-sm hover:bg-emerald-50/50"
+                          onClick={() => openLead(item.lead_id)}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium text-slate-900">
+                              {item.lead_nome ?? "Lead"} · {formatDateTime(item.agendado_para)}
+                              {item.origin_hint?.startsWith("cadencia") ? (
+                                <span className="ml-2 rounded-full bg-brand-100 px-1.5 py-0.5 text-[10px] font-semibold text-brand-800">
+                                  Cadência
+                                </span>
+                              ) : null}
+                            </p>
+                            <p className="truncate text-xs text-slate-600">{item.message_text}</p>
+                          </div>
+                          <button
+                            type="button"
+                            className="text-xs font-semibold text-red-600"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              cancelScheduled(item.id);
+                            }}
+                          >
+                            Cancelar
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                )}
               </div>
             )}
-          </section>
-        </div>
+
+            {tab === "cadencia" && cadencia && (
+              <OperacaoCadenciaSection
+                cadencia={cadencia}
+                setCadencia={setCadencia}
+                cadenciaPresets={cadenciaPresets}
+                cadenciaSegmento={cadenciaSegmento}
+                cadenciaPresetSugerido={cadenciaPresetSugerido}
+                cadenciaSaving={cadenciaSaving}
+                onSave={saveCadencia}
+                onApplyPreset={applyCadenciaPreset}
+              />
+            )}
+
+            {tab === "relatorio" && (
+              <div className="space-y-8">
+                {weekly && (
+                  <section>
+                    <h2 className="mb-4 text-lg font-semibold text-slate-900">Semana</h2>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                      <Stat label="Novos leads" value={weekly.novos_leads} />
+                      <Stat label="Convertidos" value={weekly.convertidos} />
+                      <Stat label="Handoffs" value={weekly.handoffs} />
+                      <Stat label="Follow-ups env." value={weekly.followups_enviados} />
+                      <Stat label="Cadência auto" value={weekly.cadencia_agendada} />
+                      <Stat label="Comentários" value={weekly.comentarios} />
+                    </div>
+                  </section>
+                )}
+                {pipeline && (
+                  <section>
+                    <h2 className="mb-4 text-lg font-semibold text-slate-900">Pipeline</h2>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <Stat label="Coment. → Lead" value={formatPct(pipeline.taxa_comentario_para_lead)} />
+                      <Stat label="Lead → WhatsApp" value={formatPct(pipeline.taxa_lead_para_whatsapp)} />
+                      <Stat label="WA → Handoff" value={formatPct(pipeline.taxa_whatsapp_para_handoff)} />
+                      <Stat label="WA agendados" value={pipeline.wa_followups_agendados} />
+                    </div>
+                  </section>
+                )}
+                {funnel && (
+                  <section>
+                    <h2 className="mb-4 text-lg font-semibold text-slate-900">Volume — {funnel.period_days} dias</h2>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                      <Stat label="Comentários" value={funnel.comentarios} />
+                      <Stat label="Direct in" value={funnel.direct_inbound} />
+                      <Stat label="Leads CRM" value={funnel.leads_total} />
+                      <Stat label="WA in" value={funnel.whatsapp_inbound} />
+                      <Stat label="Handoffs" value={funnel.handoffs} />
+                      <Stat label="Qualificados" value={funnel.leads_por_status.qualificado ?? 0} />
+                    </div>
+                  </section>
+                )}
+                {health && (
+                  <section className="card">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <h2 className="text-lg font-semibold text-slate-900">Saúde do sistema</h2>
+                      <span
+                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                          health.ok ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {health.ok ? "Operacional" : "Atenção"}
+                      </span>
+                    </div>
+                    {health.issues.length === 0 ? (
+                      <p className="text-sm text-emerald-700">Agentes e Evolution OK.</p>
+                    ) : (
+                      <ul className="grid gap-2 sm:grid-cols-2">
+                        {health.issues.map((issue) => (
+                          <li key={issue.code + issue.message} className={`rounded-lg border px-3 py-2 text-sm ${issueClass(issue.severity)}`}>
+                            {issue.message}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                )}
+              </div>
+            )}
+          </TabPanel>
+        </>
       )}
+
+      <Drawer
+        open={selectedId !== null}
+        onClose={closeDrawer}
+        title={leadDetail?.nome ?? selectedLead?.nome ?? "Lead"}
+        subtitle={
+          leadDetail?.username_instagram
+            ? `@${leadDetail.username_instagram}`
+            : leadDetail?.whatsapp ?? undefined
+        }
+      >
+        <LeadDetailPanel
+          loading={timelineLoading}
+          leadDetail={leadDetail}
+          timeline={timeline}
+          followUp={selectedId != null ? followUpByLead.get(selectedId) : undefined}
+          coach={coach}
+          coachLoading={coachLoading}
+          aiAvailable={Boolean(pipeline?.ai_disponivel)}
+          notasDraft={notasDraft}
+          statusDraft={statusDraft}
+          followupDraft={followupDraft}
+          waMessageDraft={waMessageDraft}
+          waScheduleDraft={waScheduleDraft}
+          schedulingWa={schedulingWa}
+          savingLead={savingLead}
+          leadScheduled={leadScheduled}
+          onNotasChange={setNotasDraft}
+          onStatusChange={setStatusDraft}
+          onFollowupChange={setFollowupDraft}
+          onWaMessageChange={setWaMessageDraft}
+          onWaScheduleChange={setWaScheduleDraft}
+          onSaveCrm={saveLeadCrm}
+          onRequestCoach={requestAiCoach}
+          onScheduleWa={scheduleWaFollowUp}
+          onCancelScheduled={cancelScheduled}
+          onCopyMessage={copyMessage}
+          onPresetSchedule={handlePresetSchedule}
+          formatDateTime={formatDateTime}
+          canalLabel={canalLabel}
+          tempClass={tempClass}
+          riscoClass={riscoClass}
+          followUpStatusLabel={followUpStatusLabel}
+        />
+      </Drawer>
     </PageShell>
   );
 }

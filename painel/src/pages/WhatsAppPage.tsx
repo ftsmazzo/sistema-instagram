@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { PageShell } from "../components/layout/PageShell";
+import { TabPanel, Tabs } from "../components/ui/Tabs";
 import {
   api,
   getAuthToken,
@@ -124,7 +125,14 @@ function waFunnelLabel(lead: LeadListItemRes): string {
   return "Aguardando handoff";
 }
 
+type WaTab = "conexao" | "agente" | "leads";
+
 export function WhatsAppPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = (searchParams.get("tab") as WaTab) || "conexao";
+  const [tab, setTab] = useState<WaTab>(
+    initialTab === "agente" || initialTab === "leads" ? initialTab : "conexao"
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [connecting, setConnecting] = useState(false);
@@ -359,6 +367,12 @@ export function WhatsAppPage() {
     }
   };
 
+  const handleTabChange = (id: string) => {
+    const next = id as WaTab;
+    setTab(next);
+    setSearchParams(next === "conexao" ? {} : { tab: next }, { replace: true });
+  };
+
   const connectionState = connection?.connection_state ?? "close";
   const isConnected = connectionState === "open";
   const isConnecting = connectionState === "connecting";
@@ -405,33 +419,18 @@ export function WhatsAppPage() {
             </div>
           )}
 
-          <section className="card border-indigo-100 bg-indigo-50/40">
-            <h2 className="text-lg font-semibold text-gray-900">Funil Instagram → WhatsApp</h2>
-            <p className="mt-1 text-sm text-gray-600">
-              Comentário e Direct no Instagram; qualificação e fechamento no WhatsApp (Evolution + agente n8n).
-            </p>
-            <ol className="mt-4 grid gap-3 sm:grid-cols-3">
-              <li className="rounded-lg border border-indigo-100 bg-white p-3 text-sm">
-                <span className="font-semibold text-indigo-800">1. Direct</span>
-                <p className="mt-1 text-gray-600">
-                  Lead informa WhatsApp → agente Instagram envia boas-vindas e agenda a IA.
-                </p>
-              </li>
-              <li className="rounded-lg border border-indigo-100 bg-white p-3 text-sm">
-                <span className="font-semibold text-indigo-800">2. Boas-vindas</span>
-                <p className="mt-1 text-gray-600">
-                  Mensagem automática na Evolution; agenda 1ª msg da IA ({savedAgent.delay_primeira_msg_minutos} min).
-                </p>
-              </li>
-              <li className="rounded-lg border border-indigo-100 bg-white p-3 text-sm">
-                <span className="font-semibold text-indigo-800">3. Agente WA</span>
-                <p className="mt-1 text-gray-600">
-                  Retoma contexto do Direct, qualifica e usa tools (agenda, link, handoff).
-                </p>
-              </li>
-            </ol>
-          </section>
+          <Tabs
+            tabs={[
+              { id: "conexao", label: "Conexão" },
+              { id: "agente", label: "Agente" },
+              { id: "leads", label: "Leads", badge: leadsTotal || undefined },
+            ]}
+            activeId={tab}
+            onChange={handleTabChange}
+          />
 
+          <TabPanel className="!mt-2">
+            {tab === "conexao" && (
           <section className="card space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -641,7 +640,9 @@ export function WhatsAppPage() {
               </div>
             )}
           </section>
+            )}
 
+            {tab === "agente" && (
           <section className="card space-y-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
@@ -653,7 +654,7 @@ export function WhatsAppPage() {
               {showAgentCard && (
                 <span
                   className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                    savedAgent.agent_ativo ? "bg-violet-100 text-violet-800" : "bg-gray-100 text-gray-700"
+                    savedAgent.agent_ativo ? "bg-brand-100 text-brand-800" : "bg-slate-100 text-slate-700"
                   }`}
                 >
                   {savedAgent.agent_ativo ? "Ativo" : "Inativo"}
@@ -662,8 +663,8 @@ export function WhatsAppPage() {
             </div>
 
             {showAgentCard ? (
-              <div className="flex flex-wrap items-start gap-4 rounded-xl border border-violet-200 bg-violet-50/40 p-4">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-violet-200 bg-violet-100 text-xl font-bold text-violet-700">
+              <div className="flex flex-wrap items-start gap-4 rounded-xl border border-brand-200 bg-brand-50/40 p-4">
+                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-brand-200 bg-brand-100 text-xl font-bold text-brand-700">
                   AI
                 </div>
                 <div className="min-w-0 flex-1 space-y-2">
@@ -699,7 +700,7 @@ export function WhatsAppPage() {
                     {objetivosLabels(savedAgent.objetivos).map((label) => (
                       <span
                         key={label}
-                        className="rounded-md bg-white/80 px-2 py-0.5 text-xs font-medium text-violet-800 ring-1 ring-violet-200"
+                        className="rounded-md bg-white/80 px-2 py-0.5 text-xs font-medium text-brand-800 ring-1 ring-brand-200"
                       >
                         {label}
                       </span>
@@ -718,7 +719,7 @@ export function WhatsAppPage() {
               <div className="space-y-4 rounded-xl border border-gray-200 bg-gray-50/40 p-4">
                 {!hasInstanceName && (
                   <p className="text-sm text-amber-800">
-                    Configure primeiro a instância WhatsApp acima para salvar o agente.
+                    Configure primeiro a instância WhatsApp na aba Conexão para salvar o agente.
                   </p>
                 )}
 
@@ -841,35 +842,18 @@ export function WhatsAppPage() {
               </div>
             )}
           </section>
+            )}
 
-          <section className="card border-indigo-100 bg-indigo-50/40">
-            <h2 className="text-lg font-semibold text-gray-900">Funil Instagram → WhatsApp</h2>
-            <p className="mt-1 text-sm text-gray-600">
-              Comentário e Direct no Instagram; qualificação e fechamento no WhatsApp (Evolution + agente n8n).
-            </p>
-            <ol className="mt-4 grid gap-3 sm:grid-cols-3">
-              <li className="rounded-lg border border-indigo-100 bg-white p-3 text-sm">
-                <span className="font-semibold text-indigo-800">1. Direct</span>
-                <p className="mt-1 text-gray-600">Lead informa WhatsApp → agente chama <code className="text-xs">enviar_whatsapp</code> +{" "}
-                  <code className="text-xs">pos_boas_vindas_wa</code>.</p>
-              </li>
-              <li className="rounded-lg border border-indigo-100 bg-white p-3 text-sm">
-                <span className="font-semibold text-indigo-800">2. Boas-vindas</span>
-                <p className="mt-1 text-gray-600">Mensagem automática na Evolution; agenda 1ª msg da IA ({savedAgent.delay_primeira_msg_minutos} min).</p>
-              </li>
-              <li className="rounded-lg border border-indigo-100 bg-white p-3 text-sm">
-                <span className="font-semibold text-indigo-800">3. Agente WA</span>
-                <p className="mt-1 text-gray-600">Retoma contexto do Direct, qualifica e usa tools (agenda, link, handoff).</p>
-              </li>
-            </ol>
-          </section>
-
+            {tab === "leads" && (
           <section className="card">
-            <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-semibold text-gray-900">Leads com WhatsApp</h2>
-                <p className="text-sm text-gray-600">{leadsTotal} no CRM — capturados pelo agente Instagram.</p>
+                <h2 className="text-lg font-semibold text-slate-900">Leads com WhatsApp</h2>
+                <p className="text-sm text-slate-600">{leadsTotal} no CRM — capturados pelo agente Instagram.</p>
               </div>
+              <Link to="/operacao" className="text-sm font-semibold text-brand-600 hover:underline">
+                Abrir no CRM →
+              </Link>
             </div>
 
             {leads.length === 0 ? (
@@ -905,6 +889,8 @@ export function WhatsAppPage() {
               </div>
             )}
           </section>
+            )}
+          </TabPanel>
         </div>
       )}
     </PageShell>
