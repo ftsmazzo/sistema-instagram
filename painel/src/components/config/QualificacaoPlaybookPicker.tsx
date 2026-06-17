@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type EmpresaPerfilRes, type QualificacaoPlaybookRes } from "../api/client";
+import { api, type EmpresaPerfilRes, type QualificacaoPlaybookRes } from "../../api/client";
 
 type Props = {
   empresa: EmpresaPerfilRes;
