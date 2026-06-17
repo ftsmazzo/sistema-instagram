@@ -10,6 +10,7 @@ import {
   touchDebounce,
 } from "../services/redis.js";
 import { normalizePhoneDigits } from "../util/phone.js";
+import { onLeadWhatsappReply } from "./crmCadencia.js";
 
 export type WhatsappEnqueueInput = {
   instanceName: string;
@@ -182,6 +183,8 @@ export async function enqueueWhatsappInbound(input: WhatsappEnqueueInput): Promi
   const redisDebounce = await touchDebounce(key, debounceSeconds);
   const debounceUntil = extend.rows[0]?.debounce_until ?? new Date(Date.now() + debounceSeconds * 1000);
   const pendingCount = Number(extend.rows[0]?.pending_count ?? 1);
+
+  onLeadWhatsappReply(orgId, telefone).catch(() => {});
 
   return {
     ok: true,

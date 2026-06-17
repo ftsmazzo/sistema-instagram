@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
+  type CrmCadenciaConfigRes,
   type CrmFollowUpMessageRes,
   type FollowUpItemRes,
   type FunnelStatsRes,
@@ -9,6 +10,7 @@ import {
   type LeadListItemRes,
   type LeadTimelineDetailRes,
   type OperacaoHealthRes,
+  type OperacaoWeeklyRes,
   type PipelineMetricsRes,
   type TimelineItemRes,
 } from "../api/client";
@@ -145,6 +147,9 @@ export function OperacaoPage() {
   const [waMessageDraft, setWaMessageDraft] = useState("");
   const [waScheduleDraft, setWaScheduleDraft] = useState("");
   const [schedulingWa, setSchedulingWa] = useState(false);
+  const [weekly, setWeekly] = useState<OperacaoWeeklyRes | null>(null);
+  const [cadencia, setCadencia] = useState<CrmCadenciaConfigRes | null>(null);
+  const [cadenciaSaving, setCadenciaSaving] = useState(false);
 
   const followUpByLead = useMemo(() => {
     const map = new Map<number, FollowUpItemRes>();
@@ -178,6 +183,8 @@ export function OperacaoPage() {
       api.agentes.getFollowUps(),
       api.agentes.getScheduledFollowUps(),
       api.agentes.getLeads({ limit: 50 }),
+      api.agentes.getOperacaoSemanal(),
+      api.agentes.getCadenciaConfig(),
     ]);
 
     const pick = <T,>(idx: number, fallback: T): T => {
@@ -197,6 +204,9 @@ export function OperacaoPage() {
     setScheduledOrg(sch.items);
     const l = pick(5, { leads: [] as LeadListItemRes[] });
     setLeads(l.leads);
+    setWeekly(pick(6, null));
+    const cadRes = pick(7, { ok: true, config: null as CrmCadenciaConfigRes | null });
+    setCadencia(cadRes.config);
 
     if (warnings.length > 0) {
       const all404 = warnings.every((w) => /404|não encontrada|not found/i.test(w));
@@ -348,6 +358,20 @@ export function OperacaoPage() {
     }
   };
 
+  const saveCadencia = async () => {
+    if (!cadencia) return;
+    setCadenciaSaving(true);
+    setError(null);
+    try {
+      const res = await api.agentes.saveCadenciaConfig(cadencia);
+      setCadencia(res.config);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao salvar cadência.");
+    } finally {
+      setCadenciaSaving(false);
+    }
+  };
+
   return (
     <PageShell
       title="Operação"
@@ -360,6 +384,95 @@ export function OperacaoPage() {
         <div className="space-y-8">
           {error && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{error}</div>
+          )}
+
+          {weekly && (
+            <section>
+              <h2 className="mb-4 text-lg font-semibold text-slate-900">Semana — conversão</h2>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                <KpiCard label="Novos leads" value={weekly.novos_leads} />
+                <KpiCard label="Convertidos" value={weekly.convertidos} />
+                <KpiCard label="Handoffs" value={weekly.handoffs} />
+                <KpiCard label="Follow-ups enviados" value={weekly.followups_enviados} />
+                <KpiCard label="Cadência auto" value={weekly.cadencia_agendada} sub="msgs agendadas" />
+                <KpiCard label="Comentários" value={weekly.comentarios} />
+              </div>
+            </section>
+          )}
+
+          {cadencia && (
+            <section className="card border-indigo-200/80">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-semibold text-slate-900">Cadência automática (retomar venda)</h2>
+                  <p className="text-sm text-slate-600 mt-1">
+                    Se o lead não responder após sua última mensagem, o CRM agenda D+1 / D+3 / D+7 no WhatsApp.
+                    Se responder, a série é cancelada. Alertas vão pro WhatsApp do consultor (Empresa).
+                  </p>
+                </div>
+                <label className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={cadencia.ativo}
+                    onChange={(e) => setCadencia({ ...cadencia, ativo: e.target.checked })}
+                  />
+                  Ativa
+                </label>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2 mb-4">
+                <label className="text-xs text-slate-600">
+                  Horas sem resposta (início da cadência)
+                  <input
+                    type="number"
+                    min={4}
+                    max={168}
+                    className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm"
+                    value={cadencia.horas_sem_resposta}
+                    onChange={(e) =>
+                      setCadencia({ ...cadencia, horas_sem_resposta: Number(e.target.value) || 24 })
+                    }
+                  />
+                </label>
+                <label className="text-xs text-slate-600">
+                  Alerta consultor após follow-up (horas)
+                  <input
+                    type="number"
+                    min={2}
+                    max={72}
+                    className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm"
+                    value={cadencia.alerta_consultor_horas}
+                    onChange={(e) =>
+                      setCadencia({ ...cadencia, alerta_consultor_horas: Number(e.target.value) || 12 })
+                    }
+                  />
+                </label>
+              </div>
+              <div className="space-y-3">
+                {cadencia.etapas.map((etapa, idx) => (
+                  <label key={idx} className="block text-xs text-slate-600">
+                    Etapa {idx + 1} — +{etapa.horas_apos_parada}h após parada
+                    <textarea
+                      className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm min-h-[60px]"
+                      value={etapa.mensagem}
+                      onChange={(e) => {
+                        const etapas = [...cadencia.etapas];
+                        etapas[idx] = { ...etapa, mensagem: e.target.value };
+                        setCadencia({ ...cadencia, etapas });
+                      }}
+                    />
+                    <span className="text-[10px] text-slate-400">Variáveis: {"{nome}"} {"{objetivo}"} {"{empresa}"}</span>
+                  </label>
+                ))}
+              </div>
+              <button
+                type="button"
+                disabled={cadenciaSaving}
+                onClick={saveCadencia}
+                className="mt-4 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+              >
+                {cadenciaSaving ? "Salvando…" : "Salvar cadência"}
+              </button>
+            </section>
           )}
 
           {pipeline && (
@@ -394,6 +507,11 @@ export function OperacaoPage() {
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-slate-900">
                         {item.lead_nome ?? "Lead"} · {formatDateTime(item.agendado_para)}
+                        {item.origin_hint?.startsWith("cadencia") ? (
+                          <span className="ml-2 rounded-full bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold text-violet-800">
+                            Cadência auto
+                          </span>
+                        ) : null}
                       </p>
                       <p className="text-xs text-slate-600 truncate">{item.message_text}</p>
                     </div>
@@ -543,7 +661,7 @@ export function OperacaoPage() {
                       <th className="py-2 pr-4 font-medium">Nome</th>
                       <th className="py-2 pr-4 font-medium">Instagram</th>
                       <th className="py-2 pr-4 font-medium">Status</th>
-                      <th className="py-2 pr-4 font-medium">Alerta</th>
+                      <th className="py-2 pr-4 font-medium">Temperatura</th>
                       <th className="py-2 pr-4 font-medium">Atualizado</th>
                       <th className="py-2 font-medium" />
                     </tr>
@@ -567,14 +685,14 @@ export function OperacaoPage() {
                               <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs">{statusLabel(lead.status)}</span>
                             </td>
                             <td className="py-2 pr-4">
-                              {fu ? (
-                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${priorityClass(fu.priority)}`}>
-                                  {priorityLabel(fu.priority)}
-                                </span>
-                              ) : (
-                                <span className="text-xs text-slate-400">—</span>
-                              )}
-                            </td>
+                            {fu ? (
+                              <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${tempClass(fu.temperature)}`}>
+                                {fu.temperature}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-slate-400">—</span>
+                            )}
+                          </td>
                             <td className="py-2 pr-4 text-xs text-gray-500">{formatDateTime(lead.updated_at)}</td>
                             <td className="py-2 text-xs font-medium text-indigo-600">
                               {selectedId === lead.id ? "Fechar" : "Abrir"}

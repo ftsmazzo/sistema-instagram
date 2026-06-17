@@ -19,7 +19,10 @@ import {
   getLeadTimeline,
   getOperacaoHealth,
   getPipelineMetrics,
+  getOperacaoWeekly,
 } from "../store/crmOperacao.js";
+import type { CrmCadenciaConfig } from "../services/crmCadenciaConfig.js";
+import { getCrmCadenciaConfig, saveCrmCadenciaConfig } from "../store/crmCadencia.js";
 import {
   createCrmFollowUp,
   cancelCrmFollowUp,
@@ -139,6 +142,37 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
     } catch (err) {
       request.log.error({ err }, "GET /operacao/follow-ups-agendados falhou");
       return reply.send({ ok: true, items: [], total: 0, degraded: true });
+    }
+  });
+
+  /** Resumo semanal de conversão. */
+  app.get("/operacao/semanal", async (request, reply) => {
+    const u = request.user as { orgId: string };
+    try {
+      const stats = await getOperacaoWeekly(u.orgId);
+      return reply.send({ ok: true, ...stats });
+    } catch (err) {
+      request.log.error({ err }, "GET /operacao/semanal falhou");
+      return reply.status(500).send({ error: "Erro ao carregar resumo semanal." });
+    }
+  });
+
+  /** Configuração da cadência automática de follow-up. */
+  app.get("/operacao/cadencia", async (request, reply) => {
+    const u = request.user as { orgId: string };
+    const config = await getCrmCadenciaConfig(u.orgId);
+    return reply.send({ ok: true, config });
+  });
+
+  app.put("/operacao/cadencia", async (request, reply) => {
+    const u = request.user as { orgId: string };
+    const body = request.body as { config?: unknown };
+    try {
+      const config = await saveCrmCadenciaConfig(u.orgId, body?.config as CrmCadenciaConfig);
+      return reply.send({ ok: true, config });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro ao salvar cadência.";
+      return reply.status(400).send({ error: msg });
     }
   });
 

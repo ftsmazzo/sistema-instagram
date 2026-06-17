@@ -323,6 +323,24 @@ export type CrmFollowUpMessageRes = {
   username_instagram?: string | null;
 };
 
+export type CrmCadenciaConfigRes = {
+  ativo: boolean;
+  horas_sem_resposta: number;
+  alerta_consultor_horas: number;
+  etapas: { horas_apos_parada: number; mensagem: string }[];
+};
+
+export type OperacaoWeeklyRes = {
+  ok: boolean;
+  period_days: number;
+  novos_leads: number;
+  convertidos: number;
+  handoffs: number;
+  followups_enviados: number;
+  cadencia_agendada: number;
+  comentarios: number;
+};
+
 export type LeadCoachRes = {
   resumo: string;
   temperatura: "quente" | "morno" | "frio";
@@ -831,6 +849,15 @@ export const api = {
       fetchJson<{ ok: boolean; items: CrmFollowUpMessageRes[]; total: number }>(
         "/api/agentes/operacao/follow-ups-agendados"
       ),
+    getOperacaoSemanal: () =>
+      fetchJson<OperacaoWeeklyRes>("/api/agentes/operacao/semanal"),
+    getCadenciaConfig: () =>
+      fetchJson<{ ok: boolean; config: CrmCadenciaConfigRes }>("/api/agentes/operacao/cadencia"),
+    saveCadenciaConfig: (config: CrmCadenciaConfigRes) =>
+      fetchJson<{ ok: boolean; config: CrmCadenciaConfigRes }>("/api/agentes/operacao/cadencia", {
+        method: "PUT",
+        body: { config },
+      }),
     getLeadTimeline: (leadId: number) =>
       fetchJson<{
         ok: boolean;

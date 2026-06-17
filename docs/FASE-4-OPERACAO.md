@@ -63,6 +63,21 @@ Tabela `crm_followup_mensagens` · status: `pendente` → `enviado` | `falhou` |
 
 Requisitos: lead com WhatsApp, instância Evolution conectada, `EVOLUTION_BASE_URL` + `EVOLUTION_GLOBAL_API_KEY`.
 
+### Cadência automática (D+1 / D+3 / D+7)
+
+Cron (1 min) detecta leads parados após **sua última mensagem** no WhatsApp e agenda série de follow-ups.
+
+- **Para se responder** — inbound cancela pendentes da cadência
+- **Alerta consultor** — follow-up ou handoff sem resposta → WhatsApp do consultor (`handoff_whatsapp` em Empresa)
+- Configurável em Operação → Cadência automática
+
+| Método | Rota |
+|--------|------|
+| GET/PUT | `/api/agentes/operacao/cadencia` |
+| GET | `/api/agentes/operacao/semanal` |
+
+Variáveis nos templates: `{nome}`, `{objetivo}`, `{empresa}`.
+
 ## Variáveis de ambiente (API)
 
 ```env

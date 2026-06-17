@@ -5,6 +5,8 @@ import { updateAgendadoStatus } from "../store/agendados.js";
 import { appendCronograma } from "../store/cronograma.js";
 import { upsertPostagemFromPostador } from "../store/crmPostagens.js";
 import { processDueCrmFollowUps } from "./crmFollowUpSender.js";
+import { processCadenciaAllOrgs, refreshCadenciaSeriesAllOrgs } from "../store/crmCadencia.js";
+import { processConsultorAlerts } from "./crmConsultorAlerts.js";
 
 export function startCronJob(fastify: FastifyInstance) {
   if (!isDbConfigured()) {
@@ -22,6 +24,25 @@ export function startCronJob(fastify: FastifyInstance) {
       }
     } catch (err) {
       fastify.log.error({ err }, "Erro no job de follow-ups WhatsApp.");
+    }
+
+    try {
+      await refreshCadenciaSeriesAllOrgs();
+      const cadencia = await processCadenciaAllOrgs();
+      if (cadencia > 0) {
+        fastify.log.info({ count: cadencia }, "Mensagens de cadência CRM agendadas.");
+      }
+    } catch (err) {
+      fastify.log.error({ err }, "Erro no job de cadência CRM.");
+    }
+
+    try {
+      const alerts = await processConsultorAlerts(fastify.log);
+      if (alerts > 0) {
+        fastify.log.info({ count: alerts }, "Alertas CRM enviados ao consultor.");
+      }
+    } catch (err) {
+      fastify.log.error({ err }, "Erro no job de alertas consultor.");
     }
 
     try {

@@ -105,6 +105,7 @@ export async function qualificarEAcionarHumano(
     `UPDATE leads
      SET status = 'handoff',
          handoff_at = NOW(),
+         handoff_alerta_em = NULL,
          handoff_motivo = $3,
          updated_at = NOW()
      WHERE organization_id = $1::uuid

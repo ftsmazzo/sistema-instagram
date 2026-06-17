@@ -453,6 +453,69 @@ export async function getPipelineMetrics(
   };
 }
 
+export type OperacaoWeekly = {
+  period_days: number;
+  novos_leads: number;
+  convertidos: number;
+  handoffs: number;
+  followups_enviados: number;
+  cadencia_agendada: number;
+  comentarios: number;
+};
+
+export async function getOperacaoWeekly(organizationId: string): Promise<OperacaoWeekly> {
+  await ensureTables();
+  const pool = getPool();
+  const since = new Date();
+  since.setDate(since.getDate() - 7);
+
+  const [leadsR, convR, handR, fuR, cadR, comR] = await Promise.all([
+    pool.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM leads
+       WHERE organization_id = $1::uuid AND created_at >= $2`,
+      [organizationId, since]
+    ),
+    pool.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM leads
+       WHERE organization_id = $1::uuid AND status = 'convertido'
+         AND updated_at >= $2`,
+      [organizationId, since]
+    ),
+    pool.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM leads
+       WHERE organization_id = $1::uuid AND handoff_at >= $2`,
+      [organizationId, since]
+    ),
+    pool.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM crm_followup_mensagens
+       WHERE organization_id = $1::uuid AND status = 'enviado' AND sent_at >= $2`,
+      [organizationId, since]
+    ),
+    pool.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM crm_followup_mensagens
+       WHERE organization_id = $1::uuid AND origin_hint LIKE 'cadencia%'
+         AND created_at >= $2`,
+      [organizationId, since]
+    ),
+    pool.query<{ n: string }>(
+      `SELECT COUNT(*)::text AS n FROM comentarios
+       WHERE organization_id = $1::uuid
+         AND COALESCE(data_comentario, created_at) >= $2`,
+      [organizationId, since]
+    ),
+  ]);
+
+  return {
+    period_days: 7,
+    novos_leads: Number(leadsR.rows[0]?.n ?? 0),
+    convertidos: Number(convR.rows[0]?.n ?? 0),
+    handoffs: Number(handR.rows[0]?.n ?? 0),
+    followups_enviados: Number(fuR.rows[0]?.n ?? 0),
+    cadencia_agendada: Number(cadR.rows[0]?.n ?? 0),
+    comentarios: Number(comR.rows[0]?.n ?? 0),
+  };
+}
+
 export async function getOperacaoHealth(organizationId: string): Promise<OperacaoHealth> {
   await ensureTables();
   const pool = getPool();
