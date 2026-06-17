@@ -78,6 +78,29 @@ Cron (1 min) detecta leads parados após **sua última mensagem** no WhatsApp e 
 
 Variáveis nos templates: `{nome}`, `{objetivo}`, `{empresa}`.
 
+### Score de conversão (0–100)
+
+Cada lead ativo recebe um **score persistente** (`crm_score`) calculado por:
+- Status no funil (handoff, qualificado, em conversa)
+- WhatsApp ativo vs só Direct
+- Compromisso agendado (`visitas`)
+- Recência da última resposta do lead
+
+A fila de **Ações prioritárias** ordena por prioridade → score → horas paradas.  
+A lista de leads ordena por score decrescente.
+
+Atualização: ao abrir Operação (fila de follow-ups) + cron a cada 1 min.
+
+### Templates de cadência por segmento
+
+Presets prontos: **Imobiliária**, **Clínica/saúde**, **Serviços B2B**, **E-commerce**.  
+O sistema sugere um preset com base no **segmento** configurado em Empresa.
+
+| Método | Rota |
+|--------|------|
+| GET | `/api/agentes/operacao/cadencia/presets` |
+| PUT | `/api/agentes/operacao/cadencia` com `{ preset_id }` aplica template |
+
 ## Variáveis de ambiente (API)
 
 ```env
@@ -90,3 +113,6 @@ CRM_IA_MODEL=gpt-4o-mini       # opcional
 Migration `018_crm_operacao.sql`:
 - `leads.crm_notas`
 - `leads.proximo_followup_em`
+
+Migration `021_crm_lead_score.sql`:
+- `leads.crm_score`, `crm_score_label`, `crm_score_motivo`, `crm_score_at`

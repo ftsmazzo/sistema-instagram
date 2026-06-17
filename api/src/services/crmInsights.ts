@@ -1,3 +1,5 @@
+import { computeLeadScore } from "./crmLeadScore.js";
+
 export type LeadActivitySnapshot = {
   id: number;
   nome: string | null;
@@ -35,6 +37,8 @@ export type FollowUpItem = {
   horas_parado: number | null;
   funil_etapa: string;
   visita_proxima: string | null;
+  crm_score: number | null;
+  crm_score_motivo: string | null;
 };
 
 const PRIORITY_RANK: Record<FollowUpPriority, number> = {
@@ -198,6 +202,8 @@ export function evaluateFollowUp(row: LeadActivitySnapshot, now = Date.now()): F
     return acc;
   });
 
+  const scored = computeLeadScore(row, now);
+
   return {
     lead_id: row.id,
     nome: row.nome,
@@ -211,6 +217,8 @@ export function evaluateFollowUp(row: LeadActivitySnapshot, now = Date.now()): F
     horas_parado: horasParado,
     funil_etapa: computeFunilEtapa(row),
     visita_proxima: row.visita_proxima,
+    crm_score: scored.score,
+    crm_score_motivo: scored.motivo,
   };
 }
 
@@ -218,6 +226,8 @@ export function sortFollowUps(items: FollowUpItem[]): FollowUpItem[] {
   return [...items].sort((a, b) => {
     const pd = PRIORITY_RANK[b.priority] - PRIORITY_RANK[a.priority];
     if (pd !== 0) return pd;
+    const sd = (b.crm_score ?? 0) - (a.crm_score ?? 0);
+    if (sd !== 0) return sd;
     return (b.horas_parado ?? 0) - (a.horas_parado ?? 0);
   });
 }

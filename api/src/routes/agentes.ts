@@ -24,6 +24,11 @@ import {
 import type { CrmCadenciaConfig } from "../services/crmCadenciaConfig.js";
 import { getCrmCadenciaConfig, saveCrmCadenciaConfig } from "../store/crmCadencia.js";
 import {
+  CADENCIA_PRESETS,
+  getCadenciaPresetById,
+  matchCadenciaPreset,
+} from "../services/crmSegmentTemplates.js";
+import {
   createCrmFollowUp,
   cancelCrmFollowUp,
   listCrmFollowUpsForLead,
@@ -158,16 +163,47 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
   });
 
   /** Configuração da cadência automática de follow-up. */
+  app.get("/operacao/cadencia/presets", async (_request, reply) => {
+    return reply.send({
+      ok: true,
+      presets: CADENCIA_PRESETS.map((p) => ({
+        id: p.id,
+        label: p.label,
+        segmentos: p.segmentos,
+      })),
+    });
+  });
+
   app.get("/operacao/cadencia", async (request, reply) => {
     const u = request.user as { orgId: string };
     const config = await getCrmCadenciaConfig(u.orgId);
-    return reply.send({ ok: true, config });
+    const empresaCfg = (await loadWorkspaceConfigStore(u.orgId)).empresa;
+    const segmento = empresaCfg.segmento ?? "";
+    const preset = matchCadenciaPreset(segmento);
+    return reply.send({
+      ok: true,
+      config,
+      segmento,
+      preset_sugerido: preset?.id ?? null,
+    });
   });
 
   app.put("/operacao/cadencia", async (request, reply) => {
     const u = request.user as { orgId: string };
-    const body = request.body as { config?: unknown };
+    const body = request.body as { config?: unknown; preset_id?: string };
     try {
+      if (body?.preset_id?.trim()) {
+        const preset = getCadenciaPresetById(body.preset_id.trim());
+        if (!preset) {
+          return reply.status(400).send({ error: "Template de cadência não encontrado." });
+        }
+        const current = await getCrmCadenciaConfig(u.orgId);
+        const config = await saveCrmCadenciaConfig(u.orgId, {
+          ...current,
+          etapas: preset.etapas,
+        });
+        return reply.send({ ok: true, config, preset_aplicado: preset.id });
+      }
       const config = await saveCrmCadenciaConfig(u.orgId, body?.config as CrmCadenciaConfig);
       return reply.send({ ok: true, config });
     } catch (err) {

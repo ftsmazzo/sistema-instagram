@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
+  type CadenciaPresetRes,
   type CrmCadenciaConfigRes,
   type CrmFollowUpMessageRes,
   type FollowUpItemRes,
@@ -78,6 +79,17 @@ function tempClass(t: string): string {
   return "bg-slate-100 text-slate-600";
 }
 
+function scoreClass(score: number | null | undefined): string {
+  if (score == null) return "bg-slate-100 text-slate-500";
+  if (score >= 65) return "bg-orange-100 text-orange-900";
+  if (score >= 35) return "bg-amber-100 text-amber-900";
+  return "bg-slate-100 text-slate-600";
+}
+
+function leadScoreValue(lead: LeadListItemRes, followUp?: FollowUpItemRes): number | null {
+  return lead.crm_score ?? followUp?.crm_score ?? null;
+}
+
 function riscoClass(r: LeadCoachRes["risco_perda"]): string {
   if (r === "alto") return "text-red-700";
   if (r === "medio") return "text-amber-700";
@@ -150,6 +162,9 @@ export function OperacaoPage() {
   const [weekly, setWeekly] = useState<OperacaoWeeklyRes | null>(null);
   const [cadencia, setCadencia] = useState<CrmCadenciaConfigRes | null>(null);
   const [cadenciaSaving, setCadenciaSaving] = useState(false);
+  const [cadenciaPresets, setCadenciaPresets] = useState<CadenciaPresetRes[]>([]);
+  const [cadenciaSegmento, setCadenciaSegmento] = useState("");
+  const [cadenciaPresetSugerido, setCadenciaPresetSugerido] = useState<string | null>(null);
 
   const followUpByLead = useMemo(() => {
     const map = new Map<number, FollowUpItemRes>();
@@ -165,7 +180,13 @@ export function OperacaoPage() {
     if (viewFilter === "quente") {
       return leads.filter((l) => {
         const f = followUpByLead.get(l.id);
-        return f?.temperature === "quente" || l.status === "qualificado" || l.status === "handoff";
+        const score = leadScoreValue(l, f);
+        return (
+          (score ?? 0) >= 65 ||
+          f?.temperature === "quente" ||
+          l.status === "qualificado" ||
+          l.status === "handoff"
+        );
       });
     }
     return leads;
@@ -185,6 +206,7 @@ export function OperacaoPage() {
       api.agentes.getLeads({ limit: 50 }),
       api.agentes.getOperacaoSemanal(),
       api.agentes.getCadenciaConfig(),
+      api.agentes.getCadenciaPresets(),
     ]);
 
     const pick = <T,>(idx: number, fallback: T): T => {
@@ -205,8 +227,12 @@ export function OperacaoPage() {
     const l = pick(5, { leads: [] as LeadListItemRes[] });
     setLeads(l.leads);
     setWeekly(pick(6, null));
-    const cadRes = pick(7, { ok: true, config: null as CrmCadenciaConfigRes | null });
+    const cadRes = pick(7, { ok: true, config: null as CrmCadenciaConfigRes | null, segmento: "", preset_sugerido: null });
     setCadencia(cadRes.config);
+    setCadenciaSegmento(cadRes.segmento ?? "");
+    setCadenciaPresetSugerido(cadRes.preset_sugerido ?? null);
+    const presetsRes = pick(8, { ok: true, presets: [] as CadenciaPresetRes[] });
+    setCadenciaPresets(presetsRes.presets);
 
     if (warnings.length > 0) {
       const all404 = warnings.every((w) => /404|não encontrada|not found/i.test(w));
@@ -372,6 +398,19 @@ export function OperacaoPage() {
     }
   };
 
+  const applyCadenciaPreset = async (presetId: string) => {
+    setCadenciaSaving(true);
+    setError(null);
+    try {
+      const res = await api.agentes.applyCadenciaPreset(presetId);
+      setCadencia(res.config);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao aplicar template.");
+    } finally {
+      setCadenciaSaving(false);
+    }
+  };
+
   return (
     <PageShell
       title="Operação"
@@ -419,6 +458,38 @@ export function OperacaoPage() {
                   Ativa
                 </label>
               </div>
+              {cadenciaPresets.length > 0 && (
+                <div className="mb-4 rounded-lg border border-indigo-100 bg-indigo-50/40 p-3">
+                  <p className="text-xs font-semibold text-indigo-900 mb-2">
+                    Templates por segmento
+                    {cadenciaSegmento ? (
+                      <span className="font-normal text-indigo-700"> — segmento: {cadenciaSegmento}</span>
+                    ) : null}
+                    {cadenciaPresetSugerido ? (
+                      <span className="ml-1 rounded-full bg-indigo-200 px-1.5 py-0.5 text-[10px] text-indigo-900">
+                        sugerido: {cadenciaPresets.find((p) => p.id === cadenciaPresetSugerido)?.label ?? cadenciaPresetSugerido}
+                      </span>
+                    ) : null}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {cadenciaPresets.map((preset) => (
+                      <button
+                        key={preset.id}
+                        type="button"
+                        disabled={cadenciaSaving}
+                        onClick={() => applyCadenciaPreset(preset.id)}
+                        className={`rounded-full px-3 py-1 text-xs font-semibold disabled:opacity-50 ${
+                          preset.id === cadenciaPresetSugerido
+                            ? "bg-indigo-600 text-white"
+                            : "bg-white text-indigo-800 border border-indigo-200 hover:bg-indigo-100"
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="grid gap-4 sm:grid-cols-2 mb-4">
                 <label className="text-xs text-slate-600">
                   Horas sem resposta (início da cadência)
@@ -546,6 +617,7 @@ export function OperacaoPage() {
                 <table className="min-w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-amber-200/60 text-slate-600">
+                      <th className="py-2 pr-3 font-medium">Score</th>
                       <th className="py-2 pr-3 font-medium">Prioridade</th>
                       <th className="py-2 pr-3 font-medium">Lead</th>
                       <th className="py-2 pr-3 font-medium">Etapa</th>
@@ -560,6 +632,14 @@ export function OperacaoPage() {
                         className="border-b border-amber-100/80 cursor-pointer hover:bg-white/60"
                         onClick={() => openTimeline(f.lead_id)}
                       >
+                        <td className="py-2 pr-3">
+                          <span
+                            className={`rounded-full px-2 py-0.5 text-xs font-bold tabular-nums ${scoreClass(f.crm_score)}`}
+                            title={f.crm_score_motivo ?? undefined}
+                          >
+                            {f.crm_score ?? "—"}
+                          </span>
+                        </td>
                         <td className="py-2 pr-3">
                           <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${priorityClass(f.priority)}`}>
                             {priorityLabel(f.priority)}
@@ -658,6 +738,7 @@ export function OperacaoPage() {
                 <table className="min-w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-gray-200 text-gray-600">
+                      <th className="py-2 pr-4 font-medium">Score</th>
                       <th className="py-2 pr-4 font-medium">Nome</th>
                       <th className="py-2 pr-4 font-medium">Instagram</th>
                       <th className="py-2 pr-4 font-medium">Status</th>
@@ -669,6 +750,7 @@ export function OperacaoPage() {
                   <tbody>
                     {visibleLeads.map((lead) => {
                       const fu = followUpByLead.get(lead.id);
+                      const score = leadScoreValue(lead, fu);
                       return (
                         <Fragment key={lead.id}>
                           <tr
@@ -677,6 +759,14 @@ export function OperacaoPage() {
                             }`}
                             onClick={() => openTimeline(lead.id)}
                           >
+                            <td className="py-2 pr-4">
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-xs font-bold tabular-nums ${scoreClass(score)}`}
+                                title={lead.crm_score_motivo ?? fu?.crm_score_motivo ?? undefined}
+                              >
+                                {score ?? "—"}
+                              </span>
+                            </td>
                             <td className="py-2 pr-4">{lead.nome ?? "—"}</td>
                             <td className="py-2 pr-4">
                               {lead.username_instagram ? `@${lead.username_instagram}` : "—"}
@@ -700,7 +790,7 @@ export function OperacaoPage() {
                           </tr>
                           {selectedId === lead.id && (
                             <tr>
-                              <td colSpan={6} className="bg-slate-50 px-4 py-4">
+                              <td colSpan={7} className="bg-slate-50 px-4 py-4">
                                 {timelineLoading ? (
                                   <p className="text-sm text-slate-500">Carregando…</p>
                                 ) : (

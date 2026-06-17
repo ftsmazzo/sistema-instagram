@@ -20,6 +20,10 @@ export type LeadListItem = {
   updated_at: string;
   crm_notas: string | null;
   proximo_followup_em: string | null;
+  crm_score: number | null;
+  crm_score_label: string | null;
+  crm_score_motivo: string | null;
+  crm_score_at: string | null;
 };
 
 export type ListLeadsParams = {
@@ -62,10 +66,10 @@ export async function listLeads(params: ListLeadsParams): Promise<{ leads: LeadL
             id_post_origem, origem_interacao, url_interesse,
             handoff_at, handoff_motivo, whatsapp_boas_vindas_enviado,
             whatsapp_primeira_ia_enviada, whatsapp_ia_agendada_em, whatsapp_boas_vindas_em,
-            crm_notas, proximo_followup_em,
+            crm_notas, proximo_followup_em, crm_score, crm_score_label, crm_score_motivo, crm_score_at,
             created_at, updated_at
      FROM leads WHERE ${where}
-     ORDER BY updated_at DESC
+     ORDER BY crm_score DESC NULLS LAST, updated_at DESC
      LIMIT $${idx++} OFFSET $${idx}`,
     values
   );
@@ -94,6 +98,10 @@ export async function listLeads(params: ListLeadsParams): Promise<{ leads: LeadL
     proximo_followup_em: row.proximo_followup_em
       ? new Date(row.proximo_followup_em).toISOString()
       : null,
+    crm_score: row.crm_score != null ? Number(row.crm_score) : null,
+    crm_score_label: row.crm_score_label ?? null,
+    crm_score_motivo: row.crm_score_motivo ?? null,
+    crm_score_at: row.crm_score_at ? new Date(row.crm_score_at).toISOString() : null,
     created_at: new Date(row.created_at).toISOString(),
     updated_at: new Date(row.updated_at).toISOString(),
   }));
@@ -162,7 +170,8 @@ export async function updateLeadCrm(input: UpdateLeadCrmInput): Promise<LeadList
                id_post_origem, origem_interacao, url_interesse,
                handoff_at, handoff_motivo, whatsapp_boas_vindas_enviado,
                whatsapp_primeira_ia_enviada, whatsapp_ia_agendada_em, whatsapp_boas_vindas_em,
-               crm_notas, proximo_followup_em, created_at, updated_at`,
+               crm_notas, proximo_followup_em, crm_score, crm_score_label, crm_score_motivo, crm_score_at,
+               created_at, updated_at`,
     values
   );
   const row = r.rows[0];
@@ -192,6 +201,10 @@ export async function updateLeadCrm(input: UpdateLeadCrmInput): Promise<LeadList
     proximo_followup_em: row.proximo_followup_em
       ? new Date(row.proximo_followup_em).toISOString()
       : null,
+    crm_score: row.crm_score != null ? Number(row.crm_score) : null,
+    crm_score_label: row.crm_score_label ?? null,
+    crm_score_motivo: row.crm_score_motivo ?? null,
+    crm_score_at: row.crm_score_at ? new Date(row.crm_score_at).toISOString() : null,
     created_at: new Date(row.created_at).toISOString(),
     updated_at: new Date(row.updated_at).toISOString(),
   };

@@ -437,5 +437,10 @@ CREATE INDEX IF NOT EXISTS idx_crm_followup_lead
   await p.query(`ALTER TABLE crm_followup_mensagens ADD COLUMN IF NOT EXISTS alerta_consultor_em timestamptz`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_crm_followup_serie ON crm_followup_mensagens (serie_id) WHERE serie_id IS NOT NULL`);
   await p.query(`CREATE INDEX IF NOT EXISTS idx_leads_cadencia_serie ON leads (organization_id, crm_cadencia_serie_id) WHERE crm_cadencia_serie_id IS NOT NULL`);
+  await p.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS crm_score smallint`);
+  await p.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS crm_score_label VARCHAR(16)`);
+  await p.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS crm_score_motivo TEXT`);
+  await p.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS crm_score_at TIMESTAMPTZ`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_leads_crm_score ON leads (organization_id, crm_score DESC NULLS LAST) WHERE status NOT IN ('convertido', 'perdido')`);
   initDone = true;
 }

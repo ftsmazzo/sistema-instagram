@@ -275,6 +275,10 @@ export type LeadListItemRes = {
   updated_at: string;
   crm_notas: string | null;
   proximo_followup_em: string | null;
+  crm_score: number | null;
+  crm_score_label: string | null;
+  crm_score_motivo: string | null;
+  crm_score_at: string | null;
 };
 
 export type PipelineMetricsRes = {
@@ -304,6 +308,8 @@ export type FollowUpItemRes = {
   horas_parado: number | null;
   funil_etapa: string;
   visita_proxima: string | null;
+  crm_score: number | null;
+  crm_score_motivo: string | null;
 };
 
 export type CrmFollowUpMessageRes = {
@@ -328,6 +334,19 @@ export type CrmCadenciaConfigRes = {
   horas_sem_resposta: number;
   alerta_consultor_horas: number;
   etapas: { horas_apos_parada: number; mensagem: string }[];
+};
+
+export type CadenciaPresetRes = {
+  id: string;
+  label: string;
+  segmentos: string[];
+};
+
+export type CadenciaConfigResponse = {
+  ok: boolean;
+  config: CrmCadenciaConfigRes;
+  segmento: string;
+  preset_sugerido: string | null;
 };
 
 export type OperacaoWeeklyRes = {
@@ -852,12 +871,19 @@ export const api = {
     getOperacaoSemanal: () =>
       fetchJson<OperacaoWeeklyRes>("/api/agentes/operacao/semanal"),
     getCadenciaConfig: () =>
-      fetchJson<{ ok: boolean; config: CrmCadenciaConfigRes }>("/api/agentes/operacao/cadencia"),
+      fetchJson<CadenciaConfigResponse>("/api/agentes/operacao/cadencia"),
+    getCadenciaPresets: () =>
+      fetchJson<{ ok: boolean; presets: CadenciaPresetRes[] }>("/api/agentes/operacao/cadencia/presets"),
     saveCadenciaConfig: (config: CrmCadenciaConfigRes) =>
       fetchJson<{ ok: boolean; config: CrmCadenciaConfigRes }>("/api/agentes/operacao/cadencia", {
         method: "PUT",
         body: { config },
       }),
+    applyCadenciaPreset: (presetId: string) =>
+      fetchJson<{ ok: boolean; config: CrmCadenciaConfigRes; preset_aplicado: string }>(
+        "/api/agentes/operacao/cadencia",
+        { method: "PUT", body: { preset_id: presetId } }
+      ),
     getLeadTimeline: (leadId: number) =>
       fetchJson<{
         ok: boolean;

@@ -7,6 +7,8 @@ import { upsertPostagemFromPostador } from "../store/crmPostagens.js";
 import { processDueCrmFollowUps } from "./crmFollowUpSender.js";
 import { processCadenciaAllOrgs, refreshCadenciaSeriesAllOrgs } from "../store/crmCadencia.js";
 import { processConsultorAlerts } from "./crmConsultorAlerts.js";
+import { refreshLeadScoresAllOrgs } from "../store/crmLeadScoreStore.js";
+import { getLeadActivitySnapshots } from "../store/crmOperacao.js";
 
 export function startCronJob(fastify: FastifyInstance) {
   if (!isDbConfigured()) {
@@ -43,6 +45,15 @@ export function startCronJob(fastify: FastifyInstance) {
       }
     } catch (err) {
       fastify.log.error({ err }, "Erro no job de alertas consultor.");
+    }
+
+    try {
+      const scored = await refreshLeadScoresAllOrgs(getLeadActivitySnapshots);
+      if (scored > 0) {
+        fastify.log.info({ count: scored }, "Scores CRM de leads atualizados.");
+      }
+    } catch (err) {
+      fastify.log.error({ err }, "Erro no job de score CRM.");
     }
 
     try {

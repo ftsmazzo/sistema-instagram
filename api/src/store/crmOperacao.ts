@@ -14,6 +14,7 @@ import {
 } from "../services/evolution.js";
 import { getWhatsappInstanceForOrg } from "./whatsappInstance.js";
 import { countPendingCrmFollowUps } from "./crmFollowUpSchedule.js";
+import { refreshLeadScores } from "./crmLeadScoreStore.js";
 
 export type FunnelStats = {
   period_days: number;
@@ -406,8 +407,19 @@ async function fetchLeadActivitySnapshots(organizationId: string): Promise<LeadA
   }));
 }
 
+export async function getLeadActivitySnapshots(
+  organizationId: string
+): Promise<LeadActivitySnapshot[]> {
+  return fetchLeadActivitySnapshots(organizationId);
+}
+
 export async function getFollowUpQueue(organizationId: string): Promise<FollowUpItem[]> {
   const snapshots = await fetchLeadActivitySnapshots(organizationId);
+  try {
+    await refreshLeadScores(organizationId, snapshots);
+  } catch {
+    /* score não bloqueia fila */
+  }
   const items: FollowUpItem[] = [];
   for (const snap of snapshots) {
     const hit = evaluateFollowUp(snap);
