@@ -13,6 +13,7 @@ import {
   resolveEvolutionBaseUrl,
 } from "../services/evolution.js";
 import { getWhatsappInstanceForOrg } from "./whatsappInstance.js";
+import { countPendingCrmFollowUps } from "./crmFollowUpSchedule.js";
 
 export type FunnelStats = {
   period_days: number;
@@ -44,6 +45,7 @@ export type PipelineMetrics = {
   leads_ativos: number;
   leads_parados_72h: number;
   follow_ups_pendentes: number;
+  wa_followups_agendados: number;
 };
 
 export type LeadTimelineDetail = {
@@ -327,6 +329,7 @@ async function fetchLeadActivitySnapshots(organizationId: string): Promise<LeadA
     has_direct: boolean;
     has_whatsapp_msgs: boolean;
     visita_proxima: Date | null;
+    pending_wa_followup_at: Date | null;
   }>(
     `SELECT l.id, l.nome, l.username_instagram, l.whatsapp, l.status, l.objetivo,
             l.handoff_at, l.handoff_motivo, l.whatsapp_boas_vindas_enviado,
@@ -336,7 +339,10 @@ async function fetchLeadActivitySnapshots(organizationId: string): Promise<LeadA
             act.has_direct, act.has_whatsapp_msgs,
             (SELECT MIN(v.data_visita) FROM visitas v
              WHERE v.lead_id = l.id AND v.organization_id = l.organization_id
-               AND v.status = 'agendada' AND v.data_visita >= NOW()) AS visita_proxima
+               AND v.status = 'agendada' AND v.data_visita >= NOW()) AS visita_proxima,
+            (SELECT MIN(f.agendado_para) FROM crm_followup_mensagens f
+             WHERE f.lead_id = l.id AND f.organization_id = l.organization_id
+               AND f.status = 'pendente' AND f.agendado_para > NOW()) AS pending_wa_followup_at
      FROM leads l
      LEFT JOIN LATERAL (
        SELECT
@@ -394,6 +400,9 @@ async function fetchLeadActivitySnapshots(organizationId: string): Promise<LeadA
     has_direct: Boolean(row.has_direct),
     has_whatsapp_msgs: Boolean(row.has_whatsapp_msgs),
     visita_proxima: row.visita_proxima ? new Date(row.visita_proxima).toISOString() : null,
+    pending_wa_followup_at: row.pending_wa_followup_at
+      ? new Date(row.pending_wa_followup_at).toISOString()
+      : null,
   }));
 }
 
@@ -425,6 +434,7 @@ export async function getPipelineMetrics(
   }).length;
 
   const convertidos = funnel.leads_por_status.convertido ?? 0;
+  const waAgendados = await countPendingCrmFollowUps(organizationId);
 
   return {
     period_days: funnel.period_days,
@@ -439,6 +449,7 @@ export async function getPipelineMetrics(
     leads_ativos: snapshots.length,
     leads_parados_72h: parados72h,
     follow_ups_pendentes: followUps.length,
+    wa_followups_agendados: waAgendados,
   };
 }
 

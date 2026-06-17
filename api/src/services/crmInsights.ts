@@ -17,6 +17,7 @@ export type LeadActivitySnapshot = {
   has_direct: boolean;
   has_whatsapp_msgs: boolean;
   visita_proxima: string | null;
+  pending_wa_followup_at: string | null;
 };
 
 export type FollowUpPriority = "critical" | "high" | "medium" | "low";
@@ -75,6 +76,9 @@ export function evaluateFollowUp(row: LeadActivitySnapshot, now = Date.now()): F
 
   const horasParado = hoursSince(row.last_inbound_at, now);
   const rules: RuleHit[] = [];
+  const hasWaScheduled =
+    Boolean(row.pending_wa_followup_at) &&
+    new Date(row.pending_wa_followup_at!).getTime() > now;
 
   if (row.proximo_followup_em) {
     const followAt = new Date(row.proximo_followup_em).getTime();
@@ -120,7 +124,7 @@ export function evaluateFollowUp(row: LeadActivitySnapshot, now = Date.now()): F
     });
   }
 
-  if (row.whatsapp && row.has_whatsapp_msgs && horasParado !== null && horasParado >= 24) {
+  if (row.whatsapp && row.has_whatsapp_msgs && horasParado !== null && horasParado >= 24 && !hasWaScheduled) {
     const ultimaFoiInbound =
       row.last_inbound_at &&
       (!row.last_outbound_at ||
@@ -179,7 +183,7 @@ export function evaluateFollowUp(row: LeadActivitySnapshot, now = Date.now()): F
     });
   }
 
-  if (horasParado !== null && horasParado >= 72 && row.status === "em_conversa") {
+  if (horasParado !== null && horasParado >= 72 && row.status === "em_conversa" && !hasWaScheduled) {
     rules.push({
       priority: "medium",
       motivo: `Sem mensagem do lead há ${horasParado}h.`,

@@ -4,6 +4,7 @@ import { publishToInstagram, publishCarouselToInstagram } from "./instagram.js";
 import { updateAgendadoStatus } from "../store/agendados.js";
 import { appendCronograma } from "../store/cronograma.js";
 import { upsertPostagemFromPostador } from "../store/crmPostagens.js";
+import { processDueCrmFollowUps } from "./crmFollowUpSender.js";
 
 export function startCronJob(fastify: FastifyInstance) {
   if (!isDbConfigured()) {
@@ -14,6 +15,15 @@ export function startCronJob(fastify: FastifyInstance) {
   fastify.log.info("Cron job de agendamentos iniciado (verificação a cada 1 minuto).");
 
   setInterval(async () => {
+    try {
+      const sentFollowUps = await processDueCrmFollowUps(fastify.log);
+      if (sentFollowUps > 0) {
+        fastify.log.info({ count: sentFollowUps }, "Follow-ups WhatsApp CRM enviados.");
+      }
+    } catch (err) {
+      fastify.log.error({ err }, "Erro no job de follow-ups WhatsApp.");
+    }
+
     try {
       const pool = getPool();
       

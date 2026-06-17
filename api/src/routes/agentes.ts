@@ -20,6 +20,12 @@ import {
   getOperacaoHealth,
   getPipelineMetrics,
 } from "../store/crmOperacao.js";
+import {
+  createCrmFollowUp,
+  cancelCrmFollowUp,
+  listCrmFollowUpsForLead,
+  listPendingCrmFollowUps,
+} from "../store/crmFollowUpSchedule.js";
 import { generateLeadCoach, isCrmAiConfigured } from "../services/crmAiCoach.js";
 import {
   backfillLeadWhatsappDigits,
@@ -97,6 +103,13 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
   app.get("/operacao/follow-ups", async (request, reply) => {
     const u = request.user as { orgId: string };
     const items = await getFollowUpQueue(u.orgId);
+    return reply.send({ ok: true, items, total: items.length });
+  });
+
+  /** Mensagens WhatsApp agendadas (pendentes) no CRM. */
+  app.get("/operacao/follow-ups-agendados", async (request, reply) => {
+    const u = request.user as { orgId: string };
+    const items = await listPendingCrmFollowUps(u.orgId);
     return reply.send({ ok: true, items, total: items.length });
   });
 
@@ -190,6 +203,69 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
       return reply.status(502).send({ error: msg });
     }
   });
+
+  /** Lista follow-ups WhatsApp agendados para um lead. */
+  app.get<{ Params: { id: string } }>("/leads/:id/follow-ups", async (request, reply) => {
+    const u = request.user as { orgId: string };
+    const leadId = Number(request.params.id);
+    if (!Number.isFinite(leadId) || leadId < 1) {
+      return reply.status(400).send({ error: "ID de lead inválido." });
+    }
+    const items = await listCrmFollowUpsForLead(u.orgId, leadId);
+    return reply.send({ ok: true, items, total: items.length });
+  });
+
+  /** Agenda mensagem WhatsApp para retomar a venda. */
+  app.post<{ Params: { id: string } }>("/leads/:id/follow-ups", async (request, reply) => {
+    const u = request.user as { orgId: string };
+    const leadId = Number(request.params.id);
+    if (!Number.isFinite(leadId) || leadId < 1) {
+      return reply.status(400).send({ error: "ID de lead inválido." });
+    }
+    const body = request.body as {
+      message_text?: string;
+      agendado_para?: string;
+      origin_hint?: string;
+    };
+    if (!body?.message_text?.trim()) {
+      return reply.status(400).send({ error: "Informe message_text." });
+    }
+    if (!body?.agendado_para?.trim()) {
+      return reply.status(400).send({ error: "Informe agendado_para (ISO)." });
+    }
+    const agendado = new Date(body.agendado_para);
+    if (!Number.isFinite(agendado.getTime())) {
+      return reply.status(400).send({ error: "agendado_para inválido." });
+    }
+    try {
+      const item = await createCrmFollowUp({
+        organizationId: u.orgId,
+        leadId,
+        messageText: body.message_text,
+        agendadoPara: agendado,
+        originHint: body.origin_hint ?? "manual",
+      });
+      return reply.send({ ok: true, item });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro ao agendar follow-up.";
+      return reply.status(400).send({ error: msg });
+    }
+  });
+
+  /** Cancela follow-up WhatsApp pendente. */
+  app.post<{ Params: { followupId: string } }>(
+    "/operacao/follow-ups/:followupId/cancel",
+    async (request, reply) => {
+      const u = request.user as { orgId: string };
+      const id = Number(request.params.followupId);
+      if (!Number.isFinite(id) || id < 1) {
+        return reply.status(400).send({ error: "ID inválido." });
+      }
+      const ok = await cancelCrmFollowUp(u.orgId, id);
+      if (!ok) return reply.status(404).send({ error: "Follow-up não encontrado ou já enviado." });
+      return reply.send({ ok: true });
+    }
+  );
 
   /** Configuração da instância WhatsApp / Evolution do workspace. */
   app.get("/whatsapp", async (request, reply) => {

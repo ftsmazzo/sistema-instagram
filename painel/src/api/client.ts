@@ -282,6 +282,7 @@ export type PipelineMetricsRes = {
   leads_ativos: number;
   leads_parados_72h: number;
   follow_ups_pendentes: number;
+  wa_followups_agendados: number;
 };
 
 export type FollowUpItemRes = {
@@ -297,6 +298,23 @@ export type FollowUpItemRes = {
   horas_parado: number | null;
   funil_etapa: string;
   visita_proxima: string | null;
+};
+
+export type CrmFollowUpMessageRes = {
+  id: number;
+  lead_id: number;
+  telefone: string;
+  message_text: string;
+  agendado_para: string;
+  status: string;
+  criado_por: string;
+  origin_hint: string | null;
+  error_message: string | null;
+  sent_at: string | null;
+  created_at: string;
+  updated_at: string;
+  lead_nome?: string | null;
+  username_instagram?: string | null;
 };
 
 export type LeadCoachRes = {
@@ -803,6 +821,10 @@ export const api = {
       fetchJson<{ ok: boolean; items: FollowUpItemRes[]; total: number }>(
         "/api/agentes/operacao/follow-ups"
       ),
+    getScheduledFollowUps: () =>
+      fetchJson<{ ok: boolean; items: CrmFollowUpMessageRes[]; total: number }>(
+        "/api/agentes/operacao/follow-ups-agendados"
+      ),
     getLeadTimeline: (leadId: number) =>
       fetchJson<{
         ok: boolean;
@@ -820,6 +842,23 @@ export const api = {
       }),
     getLeadAiCoach: (leadId: number) =>
       fetchJson<{ ok: boolean; coach: LeadCoachRes }>(`/api/agentes/leads/${leadId}/ai-coach`, {
+        method: "POST",
+        body: {},
+      }),
+    getLeadScheduledFollowUps: (leadId: number) =>
+      fetchJson<{ ok: boolean; items: CrmFollowUpMessageRes[]; total: number }>(
+        `/api/agentes/leads/${leadId}/follow-ups`
+      ),
+    scheduleLeadFollowUp: (
+      leadId: number,
+      body: { message_text: string; agendado_para: string; origin_hint?: string }
+    ) =>
+      fetchJson<{ ok: boolean; item: CrmFollowUpMessageRes }>(
+        `/api/agentes/leads/${leadId}/follow-ups`,
+        { method: "POST", body }
+      ),
+    cancelScheduledFollowUp: (followupId: number) =>
+      fetchJson<{ ok: boolean }>(`/api/agentes/operacao/follow-ups/${followupId}/cancel`, {
         method: "POST",
         body: {},
       }),

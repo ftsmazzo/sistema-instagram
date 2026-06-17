@@ -45,6 +45,24 @@ Fila automática (regras) de leads que precisam de atenção:
 | PATCH | `/api/agentes/leads/:id` | Status, notas, follow-up |
 | POST | `/api/agentes/leads/:id/ai-coach` | Sugestão IA de vendas |
 
+### Agendar WhatsApp (retomar venda)
+
+No detalhe do lead em Operação:
+- Escreva a mensagem ou use **Sugestão IA** → **Agendar msg da IA**
+- Atalhos: +2h, +24h, Amanhã 9h
+- **Programar envio** — dispara via Evolution no horário (cron API, 1 min)
+
+| Método | Rota | Descrição |
+|--------|------|-----------|
+| GET | `/api/agentes/operacao/follow-ups-agendados` | Fila global pendente |
+| GET | `/api/agentes/leads/:id/follow-ups` | Histórico do lead |
+| POST | `/api/agentes/leads/:id/follow-ups` | `{ message_text, agendado_para }` |
+| POST | `/api/agentes/operacao/follow-ups/:id/cancel` | Cancela pendente |
+
+Tabela `crm_followup_mensagens` · status: `pendente` → `enviado` | `falhou` | `cancelado`
+
+Requisitos: lead com WhatsApp, instância Evolution conectada, `EVOLUTION_BASE_URL` + `EVOLUTION_GLOBAL_API_KEY`.
+
 ## Variáveis de ambiente (API)
 
 ```env

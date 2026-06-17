@@ -2,6 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   api,
+  type CrmFollowUpMessageRes,
   type FollowUpItemRes,
   type FunnelStatsRes,
   type LeadCoachRes,
@@ -81,6 +82,35 @@ function riscoClass(r: LeadCoachRes["risco_perda"]): string {
   return "text-emerald-700";
 }
 
+function toLocalInput(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function schedulePresetHours(hours: number): string {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() + Math.max(hours * 60, 5));
+  return toLocalInput(d);
+}
+
+function schedulePresetTomorrow9(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + 1);
+  d.setHours(9, 0, 0, 0);
+  return toLocalInput(d);
+}
+
+function followUpStatusLabel(status: string): string {
+  const map: Record<string, string> = {
+    pendente: "Agendado",
+    enviando: "Enviando…",
+    enviado: "Enviado",
+    cancelado: "Cancelado",
+    falhou: "Falhou",
+  };
+  return map[status] ?? status;
+}
+
 function KpiCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
   return (
     <div className="card flex flex-col gap-1 border-slate-200/80 p-4">
@@ -98,6 +128,8 @@ export function OperacaoPage() {
   const [pipeline, setPipeline] = useState<PipelineMetricsRes | null>(null);
   const [health, setHealth] = useState<OperacaoHealthRes | null>(null);
   const [followUps, setFollowUps] = useState<FollowUpItemRes[]>([]);
+  const [scheduledOrg, setScheduledOrg] = useState<CrmFollowUpMessageRes[]>([]);
+  const [leadScheduled, setLeadScheduled] = useState<CrmFollowUpMessageRes[]>([]);
   const [leads, setLeads] = useState<LeadListItemRes[]>([]);
   const [viewFilter, setViewFilter] = useState<ViewFilter>("todos");
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -110,6 +142,9 @@ export function OperacaoPage() {
   const [statusDraft, setStatusDraft] = useState("");
   const [followupDraft, setFollowupDraft] = useState("");
   const [savingLead, setSavingLead] = useState(false);
+  const [waMessageDraft, setWaMessageDraft] = useState("");
+  const [waScheduleDraft, setWaScheduleDraft] = useState("");
+  const [schedulingWa, setSchedulingWa] = useState(false);
 
   const followUpByLead = useMemo(() => {
     const map = new Map<number, FollowUpItemRes>();
@@ -135,17 +170,19 @@ export function OperacaoPage() {
     setLoading(true);
     setError(null);
     try {
-      const [f, p, h, fu, l] = await Promise.all([
+      const [f, p, h, fu, sch, l] = await Promise.all([
         api.agentes.getFunnel(30),
         api.agentes.getOperacaoPipeline(30),
         api.agentes.getOperacaoHealth(),
         api.agentes.getFollowUps(),
+        api.agentes.getScheduledFollowUps(),
         api.agentes.getLeads({ limit: 50 }),
       ]);
       setFunnel(f);
       setPipeline(p);
       setHealth(h);
       setFollowUps(fu.items);
+      setScheduledOrg(sch.items);
       setLeads(l.leads);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao carregar operação.");
@@ -164,15 +201,20 @@ export function OperacaoPage() {
       setTimeline([]);
       setLeadDetail(null);
       setCoach(null);
+      setLeadScheduled([]);
       return;
     }
     setSelectedId(leadId);
     setTimelineLoading(true);
     setCoach(null);
+    setWaMessageDraft("");
+    setWaScheduleDraft(schedulePresetHours(2));
     try {
       const res = await api.agentes.getLeadTimeline(leadId);
+      const sch = await api.agentes.getLeadScheduledFollowUps(leadId);
       setLeadDetail(res.lead);
       setTimeline(res.timeline);
+      setLeadScheduled(sch.items);
       setNotasDraft(res.lead.crm_notas ?? "");
       setStatusDraft(res.lead.status);
       setFollowupDraft(
@@ -223,10 +265,55 @@ export function OperacaoPage() {
     try {
       const res = await api.agentes.getLeadAiCoach(selectedId);
       setCoach(res.coach);
+      if (res.coach.mensagem_sugerida && !waMessageDraft.trim()) {
+        setWaMessageDraft(res.coach.mensagem_sugerida);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao gerar sugestão de IA.");
     } finally {
       setCoachLoading(false);
+    }
+  };
+
+  const scheduleWaFollowUp = async (originHint = "manual", messageOverride?: string) => {
+    if (!selectedId) return;
+    const text = (messageOverride ?? waMessageDraft).trim();
+    if (!text) {
+      setError("Escreva a mensagem de follow-up.");
+      return;
+    }
+    if (!waScheduleDraft) {
+      setError("Escolha data e hora para envio.");
+      return;
+    }
+    setSchedulingWa(true);
+    setError(null);
+    try {
+      const res = await api.agentes.scheduleLeadFollowUp(selectedId, {
+        message_text: text,
+        agendado_para: new Date(waScheduleDraft).toISOString(),
+        origin_hint: originHint,
+      });
+      setLeadScheduled((prev) => [res.item, ...prev]);
+      setScheduledOrg((prev) => [res.item, ...prev]);
+      setWaMessageDraft("");
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao agendar WhatsApp.");
+    } finally {
+      setSchedulingWa(false);
+    }
+  };
+
+  const cancelScheduled = async (followupId: number) => {
+    setError(null);
+    try {
+      await api.agentes.cancelScheduledFollowUp(followupId);
+      setLeadScheduled((prev) => prev.filter((x) => x.id !== followupId));
+      setScheduledOrg((prev) => prev.filter((x) => x.id !== followupId));
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao cancelar agendamento.");
     }
   };
 
@@ -255,7 +342,7 @@ export function OperacaoPage() {
           {pipeline && (
             <section>
               <h2 className="mb-4 text-lg font-semibold text-slate-900">Pipeline de conversão</h2>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
                 <KpiCard label="Coment. → Lead" value={formatPct(pipeline.taxa_comentario_para_lead)} sub="captura no CRM" />
                 <KpiCard label="Lead → WhatsApp" value={formatPct(pipeline.taxa_lead_para_whatsapp)} sub="handoff de canal" />
                 <KpiCard label="WA → Handoff" value={formatPct(pipeline.taxa_whatsapp_para_handoff)} sub="humano acionado" />
@@ -263,7 +350,43 @@ export function OperacaoPage() {
                 <KpiCard label="Leads ativos" value={pipeline.leads_ativos} />
                 <KpiCard label="Parados 72h+" value={pipeline.leads_parados_72h} sub="risco de esfriar" />
                 <KpiCard label="Follow-ups" value={pipeline.follow_ups_pendentes} sub="ações sugeridas" />
+                <KpiCard label="WA agendados" value={pipeline.wa_followups_agendados} sub="envio programado" />
               </div>
+            </section>
+          )}
+
+          {scheduledOrg.length > 0 && (
+            <section className="card border-emerald-200/80 bg-emerald-50/30">
+              <h2 className="mb-3 text-lg font-semibold text-slate-900">WhatsApp programados</h2>
+              <p className="mb-3 text-sm text-slate-600">
+                Mensagens de retomada de venda — enviadas automaticamente pela Evolution (cron a cada 1 min).
+              </p>
+              <ul className="space-y-2">
+                {scheduledOrg.slice(0, 10).map((item) => (
+                  <li
+                    key={item.id}
+                    className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-emerald-100 bg-white px-3 py-2 text-sm cursor-pointer hover:bg-emerald-50/50"
+                    onClick={() => openTimeline(item.lead_id)}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-slate-900">
+                        {item.lead_nome ?? "Lead"} · {formatDateTime(item.agendado_para)}
+                      </p>
+                      <p className="text-xs text-slate-600 truncate">{item.message_text}</p>
+                    </div>
+                    <button
+                      type="button"
+                      className="text-xs font-semibold text-red-600 shrink-0"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        cancelScheduled(item.id);
+                      }}
+                    >
+                      Cancelar
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </section>
           )}
 
@@ -465,6 +588,106 @@ export function OperacaoPage() {
                                         </div>
                                       )}
 
+                                      <div className="rounded-lg border border-emerald-200 bg-emerald-50/40 p-4 space-y-3">
+                                        <h3 className="font-semibold text-emerald-950">Agendar WhatsApp (retomar venda)</h3>
+                                        {!leadDetail?.whatsapp ? (
+                                          <p className="text-xs text-amber-800">Lead sem WhatsApp — capture o número antes de agendar.</p>
+                                        ) : (
+                                          <>
+                                            <label className="block text-xs text-slate-600">
+                                              Mensagem
+                                              <textarea
+                                                className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm min-h-[90px] bg-white"
+                                                value={waMessageDraft}
+                                                onChange={(e) => setWaMessageDraft(e.target.value)}
+                                                onClick={(e) => e.stopPropagation()}
+                                                placeholder="Olá! Vi que você demonstrou interesse…"
+                                              />
+                                            </label>
+                                            <label className="block text-xs text-slate-600">
+                                              Enviar em
+                                              <input
+                                                type="datetime-local"
+                                                className="mt-1 w-full rounded border border-slate-200 px-2 py-1.5 text-sm bg-white"
+                                                value={waScheduleDraft}
+                                                onChange={(e) => setWaScheduleDraft(e.target.value)}
+                                                onClick={(e) => e.stopPropagation()}
+                                              />
+                                            </label>
+                                            <div className="flex flex-wrap gap-2">
+                                              <button
+                                                type="button"
+                                                className="rounded-full bg-white border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-900"
+                                                onClick={(e) => { e.stopPropagation(); setWaScheduleDraft(schedulePresetHours(2)); }}
+                                              >
+                                                +2h
+                                              </button>
+                                              <button
+                                                type="button"
+                                                className="rounded-full bg-white border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-900"
+                                                onClick={(e) => { e.stopPropagation(); setWaScheduleDraft(schedulePresetHours(24)); }}
+                                              >
+                                                +24h
+                                              </button>
+                                              <button
+                                                type="button"
+                                                className="rounded-full bg-white border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-900"
+                                                onClick={(e) => { e.stopPropagation(); setWaScheduleDraft(schedulePresetTomorrow9()); }}
+                                              >
+                                                Amanhã 9h
+                                              </button>
+                                            </div>
+                                            <div className="flex flex-wrap gap-2">
+                                              <button
+                                                type="button"
+                                                disabled={schedulingWa}
+                                                onClick={(e) => { e.stopPropagation(); scheduleWaFollowUp("manual"); }}
+                                                className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                                              >
+                                                {schedulingWa ? "Agendando…" : "Programar envio"}
+                                              </button>
+                                              {coach?.mensagem_sugerida && (
+                                                <button
+                                                  type="button"
+                                                  disabled={schedulingWa}
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setWaMessageDraft(coach.mensagem_sugerida);
+                                                    scheduleWaFollowUp("ai_coach", coach.mensagem_sugerida);
+                                                  }}
+                                                  className="rounded-lg border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-900 disabled:opacity-50"
+                                                >
+                                                  Agendar msg da IA
+                                                </button>
+                                              )}
+                                            </div>
+                                            {leadScheduled.filter((x) => x.status === "pendente").length > 0 && (
+                                              <ul className="border-t border-emerald-100 pt-2 space-y-1">
+                                                {leadScheduled
+                                                  .filter((x) => x.status === "pendente" || x.status === "falhou")
+                                                  .slice(0, 5)
+                                                  .map((item) => (
+                                                    <li key={item.id} className="flex justify-between gap-2 text-xs">
+                                                      <span className="text-slate-700">
+                                                        {followUpStatusLabel(item.status)} · {formatDateTime(item.agendado_para)}
+                                                      </span>
+                                                      {item.status === "pendente" && (
+                                                        <button
+                                                          type="button"
+                                                          className="text-red-600 font-semibold"
+                                                          onClick={(e) => { e.stopPropagation(); cancelScheduled(item.id); }}
+                                                        >
+                                                          Cancelar
+                                                        </button>
+                                                      )}
+                                                    </li>
+                                                  ))}
+                                              </ul>
+                                            )}
+                                          </>
+                                        )}
+                                      </div>
+
                                       <div className="rounded-lg border border-slate-200 bg-white p-4 space-y-3">
                                         <h3 className="font-semibold text-slate-900">Gestão do lead</h3>
                                         <label className="block text-xs text-slate-600">
@@ -543,9 +766,13 @@ export function OperacaoPage() {
                                               <button
                                                 type="button"
                                                 className="mt-2 text-xs font-semibold text-indigo-600"
-                                                onClick={(e) => { e.stopPropagation(); copyMessage(coach.mensagem_sugerida); }}
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setWaMessageDraft(coach.mensagem_sugerida);
+                                                  copyMessage(coach.mensagem_sugerida);
+                                                }}
                                               >
-                                                Copiar mensagem
+                                                Usar na agenda · Copiar
                                               </button>
                                             </div>
                                           )}
