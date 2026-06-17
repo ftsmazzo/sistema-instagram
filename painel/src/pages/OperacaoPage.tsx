@@ -169,26 +169,49 @@ export function OperacaoPage() {
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
-    try {
-      const [f, p, h, fu, sch, l] = await Promise.all([
-        api.agentes.getFunnel(30),
-        api.agentes.getOperacaoPipeline(30),
-        api.agentes.getOperacaoHealth(),
-        api.agentes.getFollowUps(),
-        api.agentes.getScheduledFollowUps(),
-        api.agentes.getLeads({ limit: 50 }),
-      ]);
-      setFunnel(f);
-      setPipeline(p);
-      setHealth(h);
-      setFollowUps(fu.items);
-      setScheduledOrg(sch.items);
-      setLeads(l.leads);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro ao carregar operação.");
-    } finally {
-      setLoading(false);
+    const warnings: string[] = [];
+
+    const settled = await Promise.allSettled([
+      api.agentes.getFunnel(30),
+      api.agentes.getOperacaoPipeline(30),
+      api.agentes.getOperacaoHealth(),
+      api.agentes.getFollowUps(),
+      api.agentes.getScheduledFollowUps(),
+      api.agentes.getLeads({ limit: 50 }),
+    ]);
+
+    const pick = <T,>(idx: number, fallback: T): T => {
+      const r = settled[idx];
+      if (r.status === "fulfilled") return r.value as T;
+      const reason = r.reason instanceof Error ? r.reason.message : "Erro desconhecido";
+      warnings.push(reason);
+      return fallback;
+    };
+
+    setFunnel(pick(0, null));
+    setPipeline(pick(1, null));
+    setHealth(pick(2, null));
+    const fu = pick(3, { items: [] as FollowUpItemRes[] });
+    setFollowUps(fu.items);
+    const sch = pick(4, { items: [] as CrmFollowUpMessageRes[] });
+    setScheduledOrg(sch.items);
+    const l = pick(5, { leads: [] as LeadListItemRes[] });
+    setLeads(l.leads);
+
+    if (warnings.length > 0) {
+      const all404 = warnings.every((w) => /404|não encontrada|not found/i.test(w));
+      if (all404) {
+        setError(
+          "API desatualizada ou URL incorreta (404). Redeploy do serviço API no EasyPanel e confira VITE_API_URL no build do painel."
+        );
+      } else if (settled.every((r) => r.status === "rejected")) {
+        setError(warnings[0] ?? "Erro ao carregar operação.");
+      } else {
+        setError(`Alguns dados não carregaram: ${warnings[0]}`);
+      }
     }
+
+    setLoading(false);
   }, []);
 
   useEffect(() => {

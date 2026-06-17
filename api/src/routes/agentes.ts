@@ -95,22 +95,51 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
     const u = request.user as { orgId: string };
     const q = request.query as { days?: string };
     const days = q.days ? Number(q.days) : 30;
-    const metrics = await getPipelineMetrics(u.orgId, days);
-    return reply.send({ ok: true, ai_disponivel: isCrmAiConfigured(), ...metrics });
+    try {
+      const metrics = await getPipelineMetrics(u.orgId, days);
+      return reply.send({ ok: true, ai_disponivel: isCrmAiConfigured(), ...metrics });
+    } catch (err) {
+      request.log.error({ err }, "GET /operacao/pipeline falhou");
+      const funnel = await getFunnelStats(u.orgId, days);
+      return reply.send({
+        ok: true,
+        degraded: true,
+        ai_disponivel: isCrmAiConfigured(),
+        period_days: funnel.period_days,
+        taxa_comentario_para_lead: null,
+        taxa_lead_para_whatsapp: null,
+        taxa_whatsapp_para_handoff: null,
+        taxa_handoff_para_convertido: null,
+        leads_ativos: 0,
+        leads_parados_72h: 0,
+        follow_ups_pendentes: 0,
+        wa_followups_agendados: 0,
+      });
+    }
   });
 
   /** Fila de follow-ups prioritários (regras de conversão). */
   app.get("/operacao/follow-ups", async (request, reply) => {
     const u = request.user as { orgId: string };
-    const items = await getFollowUpQueue(u.orgId);
-    return reply.send({ ok: true, items, total: items.length });
+    try {
+      const items = await getFollowUpQueue(u.orgId);
+      return reply.send({ ok: true, items, total: items.length });
+    } catch (err) {
+      request.log.error({ err }, "GET /operacao/follow-ups falhou");
+      return reply.send({ ok: true, items: [], total: 0, degraded: true });
+    }
   });
 
   /** Mensagens WhatsApp agendadas (pendentes) no CRM. */
   app.get("/operacao/follow-ups-agendados", async (request, reply) => {
     const u = request.user as { orgId: string };
-    const items = await listPendingCrmFollowUps(u.orgId);
-    return reply.send({ ok: true, items, total: items.length });
+    try {
+      const items = await listPendingCrmFollowUps(u.orgId);
+      return reply.send({ ok: true, items, total: items.length });
+    } catch (err) {
+      request.log.error({ err }, "GET /operacao/follow-ups-agendados falhou");
+      return reply.send({ ok: true, items: [], total: 0, degraded: true });
+    }
   });
 
   /** Timeline unificada de um lead (comentário + Direct + WhatsApp). */

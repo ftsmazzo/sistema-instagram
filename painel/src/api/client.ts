@@ -58,7 +58,13 @@ async function fetchJson<T>(path: string, options?: FetchOptions): Promise<T> {
   });
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({}));
-    const msg = (errBody as { error?: string }).error ?? `API ${res.status}: ${res.statusText}`;
+    const body = errBody as { error?: string; message?: string };
+    const msg =
+      body.error ??
+      body.message ??
+      (res.status === 404
+        ? `Rota não encontrada (${path}). Redeploy da API necessário?`
+        : `API ${res.status}: ${res.statusText}`);
     throw new Error(msg);
   }
   return res.json() as Promise<T>;
