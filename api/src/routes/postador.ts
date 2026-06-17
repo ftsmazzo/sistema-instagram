@@ -61,6 +61,7 @@ type PostadorIaBody = {
   marca_nome?: string;
   image_mode?: string;
   slide_template?: string;
+  slides_count?: number;
 };
 
 async function loadBrandKitFromRequest(app: FastifyInstance, request: FastifyRequest) {
@@ -564,6 +565,7 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       prompt?: string;
       provider?: string;
       aplicar_moldura?: boolean;
+      slides_count?: number;
     } & PostadorIaBody;
     const brief = (body?.brief ?? body?.prompt ?? "").trim();
     if (!brief) {
@@ -576,7 +578,8 @@ export const postadorRoutes: FastifyPluginAsync = async (fastify) => {
       const result = await gerarCarrosselCompleto({
         brief,
         provider,
-        aplicarMoldura: body.aplicar_moldura !== false,
+        aplicarMoldura: body.aplicar_moldura === true,
+        slides_count: body.slides_count,
         slide_template: parseSlideTemplate(body.slide_template),
         brandKit: brand,
         options: iaOpts,

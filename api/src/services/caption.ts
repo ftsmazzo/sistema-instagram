@@ -143,6 +143,8 @@ export type GerarCaptionOptions = {
   marcaNome?: string | null;
   imageMode?: PostadorImageMode | null;
   brandKit?: import("./postadorBrand.js").PostadorBrandKit | null;
+  /** Força N slides no carrossel (2–10), independente do template de nicho */
+  slidesCount?: number | null;
 };
 
 function captionContextFromOptions(options?: GerarCaptionOptions): PostadorCaptionContext {
@@ -311,14 +313,22 @@ export async function gerarIngredientesCarrossel(
   options?: GerarCaptionOptions
 ): Promise<PostadorIngredientes> {
   const ctx = captionContextFromOptions(options);
-  if (ctx.template.formato !== "carrossel") {
+  const forced =
+    options?.slidesCount != null && options.slidesCount >= 2
+      ? Math.min(10, Math.max(2, Math.round(options.slidesCount)))
+      : null;
+  if (!forced && ctx.template.formato !== "carrossel") {
     throw new Error("Template atual não é carrossel.");
   }
-  const system = buildIngredientesSystemPrompt(ctx);
-  const user = `Brief do post:\n\n""" ${brief} """\n\nRetorne o JSON com exatamente ${ctx.template.slides} slides:`;
+  const slideTarget = forced ?? ctx.template.slides;
+  const effectiveCtx = forced
+    ? { ...ctx, template: { ...ctx.template, formato: "carrossel" as const, slides: slideTarget } }
+    : ctx;
+  const system = buildIngredientesSystemPrompt(effectiveCtx);
+  const user = `Brief do post:\n\n""" ${brief} """\n\nRetorne o JSON com exatamente ${slideTarget} slides:`;
   const resText = await completeLong(system, user, options?.provider, options?.model ?? "gpt-4o-mini");
   try {
-    return parseIngredientesJson(resText, ctx.template.slides);
+    return parseIngredientesJson(resText, slideTarget);
   } catch (err) {
     console.error("Erro parse ingredientes carrossel:", resText);
     const detail = err instanceof Error ? err.message : "";

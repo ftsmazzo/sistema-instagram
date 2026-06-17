@@ -123,6 +123,7 @@ type Step = "form" | "review" | "published";
 /** Passos do assistente antes de gerar (só em step === "form") */
 type WizardStep = 1 | 2 | 3 | 4;
 type ContentMode = "descricao" | "link";
+type FormatoPost = "feed" | "carrossel" | "reels";
 
 type QualityReport = {
   score: number;
@@ -135,7 +136,9 @@ export function Postador() {
   const [urlImovel, setUrlImovel] = useState("");
   const [arquivos, setArquivos] = useState<File[]>([]);
   const [criarMidiaIA, setCriarMidiaIA] = useState(false);
-  const [tipoMidiaIA, setTipoMidiaIA] = useState<"imagem" | "video">("imagem");
+  const [formatoPost, setFormatoPost] = useState<FormatoPost>("feed");
+  const [carrosselSlidesCount, setCarrosselSlidesCount] = useState(5);
+  const [aplicarMoldura, setAplicarMoldura] = useState(false);
   const [provedorImagem, setProvedorImagem] = useState<"openai" | "gemini">("gemini");
   const [provedorVideo, setProvedorVideo] = useState<"slideshow" | "veo" | "sora">("slideshow");
   const [duracaoVideo, setDuracaoVideo] = useState<4 | 8 | 12>(8);
@@ -194,7 +197,12 @@ export function Postador() {
   const nichePack = niches.find((n) => n.id === nicheId);
   const templatesDoNicho = nichePack?.templates ?? [];
   const templateSelecionado = templatesDoNicho.find((t) => t.key === templateKey);
-  const isCarrosselTemplate = templateSelecionado?.formato === "carrossel";
+
+  useEffect(() => {
+    if (templateSelecionado?.formato === "carrossel" && templateSelecionado.slides >= 2) {
+      setCarrosselSlidesCount(templateSelecionado.slides);
+    }
+  }, [templateKey]);
 
   const nicheParams = (): PostadorNicheParams => ({
     niche_id: nicheId || undefined,
@@ -205,6 +213,7 @@ export function Postador() {
     slide_template: slideTemplate,
     music_id: musicTrackId !== "none" ? musicTrackId : undefined,
     music_start_sec: musicTrackId !== "none" ? musicStartSec : undefined,
+    slides_count: formatoPost === "carrossel" ? carrosselSlidesCount : undefined,
   });
 
   useEffect(() => {
@@ -330,16 +339,40 @@ export function Postador() {
       setError("Informe a descrição do que deseja postar.");
       return;
     }
+
+    const imgs = arquivos.filter((a) => a.type.startsWith("image/"));
+    const vids = arquivos.filter((a) => a.type.startsWith("video/"));
+
+    if (!criarMidiaIA) {
+      if (formatoPost === "carrossel" && imgs.length < 2) {
+        setError("Carrossel no feed precisa de 2 a 10 imagens. Envie várias fotos ou marque «Criar mídia com IA».");
+        return;
+      }
+      if (formatoPost === "feed" && imgs.length > 1) {
+        setError("Post feed usa 1 imagem. Para várias fotos, escolha «Carrossel» acima.");
+        return;
+      }
+      if (formatoPost === "reels" && !vids.length && !imgs.length) {
+        setError("Reels precisa de um vídeo ou fotos. Envie mídia ou marque «Criar mídia com IA».");
+        return;
+      }
+      if (formatoPost === "reels" && vids.length && imgs.length) {
+        setError("Envie só vídeo OU só imagens para Reels — não misture os dois.");
+        return;
+      }
+    }
+
     setError(null);
     setLoading(true);
     try {
       let urlGerada: string | null = null;
-      let tipoGerado: "IMAGE" | "REELS" | undefined;
+      let tipoGerado: "IMAGE" | "REELS" | "CAROUSEL" | undefined;
+
       if (criarMidiaIA) {
         const prompt = (instrucoesImagem || descricao).trim();
-        if (tipoMidiaIA === "video") {
+        if (formatoPost === "reels") {
           const imageUrls: string[] = [];
-          for (const f of arquivos.filter((a) => a.type.startsWith("image/"))) {
+          for (const f of imgs) {
             const up = await api.postador.uploadMidia(f);
             imageUrls.push(up.media_url);
           }
@@ -355,11 +388,12 @@ export function Postador() {
           tipoGerado = "REELS";
           setUltimoCustoVideo(resVid.custo_estimado_usd);
           setUltimoCustoPost(null);
-        } else if (isCarrosselTemplate) {
+        } else if (formatoPost === "carrossel") {
           const resCar = await api.postador.gerarCarrossel({
             brief: prompt,
             provider: provedorImagem,
-            aplicar_moldura: true,
+            aplicar_moldura: aplicarMoldura,
+            slides_count: carrosselSlidesCount,
             ...nicheParams(),
           });
           setCaption(resCar.caption);
@@ -378,8 +412,32 @@ export function Postador() {
           setUltimoCustoVideo(null);
           setUltimoCustoPost(null);
         }
+      } else if (formatoPost === "reels" && imgs.length && !vids.length) {
+        const imageUrls: string[] = [];
+        for (const f of imgs) {
+          const up = await api.postador.uploadMidia(f);
+          imageUrls.push(up.media_url);
+        }
+        const resVid = await api.postador.gerarVideo({
+          prompt: descricao.trim(),
+          provider: "slideshow",
+          image_urls: imageUrls,
+          duration_seconds: duracaoVideo,
+          auto_imagem_slideshow: false,
+          ...nicheParams(),
+        });
+        urlGerada = resVid.media_url;
+        tipoGerado = "REELS";
+        setUltimoCustoVideo(resVid.custo_estimado_usd);
+        setUltimoCustoPost(null);
       }
-      const files = arquivos.length ? arquivos : undefined;
+
+      const files =
+        formatoPost === "feed" && imgs.length > 1
+          ? [imgs[0]]
+          : arquivos.length
+            ? arquivos
+            : undefined;
       const res = await api.postador.gerarCaption(
         descricao.trim(),
         files,
@@ -392,20 +450,31 @@ export function Postador() {
       setMediaUrls(res.media_urls ?? (urlGerada ? [urlGerada] : []));
       const tipo =
         tipoGerado ??
-        (res.media_type === "REELS" ? "REELS" : res.media_type === "CAROUSEL" ? "CAROUSEL" : "IMAGE");
+        (formatoPost === "reels"
+          ? "REELS"
+          : formatoPost === "carrossel"
+            ? "CAROUSEL"
+            : res.media_type === "REELS"
+              ? "REELS"
+              : res.media_type === "CAROUSEL"
+                ? "CAROUSEL"
+                : "IMAGE");
       setMediaType(tipo);
-      if (tipo === "CAROUSEL" && res.media_urls?.length) {
-        setPreviewUrls(res.media_urls);
-      } else if (res.media_url) {
-        setPreviewUrls([res.media_url]);
-      } else if (urlGerada) {
-        setPreviewUrls([urlGerada]);
+      if (tipo === "CAROUSEL" && (res.media_urls?.length || mediaUrls.length)) {
+        setPreviewUrls(res.media_urls ?? []);
+      } else if (res.media_url || urlGerada) {
+        setPreviewUrls([res.media_url ?? urlGerada!]);
       } else if (arquivos.length === 1 && arquivos[0].type.startsWith("image/")) {
         setPreviewUrls([URL.createObjectURL(arquivos[0])]);
       } else {
         setPreviewUrls([]);
       }
-      const numPreviews = (tipo === "CAROUSEL" && res.media_urls?.length) ? res.media_urls.length : (res.media_url || urlGerada || (arquivos.length === 1 && arquivos[0]?.type.startsWith("image/"))) ? 1 : 0;
+      const numPreviews =
+        tipo === "CAROUSEL" && res.media_urls?.length
+          ? res.media_urls.length
+          : res.media_url || urlGerada || (arquivos.length === 1 && arquivos[0]?.type.startsWith("image/"))
+            ? 1
+            : 0;
       setTextosCarrossel(new Array(numPreviews).fill(""));
       setStep("review");
     } catch (e) {
@@ -1037,6 +1106,46 @@ export function Postador() {
               {contentMode === "descricao" && (
                 <div className="space-y-4 pt-2 border-t border-gray-100">
                   <div>
+                    <span className="block text-sm font-medium text-gray-700 mb-2">Formato no Instagram *</span>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      {(
+                        [
+                          {
+                            id: "feed" as const,
+                            title: "Post feed",
+                            desc: "1 foto 4:5 no feed. Upload ou 1 imagem IA.",
+                          },
+                          {
+                            id: "carrossel" as const,
+                            title: "Carrossel",
+                            desc: "2–10 fotos que o usuário desliza no feed.",
+                          },
+                          {
+                            id: "reels" as const,
+                            title: "Reels",
+                            desc: "Vídeo vertical 9:16 (upload, slideshow ou IA).",
+                          },
+                        ] as const
+                      ).map((opt) => (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setFormatoPost(opt.id)}
+                          disabled={loading}
+                          className={`rounded-xl border-2 p-3 text-left transition-all ${
+                            formatoPost === opt.id
+                              ? "border-indigo-600 bg-indigo-50/50 ring-1 ring-indigo-600"
+                              : "border-gray-200 hover:border-gray-300 bg-gray-50/50"
+                          }`}
+                        >
+                          <span className="block font-semibold text-gray-900 text-sm">{opt.title}</span>
+                          <span className="mt-1 block text-xs text-gray-600">{opt.desc}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
                     <label htmlFor="descricao" className="block text-sm font-medium text-gray-700 mb-1">
                       Descrição do post *
                     </label>
@@ -1064,68 +1173,98 @@ export function Postador() {
                       Criar mídia com IA
                     </label>
                   </div>
+
+                  {formatoPost === "carrossel" && criarMidiaIA && (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Quantos slides gerar?</label>
+                      <select
+                        value={carrosselSlidesCount}
+                        onChange={(e) => setCarrosselSlidesCount(Number(e.target.value))}
+                        className="rounded-md border border-gray-300 px-3 py-2 text-sm w-full max-w-xs"
+                        disabled={loading}
+                      >
+                        {[3, 4, 5, 6, 7, 8].map((n) => (
+                          <option key={n} value={n}>
+                            {n} slides
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-1 text-xs text-gray-500">
+                        A IA planeja o roteiro e gera {carrosselSlidesCount} imagens (1 por slide). Tempo: ~1–3 min.
+                      </p>
+                    </div>
+                  )}
+
+                  {(formatoPost === "carrossel" || formatoPost === "feed") && (
+                    <div className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        id="aplicar-moldura"
+                        checked={aplicarMoldura}
+                        onChange={(e) => setAplicarMoldura(e.target.checked)}
+                        disabled={loading}
+                        className="mt-1 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <label htmlFor="aplicar-moldura" className="text-sm text-gray-700">
+                        <span className="font-medium">Aplicar moldura com texto</span>
+                        <span className="block text-xs text-gray-500 mt-0.5">
+                          Desligado por padrão — suas fotos ficam limpas. Ative só se quiser headline sobre a imagem (max ~42 caracteres).
+                        </span>
+                      </label>
+                    </div>
+                  )}
+
                   {criarMidiaIA && (
                     <div className="space-y-3 pl-1 border-l-2 border-indigo-100">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Tipo de mídia</label>
-                        <select
-                          value={tipoMidiaIA}
-                          onChange={(e) => setTipoMidiaIA(e.target.value as "imagem" | "video")}
-                          className="rounded-md border border-gray-300 px-3 py-2 text-sm w-full max-w-md"
-                        >
-                          <option value="imagem">Imagem (feed 4:5)</option>
-                          <option value="video">Vídeo Reels (9:16)</option>
-                        </select>
-                      </div>
-                      {tipoMidiaIA === "imagem" ? (
+                      {formatoPost === "feed" || formatoPost === "carrossel" ? (
                         <>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Provedor de imagem</label>
-                          <select
-                            value={provedorImagem}
-                            onChange={(e) => setProvedorImagem(e.target.value as "openai" | "gemini")}
-                            className="rounded-md border border-gray-300 px-3 py-2 text-sm w-full max-w-md"
-                          >
-                            <option value="gemini">Imagen 4 (Google)</option>
-                            <option value="openai">DALL·E / GPT Image (OpenAI)</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Estilo da imagem IA</label>
-                          <select
-                            value={modoImagemIA}
-                            onChange={(e) => setModoImagemIA(e.target.value as "criativo" | "produto")}
-                            className="rounded-md border border-gray-300 px-3 py-2 text-sm w-full max-w-md"
-                          >
-                            <option value="criativo">Criativo / mood (recomendado)</option>
-                            <option value="produto">Tentar recriar produto (não recomendado)</option>
-                          </select>
-                          <p className="mt-1 text-xs text-gray-500">
-                            {modoImagemIA === "criativo"
-                              ? "A IA gera arte editorial que remete ao produto (texturas, luz, ambiente). Para foto fiel do produto, envie a imagem abaixo em vez de gerar."
-                              : "A IA tentará desenhar o produto — em geral fica genérico. Prefira enviar a foto real do produto."}
-                          </p>
-                        </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Provedor de imagem</label>
+                            <select
+                              value={provedorImagem}
+                              onChange={(e) => setProvedorImagem(e.target.value as "openai" | "gemini")}
+                              className="rounded-md border border-gray-300 px-3 py-2 text-sm w-full max-w-md"
+                            >
+                              <option value="gemini">Imagen 4 (Google)</option>
+                              <option value="openai">DALL·E / GPT Image (OpenAI)</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Estilo da imagem IA</label>
+                            <select
+                              value={modoImagemIA}
+                              onChange={(e) => setModoImagemIA(e.target.value as "criativo" | "produto")}
+                              className="rounded-md border border-gray-300 px-3 py-2 text-sm w-full max-w-md"
+                            >
+                              <option value="criativo">Criativo / mood (recomendado)</option>
+                              <option value="produto">Tentar recriar produto (não recomendado)</option>
+                            </select>
+                            <p className="mt-1 text-xs text-gray-500">
+                              {modoImagemIA === "criativo"
+                                ? "Arte editorial. Para foto fiel do produto, envie a imagem em vez de gerar."
+                                : "A IA tentará desenhar o produto — prefira enviar a foto real."}
+                            </p>
+                          </div>
                         </>
                       ) : (
                         <>
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Provedor de vídeo (teste)</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Provedor de vídeo</label>
                             <select
                               value={provedorVideo}
                               onChange={(e) => setProvedorVideo(e.target.value as "slideshow" | "veo" | "sora")}
                               className="rounded-md border border-gray-300 px-3 py-2 text-sm w-full max-w-md"
                             >
-                              <option value="slideshow">Slideshow ffmpeg (~US$ 0,02)</option>
+                              <option value="slideshow">Slideshow a partir de fotos (~US$ 0,02)</option>
                               <option value="veo">Veo Google (~US$ 0,40/8s)</option>
                               <option value="sora">Sora 2 OpenAI (~US$ 0,80/8s)</option>
                             </select>
                             <p className="mt-1 text-xs text-gray-500">
                               {provedorVideo === "slideshow"
-                                ? "Usa imagens enviadas ou gera 1 foto Imagen automaticamente."
+                                ? "Monta vídeo 9:16 com suas fotos ou 1 imagem gerada — imagem inteira visível (sem cortar)."
                                 : provedorVideo === "veo"
-                                  ? "Texto → vídeo. Pode levar 1–3 min (GEMINI_API_KEY)."
-                                  : "Texto → vídeo com áudio. Pode levar 2–5 min (OPENAI_API_KEY)."}
+                                  ? "Texto → vídeo. Pode levar 1–3 min."
+                                  : "Texto → vídeo com áudio. Pode levar 2–5 min."}
                             </p>
                           </div>
                           <div>
@@ -1171,32 +1310,29 @@ export function Postador() {
                                 clipDurationSec={duracaoVideo}
                                 disabled={loading}
                               />
-                              <p className="mt-1 text-xs text-gray-500">
-                                Músicas royalty-free (Mixkit). Volume balanceado para Reels.
-                              </p>
                             </div>
                           )}
                         </>
                       )}
                       <div>
                         <label htmlFor="instrucoes" className="block text-sm font-medium text-gray-700 mb-1">
-                          {tipoMidiaIA === "video" ? "Brief do vídeo" : "Mood visual"} (opcional)
+                          {formatoPost === "reels" ? "Brief do vídeo" : "Mood visual"} (opcional)
                         </label>
                         <textarea
                           id="instrucoes"
                           rows={2}
                           className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                           placeholder={
-                            tipoMidiaIA === "video"
-                              ? "Ex.: transição suave, luz dourada, movimento de câmera lento"
-                              : "Ex.: mel dourado, cabelo sedoso, luz spa — ou deixe vazio para inferir da descrição"
+                            formatoPost === "reels"
+                              ? "Ex.: transição suave, luz dourada, movimento lento"
+                              : "Ex.: mel dourado, luz spa — ou deixe vazio para inferir da descrição"
                           }
                           value={instrucoesImagem}
                           onChange={(e) => setInstrucoesImagem(e.target.value)}
                           disabled={loading}
                         />
                       </div>
-                      {tipoMidiaIA === "video" && (
+                      {formatoPost === "reels" && (
                         <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5">
                           Geração de vídeo é lenta (até 5 min). Não feche a página.
                         </p>
@@ -1207,14 +1343,18 @@ export function Postador() {
                   {!criarMidiaIA && (
                     <div>
                       <label htmlFor="arquivo" className="block text-sm font-medium text-gray-700 mb-1">
-                        Imagem(ns) ou vídeo (recomendado para foto real do produto)
+                        {formatoPost === "carrossel"
+                          ? "Imagens do carrossel (2–10 fotos)"
+                          : formatoPost === "reels"
+                            ? "Vídeo Reels ou fotos para slideshow"
+                            : "Imagem do post (1 foto)"}
                       </label>
                       <input
                         id="arquivo"
                         ref={fileInputRef}
                         type="file"
                         accept="image/*,video/*"
-                        multiple
+                        multiple={formatoPost !== "feed"}
                         className="block w-full text-sm text-gray-600 file:mr-4 file:rounded-md file:border-0 file:bg-indigo-50 file:px-4 file:py-2 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100"
                         onChange={(e) => setArquivos(Array.from(e.target.files ?? []))}
                         disabled={loading}
@@ -1224,13 +1364,18 @@ export function Postador() {
                           {arquivos.length} arquivo(s): {arquivos.map((f) => f.name).join(", ")}
                         </p>
                       )}
+                      {formatoPost === "reels" && arquivos.some((f) => f.type.startsWith("image/")) && (
+                        <p className="mt-1 text-xs text-gray-500">
+                          Fotos enviadas serão montadas em slideshow vertical (9:16) com trilha opcional na revisão.
+                        </p>
+                      )}
                     </div>
                   )}
 
-                  {criarMidiaIA && (
+                  {aplicarMoldura && (formatoPost === "carrossel" || formatoPost === "feed") && (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Estilo visual {isCarrosselTemplate && tipoMidiaIA === "imagem" ? "dos slides" : "da moldura"}
+                        Estilo da moldura {formatoPost === "carrossel" ? "dos slides" : ""}
                       </label>
                       <select
                         value={slideTemplate}
@@ -1246,7 +1391,7 @@ export function Postador() {
                               { id: "magazine" as const, label: "Magazine", descricao: "publicitário" },
                               { id: "bold" as const, label: "Bold block", descricao: "alto contraste" },
                               { id: "glass" as const, label: "Glass card", descricao: "moderno" },
-                              { id: "split" as const, label: "Split", descricao: "metade painel" },
+                              { id: "split" as const, label: "Split", descricao: "painel inferior" },
                               { id: "numerado" as const, label: "Numerado", descricao: "badge 1/N" },
                               { id: "minimal" as const, label: "Minimal", descricao: "só headline" },
                             ]
@@ -1262,9 +1407,11 @@ export function Postador() {
                     </div>
                   )}
 
-                  {isCarrosselTemplate && criarMidiaIA && tipoMidiaIA === "imagem" && (
+                  {formatoPost === "carrossel" && criarMidiaIA && (
                     <p className="text-xs text-indigo-800 bg-indigo-50 border border-indigo-200 rounded-md px-3 py-2">
-                      Template de carrossel ({templateSelecionado?.slides} slides): a IA planeja roteiro visual + gera cada slide em modo criativo + aplica moldura com headline. Legenda curta vem pronta na revisão. Tempo estimado: 1–3 min.
+                      Carrossel com IA: roteiro + {carrosselSlidesCount} imagens geradas
+                      {aplicarMoldura ? " + moldura com headline em cada slide" : " (sem moldura — você pode aplicar texto na revisão)"}.
+                      Legenda curta pronta na revisão.
                     </p>
                   )}
 
@@ -1275,14 +1422,16 @@ export function Postador() {
                     className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:pointer-events-none"
                   >
                     {loading
-                      ? isCarrosselTemplate && criarMidiaIA && tipoMidiaIA === "imagem"
-                        ? `Gerando carrossel (${templateSelecionado?.slides ?? "…"} slides)...`
-                        : tipoMidiaIA === "video" && criarMidiaIA
-                          ? "Gerando vídeo (pode levar alguns minutos)..."
+                      ? formatoPost === "carrossel" && criarMidiaIA
+                        ? `Gerando carrossel (${carrosselSlidesCount} slides)...`
+                        : formatoPost === "reels" && criarMidiaIA
+                          ? "Gerando Reels (pode levar alguns minutos)..."
                           : "Gerando..."
-                      : isCarrosselTemplate && criarMidiaIA && tipoMidiaIA === "imagem"
-                        ? "Gerar carrossel com IA e revisar"
-                        : "Gerar legenda e seguir para revisão"}
+                      : formatoPost === "carrossel" && criarMidiaIA
+                        ? `Gerar carrossel (${carrosselSlidesCount} slides) com IA`
+                        : formatoPost === "reels" && criarMidiaIA
+                          ? "Gerar Reels com IA"
+                          : "Gerar legenda e seguir para revisão"}
                   </button>
                 </div>
               )}
@@ -1378,7 +1527,20 @@ export function Postador() {
           </div>
 
           <div>
-            <span className="block text-sm font-medium text-gray-700 mb-1">Mídia do post</span>
+            <div className="flex flex-wrap items-center gap-2 mb-2">
+              <span className="block text-sm font-medium text-gray-700">Mídia do post</span>
+              <span
+                className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                  mediaType === "CAROUSEL"
+                    ? "bg-indigo-100 text-indigo-800"
+                    : mediaType === "REELS"
+                      ? "bg-violet-100 text-violet-800"
+                      : "bg-gray-100 text-gray-800"
+                }`}
+              >
+                {mediaType === "CAROUSEL" ? "Carrossel (feed)" : mediaType === "REELS" ? "Reels" : "Post feed"}
+              </span>
+            </div>
             {mediaType === "REELS" && previewUrls[0] && (
               <video
                 src={previewUrls[0]}
@@ -1399,7 +1561,7 @@ export function Postador() {
                 Custo estimado deste carrossel: ~US$ {ultimoCustoPost.toFixed(2)} ({previewUrls.length} slides)
               </p>
             )}
-            {previewUrls.length > 1 && (
+            {previewUrls.length > 1 && mediaType === "CAROUSEL" && (
               <>
                 <div className="flex gap-2 flex-wrap">
                   {previewUrls.map((url, i) => (
@@ -1407,11 +1569,9 @@ export function Postador() {
                   ))}
                 </div>
                 <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  <p className="text-sm font-medium text-gray-700 mb-2">Textos do carrossel</p>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Textos do carrossel (opcional)</p>
                   <p className="text-xs text-gray-500 mb-4">
-                    {ultimoCustoPost != null
-                      ? "Headlines já aplicadas na moldura. Edite abaixo e clique em reaplicar se quiser ajustar."
-                      : "Adicione títulos atrativos para as imagens. O sistema aplicará um design profissional automaticamente."}
+                    Suas fotos ficam limpas por padrão. Se quiser headline sobre a imagem, digite até 42 caracteres e clique em «Aplicar texto».
                   </p>
                   <div className="space-y-2 mb-2">
                     {previewUrls.map((_, i) => (
@@ -1419,13 +1579,14 @@ export function Postador() {
                         <span className="text-sm text-gray-500 w-8">#{i + 1}</span>
                         <input
                           type="text"
+                          maxLength={42}
                           value={textosCarrossel[i] ?? ""}
                           onChange={(e) => setTextosCarrossel((prev) => {
                             const next = [...prev];
                             next[i] = e.target.value;
                             return next;
                           })}
-                          placeholder={`Texto da imagem ${i + 1}`}
+                          placeholder={`Headline slide ${i + 1} (max 42)`}
                           className="flex-1 rounded-md border border-gray-300 px-2 py-1.5 text-sm"
                           disabled={loading}
                         />
@@ -1455,43 +1616,48 @@ export function Postador() {
                   >
                     {loading ? "Aplicando..." : "Aplicar texto nas imagens"}
                   </button>
-                  <div className="mt-3 flex flex-wrap items-end gap-2">
-                    <div className="flex-1 min-w-[180px]">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Trilha do Reels</label>
-                      <select
-                        value={musicTrackId}
-                        onChange={(e) => setMusicTrackId(e.target.value)}
-                        className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
-                        disabled={loading}
+                  <details className="mt-4 rounded-md border border-violet-200 bg-violet-50/50 p-3">
+                    <summary className="text-sm font-medium text-violet-900 cursor-pointer select-none">
+                      Opcional: também criar um Reels (vídeo separado)
+                    </summary>
+                    <p className="mt-2 text-xs text-violet-800">
+                      Isso gera um vídeo 9:16 extra — não substitui o carrossel no feed. A imagem inteira aparece (sem cortar a moldura).
+                    </p>
+                    <div className="mt-3 flex flex-wrap items-end gap-2">
+                      <div className="flex-1 min-w-[180px]">
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Trilha do Reels</label>
+                        <select
+                          value={musicTrackId}
+                          onChange={(e) => setMusicTrackId(e.target.value)}
+                          className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm"
+                          disabled={loading}
+                        >
+                          <option value="none">Sem música</option>
+                          {musicTracks.map((t) => (
+                            <option key={t.id} value={t.id}>
+                              {t.label} — {t.mood}
+                            </option>
+                          ))}
+                        </select>
+                        <MusicTrimPanel
+                          musicTrackId={musicTrackId}
+                          musicTracks={musicTracks}
+                          musicStartSec={musicStartSec}
+                          setMusicStartSec={setMusicStartSec}
+                          clipDurationSec={8}
+                          disabled={loading}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleCarrosselParaReels}
+                        disabled={loading || previewUrls.length < 2}
+                        className="px-3 py-1.5 text-sm font-medium rounded-md text-violet-800 bg-violet-50 hover:bg-violet-100 border border-violet-200 disabled:opacity-50"
                       >
-                        <option value="none">Sem música</option>
-                        {musicTracks.map((t) => (
-                          <option key={t.id} value={t.id}>
-                            {t.label} — {t.mood}
-                          </option>
-                        ))}
-                      </select>
-                      <MusicTrimPanel
-                        musicTrackId={musicTrackId}
-                        musicTracks={musicTracks}
-                        musicStartSec={musicStartSec}
-                        setMusicStartSec={setMusicStartSec}
-                        clipDurationSec={8}
-                        disabled={loading}
-                      />
+                        {loading ? "Gerando..." : "Gerar Reels 8s"}
+                      </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={handleCarrosselParaReels}
-                      disabled={loading || previewUrls.length < 2}
-                      className="px-3 py-1.5 text-sm font-medium rounded-md text-violet-800 bg-violet-50 hover:bg-violet-100 border border-violet-200 disabled:opacity-50"
-                    >
-                      {loading ? "Gerando..." : "Gerar Reels 8s"}
-                    </button>
-                  </div>
-                  <p className="mt-2 text-xs text-gray-500">
-                    Transforma os slides em vídeo vertical 9:16 com transições + trilha royalty-free (~US$ 0,02).
-                  </p>
+                  </details>
                 </div>
               </>
             )}

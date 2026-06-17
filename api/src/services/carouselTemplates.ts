@@ -44,6 +44,14 @@ function escapeXml(t: string): string {
     .replace(/'/g, "&apos;");
 }
 
+/** Limita headline para não estourar a moldura (max ~2 linhas curtas). */
+export function sanitizeOverlayText(text: string, maxChars = 42): string {
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  if (cleaned.length <= maxChars) return cleaned;
+  const cut = cleaned.slice(0, maxChars - 1).replace(/\s+\S*$/, "");
+  return `${cut}…`;
+}
+
 function wrapText(text: string, maxChars: number): string[] {
   const words = text.split(" ");
   const lines: string[] = [];
@@ -62,19 +70,19 @@ function wrapText(text: string, maxChars: number): string[] {
 
 export function capaFontSize(text: string, tpl: PostadorSlideTemplate, slideIndex: number): number {
   if (tpl === "capa" && slideIndex === 0) {
-    if (text.length > 50) return 40;
-    if (text.length > 30) return 46;
-    return 52;
+    if (text.length > 40) return 32;
+    if (text.length > 28) return 36;
+    return 40;
   }
   if (tpl === "bold" || tpl === "split") {
-    if (text.length > 50) return 38;
-    if (text.length > 30) return 44;
-    return 48;
+    if (text.length > 40) return 30;
+    if (text.length > 28) return 34;
+    return 38;
   }
   if (tpl === "editorial" || tpl === "magazine") {
-    if (text.length > 50) return 36;
-    if (text.length > 30) return 42;
-    return 46;
+    if (text.length > 40) return 28;
+    if (text.length > 28) return 32;
+    return 36;
   }
   return 0;
 }
@@ -100,32 +108,32 @@ function resolveTextLayout(
   panelH: number
 ): TextLayout {
   const capaFs = capaFontSize(text, tpl, slideIndex);
-  let fontSize = capaFs || 48;
+  let fontSize = capaFs || 36;
   const maxChars =
     tpl === "editorial" || tpl === "magazine"
-      ? text.length > 60
+      ? text.length > 36
+        ? 16
+        : text.length > 22
+          ? 18
+          : 22
+      : text.length > 36
         ? 18
-        : text.length > 30
-          ? 22
-          : 26
-      : text.length > 60
-        ? 22
-        : text.length > 30
-          ? 24
-          : 26;
+        : text.length > 22
+          ? 20
+          : 24;
 
   if (!capaFs) {
-    if (text.length > 50) fontSize = 42;
-    if (text.length > 80) fontSize = 34;
+    if (text.length > 36) fontSize = 32;
+    if (text.length > 42) fontSize = 28;
   }
 
-  const lines = wrapText(text, maxChars).slice(0, 3);
-  if (lines.length === 3 && wrapText(text, maxChars).length > 3) {
-    lines[2] = lines[2].replace(/\s+\S*$/, "…");
+  const lines = wrapText(text, maxChars).slice(0, 2);
+  if (lines.length === 2 && wrapText(text, maxChars).length > 2) {
+    lines[1] = lines[1].replace(/\s+\S*$/, "…");
   }
 
-  const lineH = fontSize * 1.35;
-  const panelPad = capaFs ? 72 : tpl === "glass" ? 48 : 56;
+  const lineH = fontSize * 1.28;
+  const panelPad = capaFs ? 56 : tpl === "glass" ? 40 : 44;
   const textBlockH = lines.length * lineH;
   const startY = panelY + panelPad / 2 + fontSize * 0.55;
 
@@ -190,7 +198,7 @@ function buildPanelLayers(
   const idx = slideIndex + 1;
 
   if (tpl === "split") {
-    const splitY = Math.round(H * 0.52);
+    const splitY = Math.round(H * 0.72);
     const panelH = H - splitY;
     return {
       panelY: splitY,
@@ -202,7 +210,7 @@ function buildPanelLayers(
   }
 
   if (tpl === "bold") {
-    const panelH = Math.round(H * 0.38);
+    const panelH = Math.round(H * 0.26);
     const panelY = H - panelH;
     return {
       panelY,
@@ -214,7 +222,7 @@ function buildPanelLayers(
   }
 
   if (tpl === "glass") {
-    const panelH = Math.round(H * 0.28);
+    const panelH = Math.round(H * 0.22);
     const panelY = H - panelH - 48;
     const padX = Math.round(W * 0.06);
     return {
@@ -229,7 +237,7 @@ function buildPanelLayers(
 
   if (tpl === "magazine") {
     const sidebarW = Math.round(W * 0.28);
-    const panelH = Math.round(H * 0.32);
+    const panelH = Math.round(H * 0.24);
     const panelY = H - panelH;
     return {
       panelY,
@@ -242,7 +250,7 @@ function buildPanelLayers(
   }
 
   if (tpl === "editorial") {
-    const panelH = Math.round(H * 0.34);
+    const panelH = Math.round(H * 0.26);
     const panelY = H - panelH;
     return {
       panelY,
@@ -256,8 +264,8 @@ function buildPanelLayers(
 
   // minimal | numerado | capa
   const capaFs = tpl === "capa" && slideIndex === 0;
-  const panelPad = capaFs ? 72 : 56;
-  const panelH = Math.round(H * 0.22) + panelPad;
+  const panelPad = capaFs ? 52 : 44;
+  const panelH = Math.round(H * 0.18) + panelPad;
   const panelY = capaFs ? H - panelH - 24 : H - panelH;
 
   let extras = "";
@@ -307,9 +315,10 @@ export function buildCarouselOverlaySvg(
   const slideIndex = opts.slideIndex ?? 0;
   const total = opts.totalSlides ?? 1;
   const idx = slideIndex + 1;
+  const safeText = sanitizeOverlayText(text);
 
   const { panelY, panelH, layers } = buildPanelLayers(W, H, style, tpl, slideIndex);
-  const layout = resolveTextLayout(W, H, text, tpl, slideIndex, panelY, panelH);
+  const layout = resolveTextLayout(W, H, safeText, tpl, slideIndex, panelY, panelH);
   const badge = buildBadge(W, style, tpl, idx, total);
   const textSvg = buildTextSvg(layout);
 

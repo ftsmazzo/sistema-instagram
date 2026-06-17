@@ -52,7 +52,15 @@ async function downloadBuffer(url: string, kind: string): Promise<Buffer> {
 }
 
 function scaleCropFilter(index: number, fps: number): string {
-  return `[${index}:v]scale=${REELS_W}:${REELS_H}:force_original_aspect_ratio=increase,crop=${REELS_W}:${REELS_H},setsar=1,fps=${fps},format=yuv420p[v${index}]`;
+  const bg = `bg${index}`;
+  const fg = `fg${index}`;
+  const out = `v${index}`;
+  return [
+    `[${index}:v]split=2[${bg}][${fg}]`,
+    `[${bg}]scale=${REELS_W}:${REELS_H}:force_original_aspect_ratio=increase,crop=${REELS_W}:${REELS_H},boxblur=20:5[${bg}b]`,
+    `[${fg}]scale=${REELS_W}:${REELS_H}:force_original_aspect_ratio=decrease[${fg}s]`,
+    `[${bg}b][${fg}s]overlay=(W-w)/2:(H-h)/2,setsar=1,fps=${fps},format=yuv420p[${out}]`,
+  ].join(";");
 }
 
 function fadeFilter(label: string, duration: number, fadeSec: number, isFirst: boolean, isLast: boolean): string {
@@ -107,10 +115,12 @@ export async function gerarSlideshowReels(
 
     if (n === 1) {
       const vf = [
-        `scale=${REELS_W}:${REELS_H}:force_original_aspect_ratio=increase`,
-        `crop=${REELS_W}:${REELS_H}`,
-        `zoompan=z='min(zoom+0.0012,1.25)':d=${durationSeconds * fps}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${REELS_W}x${REELS_H}:fps=${fps}`,
-      ].join(",");
+        "split=2[bg][fg]",
+        `[bg]scale=${REELS_W}:${REELS_H}:force_original_aspect_ratio=increase,crop=${REELS_W}:${REELS_H},boxblur=20:5[bgb]`,
+        `[fg]scale=${REELS_W}:${REELS_H}:force_original_aspect_ratio=decrease[fgs]`,
+        "[bgb][fgs]overlay=(W-w)/2:(H-h)/2[lb]",
+        `zoompan=z='min(zoom+0.0010,1.12)':d=${durationSeconds * fps}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=${REELS_W}x${REELS_H}:fps=${fps}`,
+      ].join(";");
 
       if (musicPath && track) {
         await execFileAsync("ffmpeg", [

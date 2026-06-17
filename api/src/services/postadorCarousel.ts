@@ -36,6 +36,7 @@ export async function gerarCarrosselCompleto(args: {
   brief: string;
   provider?: ImageGenProvider;
   aplicarMoldura?: boolean;
+  slides_count?: number;
   slide_template?: PostadorSlideTemplate;
   brandKit?: PostadorBrandKit | null;
   options?: GerarCaptionOptions;
@@ -44,7 +45,7 @@ export async function gerarCarrosselCompleto(args: {
   if (!brief) throw new Error("Brief vazio — informe a descrição do post.");
 
   const provider: ImageGenProvider = args.provider === "openai" ? "openai" : "gemini";
-  const aplicarMoldura = args.aplicarMoldura !== false;
+  const aplicarMoldura = args.aplicarMoldura === true;
   const slideTemplate = args.slide_template ?? "capa";
   const ctx = resolveCaptionContext({
     nicheId: args.options?.nicheId,
@@ -54,26 +55,44 @@ export async function gerarCarrosselCompleto(args: {
     brandKit: args.brandKit ?? args.options?.brandKit ?? undefined,
   });
 
-  if (ctx.template.formato !== "carrossel" || ctx.template.slides < 2) {
-    throw new Error("O template selecionado não é um carrossel multi-slide. Escolha um template de carrossel no passo Nicho.");
+  const requested =
+    args.slides_count != null && args.slides_count >= 2
+      ? Math.min(10, Math.max(2, Math.round(args.slides_count)))
+      : null;
+  let targetSlides: number;
+  if (requested != null) {
+    targetSlides = requested;
+  } else if (ctx.template.formato === "carrossel" && ctx.template.slides >= 2) {
+    targetSlides = ctx.template.slides;
+  } else {
+    throw new Error("Informe quantos slides (2–10) ou escolha um template de carrossel no nicho.");
   }
 
-  const ingredientes = await gerarIngredientesCarrossel(brief, { ...args.options, brandKit: ctx.brandKit });
+  const effectiveCtx = {
+    ...ctx,
+    template: { ...ctx.template, formato: "carrossel" as const, slides: targetSlides },
+  };
+
+  const ingredientes = await gerarIngredientesCarrossel(brief, {
+    ...args.options,
+    brandKit: effectiveCtx.brandKit,
+    slidesCount: targetSlides,
+  });
   const slides = ingredientes.slides ?? [];
   if (slides.length < 2) {
     throw new Error("A IA não retornou slides suficientes para o carrossel.");
   }
 
-  const total = Math.min(slides.length, ctx.template.slides);
+  const total = Math.min(slides.length, targetSlides);
   const slidePlan = slides.slice(0, total);
   const slideTexts = slidePlan.map((s) => s.titulo.trim());
   const imageUrls: string[] = [];
 
   for (let i = 0; i < slidePlan.length; i++) {
-    const slideBrief = buildCarouselSlideBrief(slidePlan[i], i, total, ctx);
+    const slideBrief = buildCarouselSlideBrief(slidePlan[i], i, total, effectiveCtx);
     let imgPrompt = slideBrief;
     try {
-      imgPrompt = await enriquecerPromptImagem(slideBrief, ctx, args.options);
+      imgPrompt = await enriquecerPromptImagem(slideBrief, effectiveCtx, args.options);
     } catch {
       /* fallback */
     }
@@ -84,9 +103,11 @@ export async function gerarCarrosselCompleto(args: {
   let finalUrls = imageUrls;
   let overlayApplied = false;
   if (aplicarMoldura && slideTexts.some((t) => t.length > 0)) {
-    const style = overlayStyleFromContext(ctx);
+    const style = overlayStyleFromContext(effectiveCtx);
     const logoUrl =
-      ctx.brandKit?.usar_logo_em_posts && ctx.brandKit.logo_url ? ctx.brandKit.logo_url : undefined;
+      effectiveCtx.brandKit?.usar_logo_em_posts && effectiveCtx.brandKit.logo_url
+        ? effectiveCtx.brandKit.logo_url
+        : undefined;
     finalUrls = await adicionarTextoCarrossel(imageUrls, slideTexts, style, {
       slideTemplate,
       logoUrl,
@@ -94,7 +115,7 @@ export async function gerarCarrosselCompleto(args: {
     overlayApplied = true;
   }
 
-  const caption = montarCaptionDeIngredientes(ingredientes, ctx);
+  const caption = montarCaptionDeIngredientes(ingredientes, effectiveCtx);
   const custo =
     slidePlan.length * custoPorSlide(provider) +
     POSTADOR_CUSTO_ESTIMADO_USD.legenda_gpt41 +

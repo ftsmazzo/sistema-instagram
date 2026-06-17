@@ -262,6 +262,7 @@ export type PostadorNicheParams = {
   slide_template?: PostadorSlideTemplateId;
   music_id?: string;
   music_start_sec?: number;
+  slides_count?: number;
 };
 
 export type PostadorNicheTemplateRes = {
@@ -445,6 +446,7 @@ export const api = {
       brief: string;
       provider?: "openai" | "gemini";
       aplicar_moldura?: boolean;
+      slides_count?: number;
     } & PostadorNicheParams) =>
       fetchJson<{
         media_type: "CAROUSEL";
