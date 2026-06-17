@@ -43,15 +43,18 @@ type FetchOptions = Omit<RequestInit, "body"> & { body?: Record<string, unknown>
 async function fetchJson<T>(path: string, options?: FetchOptions): Promise<T> {
   const { body, ...init } = options ?? {};
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     ...(init.headers as Record<string, string>),
   };
   const t = getAuthToken();
   if (t) headers["Authorization"] = `Bearer ${t}`;
+  const payload = body !== undefined ? JSON.stringify(body) : undefined;
+  if (payload !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
   const res = await fetch(`${base}${path}`, {
     ...init,
     headers,
-    body: body !== undefined ? JSON.stringify(body) : undefined,
+    body: payload,
   });
   if (!res.ok) {
     const errBody = await res.json().catch(() => ({}));
