@@ -17,9 +17,15 @@ const quickLinks = [
     accent: "from-violet-500 to-indigo-600",
   },
   {
+    to: "/agentes",
+    title: "Agentes Instagram",
+    desc: "Conta comercial, tokens Graph API e prompts de comentário e Direct.",
+    accent: "from-indigo-500 to-violet-600",
+  },
+  {
     to: "/admin",
-    title: "Administração",
-    desc: "Conta Instagram, perfil da empresa, prompts e critérios de qualificação.",
+    title: "Empresa",
+    desc: "Perfil da marca, qualificação de leads, agenda e link comercial.",
     accent: "from-amber-500 to-orange-600",
   },
   {

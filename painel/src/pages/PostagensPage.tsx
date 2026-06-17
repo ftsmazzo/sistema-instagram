@@ -142,8 +142,8 @@ export function PostagensPage() {
       {semConta && (
         <div className="alert-warn mb-6 text-sm">
           Nenhuma conta Instagram cadastrada.{" "}
-          <Link to="/admin" className="font-semibold text-amber-900 underline">
-            Configure em Administração
+          <Link to="/agentes" className="font-semibold text-amber-900 underline">
+            Agentes Instagram
           </Link>{" "}
           (token + ig_user_id) antes de sincronizar.
         </div>
