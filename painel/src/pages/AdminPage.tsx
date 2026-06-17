@@ -149,7 +149,7 @@ export function AdminPage() {
 
           <ConfigSectionCard
             title="Qualificação de leads"
-            description="Escolha um modelo, marque o que importa e salve — o agente qualifica com conversa humana até o WhatsApp."
+            description="Escolha um modelo, marque o que importa e salve — Direct inicia; WhatsApp qualifica a fundo e fecha."
             editing={editingSection === "qualificacao"}
             onEdit={() => startEdit("qualificacao")}
             onCancel={cancelEdit}
