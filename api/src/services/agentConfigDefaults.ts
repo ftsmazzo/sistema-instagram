@@ -1,5 +1,4 @@
 import type { EmpresaPerfil } from "../store/config.js";
-import { formatCriteriosForPrompt } from "./empresaConfigHelpers.js";
 import { buildQualificacaoPromptBlock } from "./qualificacaoPlaybooks.js";
 
 export const AGENT_GRAPH_API_VERSION = (process.env.AGENT_GRAPH_API_VERSION ?? "v24.0").replace(/^v?/, "v");
@@ -79,19 +78,15 @@ export function buildDefaultPromptComentarios(empresa: EmpresaPerfil, agentNome:
 }
 
 export function buildDefaultPromptDirect(empresa: EmpresaPerfil, agentNome: string): string {
-  const { marca, segmento, cidade, tom, sobre, objetivo } = empresaContexto(empresa, agentNome);
+  const { marca, segmento, cidade, tom, sobre } = empresaContexto(empresa, agentNome);
   const tomFinal = tom || "consultivo, empático e persuasivo — vendedor de confiança, nunca robô de script";
-  const meta = objetivo || "qualificar o lead (necessidade, urgência, perfil) e obter nome + WhatsApp com naturalidade";
-  const criteriosBloco = formatCriteriosForPrompt(empresa.criterios_qualificacao);
-  const conversaoBloco = buildQualificacaoPromptBlock(empresa);
+  const conversaoBloco = buildQualificacaoPromptBlock(empresa, "direct");
   const linhas = [
     `Você é ${agentNome} da ${marca}, atendendo leads no Instagram Direct.`,
     segmento ? `Segmento: ${segmento}.` : "",
     cidade ? `Região: ${cidade}.` : "",
     sobre ? `Sobre a empresa: ${sobre}` : "",
     `Tom: ${tomFinal}.`,
-    `Meta de qualificação: ${meta}.`,
-    criteriosBloco ? `\nCritérios a confirmar na conversa:\n${criteriosBloco}` : "",
     "",
     conversaoBloco,
     "",

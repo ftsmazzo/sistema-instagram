@@ -1,6 +1,6 @@
 /**
  * Playbooks de qualificação — configuram Empresa em poucos cliques.
- * Os campos preenchidos alimentam buildDefaultPromptDirect/Comentarios.
+ * Os campos preenchidos alimentam buildDefaultPromptDirect e buildDefaultPromptWhatsapp.
  */
 
 import {
@@ -344,15 +344,20 @@ export function listPlaybooksForApi(segmento?: string) {
   };
 }
 
-/** Bloco extra para o prompt Direct — conversão humana. */
-export function buildQualificacaoPromptBlock(empresa: {
-  objetivo_qualificacao?: string;
-  criterios_qualificacao?: string;
-  link_produto_servico?: string;
-  handoff_whatsapp?: string;
-  agenda_config?: AgendaConfig;
-  agenda_local?: string;
-}): string {
+export type QualificacaoCanal = "direct" | "whatsapp";
+
+/** Bloco compartilhado de conversão — Direct (ponte) e WhatsApp (qualificação profunda). */
+export function buildQualificacaoPromptBlock(
+  empresa: {
+    objetivo_qualificacao?: string;
+    criterios_qualificacao?: string;
+    link_produto_servico?: string;
+    handoff_whatsapp?: string;
+    agenda_config?: AgendaConfig;
+    agenda_local?: string;
+  },
+  canal: QualificacaoCanal = "direct"
+): string {
   const objetivo = (empresa.objetivo_qualificacao ?? "").trim();
   const criterios = formatCriteriosForPrompt(empresa.criterios_qualificacao);
   const link = (empresa.link_produto_servico ?? "").trim();
@@ -360,19 +365,58 @@ export function buildQualificacaoPromptBlock(empresa: {
   const agenda = formatAgendaForPrompt(parseAgendaConfig(empresa.agenda_config));
   const local = (empresa.agenda_local ?? "").trim();
 
-  const linhas = [
-    "CONVERSÃO (o que gera resultado):",
-    objetivo ? `- Meta: ${objetivo}` : "- Meta: qualificar com naturalidade e levar ao WhatsApp.",
-    criterios
-      ? `- Lead pronto para WhatsApp quando confirmar na conversa:\n${criterios}`
-      : "- Lead pronto quando tiver nome, interesse claro e WhatsApp.",
-    "- Descubra cada critério em mensagens separadas, com comentário sobre o que o lead disse.",
-    "- Não pareça formulário — uma pergunta por vez, tom de conversa.",
-    "- Ao ter WhatsApp novo: confirme em 1 frase, use enviar_whatsapp e pos_boas_vindas_wa.",
+  const regrasHumanas = [
+    "- Descubra cada critério em mensagens separadas, comentando o que o lead disse.",
+    "- Não pareça formulário — uma pergunta por vez, tom de conversa real.",
+    "- Não invente preço, prazo ou condição que não esteja no contexto.",
   ];
-  if (link) linhas.push(`- Link (só após interesse real): ${link}`);
-  if (handoff) linhas.push(`- Consultor humano (alerta após qualificar): WhatsApp ${handoff}`);
-  if (local) linhas.push(`- Local padrão de compromisso: ${local}`);
-  linhas.push(`- Agenda disponível: ${agenda}`);
+
+  if (canal === "whatsapp") {
+    const linhas = [
+      "CONVERSÃO E QUALIFICAÇÃO (canal principal — onde fecha o negócio):",
+      objetivo
+        ? `- Meta: ${objetivo}`
+        : "- Meta: qualificar a fundo e fechar com link, agenda ou consultor humano.",
+      criterios
+        ? `- Critérios a confirmar neste canal (mesmos do playbook Empresa):\n${criterios}`
+        : "- Critérios: necessidade clara, perfil, urgência e próximo passo definido.",
+      "- Qualificação pesada acontece AQUI: retome o Direct e complete o que faltou.",
+      ...regrasHumanas,
+      "- Só avance (link, agenda ou humano) com critérios claros OU pedido explícito do lead.",
+      "- NUNCA envie link na 1ª mensagem proativa nem em respostas vagas (ok, obrigado).",
+    ];
+    if (link) {
+      linhas.push(
+        `- Link (após qualificação): use enviar_link_produto — ${link}. A ferramenta envia a URL; não repita o link na resposta.`
+      );
+    } else {
+      linhas.push("- Link: use enviar_link_produto só quando o lead pedir ou após qualificação.");
+    }
+    if (handoff) {
+      linhas.push(`- Consultor humano: qualificar_acionar_humano após qualificar — alerta ${handoff}.`);
+    } else {
+      linhas.push("- Consultor humano: qualificar_acionar_humano quando qualificado ou pedir atendente.");
+    }
+    if (local) linhas.push(`- Local padrão de compromisso: ${local} — cite na confirmação.`);
+    linhas.push(`- Agenda disponível: ${agenda} — use agendar_compromisso com dia_semana + horario.`);
+    return linhas.join("\n");
+  }
+
+  const linhas = [
+    "CONVERSÃO (ponte para o WhatsApp):",
+    objetivo
+      ? `- Meta: ${objetivo}`
+      : "- Meta: conectar, iniciar descoberta e levar ao WhatsApp com naturalidade.",
+    criterios
+      ? `- Critérios do playbook (inicie no Direct; aprofunde no WhatsApp):\n${criterios}`
+      : "- Inicie: nome, interesse claro e WhatsApp — detalhes fecham no Zap.",
+    "- No Direct: conexão + descoberta inicial. Não precisa fechar todos os critérios aqui.",
+    ...regrasHumanas,
+    "- Ao receber WhatsApp novo: confirme em 1 frase, use enviar_whatsapp e pos_boas_vindas_wa.",
+  ];
+  if (link) linhas.push(`- Link configurado (enviar só no WhatsApp após qualificar): ${link}`);
+  if (handoff) linhas.push(`- Consultor humano (acionar no WhatsApp após qualificar): ${handoff}`);
+  if (local) linhas.push(`- Local de compromisso (combinar no WhatsApp): ${local}`);
+  linhas.push(`- Agenda (fechar no WhatsApp): ${agenda}`);
   return linhas.join("\n");
 }
