@@ -267,6 +267,60 @@ export type LeadListItemRes = {
   whatsapp_boas_vindas_em: string | null;
   created_at: string;
   updated_at: string;
+  crm_notas: string | null;
+  proximo_followup_em: string | null;
+};
+
+export type PipelineMetricsRes = {
+  ok: boolean;
+  ai_disponivel: boolean;
+  period_days: number;
+  taxa_comentario_para_lead: number | null;
+  taxa_lead_para_whatsapp: number | null;
+  taxa_whatsapp_para_handoff: number | null;
+  taxa_handoff_para_convertido: number | null;
+  leads_ativos: number;
+  leads_parados_72h: number;
+  follow_ups_pendentes: number;
+};
+
+export type FollowUpItemRes = {
+  lead_id: number;
+  nome: string | null;
+  username_instagram: string | null;
+  whatsapp: string | null;
+  status: string;
+  priority: "critical" | "high" | "medium" | "low";
+  temperature: "quente" | "morno" | "frio";
+  motivo: string;
+  acao_sugerida: string;
+  horas_parado: number | null;
+  funil_etapa: string;
+  visita_proxima: string | null;
+};
+
+export type LeadCoachRes = {
+  resumo: string;
+  temperatura: "quente" | "morno" | "frio";
+  proxima_acao: string;
+  mensagem_sugerida: string;
+  risco_perda: "baixo" | "medio" | "alto";
+  oportunidade: string;
+};
+
+export type LeadTimelineDetailRes = {
+  id: number;
+  nome: string | null;
+  id_instagram: string;
+  whatsapp: string | null;
+  username_instagram: string | null;
+  status: string;
+  objetivo: string | null;
+  origem_interacao: string | null;
+  url_interesse: string | null;
+  handoff_motivo: string | null;
+  crm_notas: string | null;
+  proximo_followup_em: string | null;
 };
 
 export type FunnelStatsRes = {
@@ -284,7 +338,7 @@ export type FunnelStatsRes = {
 };
 
 export type TimelineItemRes = {
-  canal: "comentario" | "direct" | "whatsapp";
+  canal: "comentario" | "direct" | "whatsapp" | "visita";
   direction: "inbound" | "outbound";
   text: string;
   at: string;
@@ -743,11 +797,31 @@ export const api = {
     getFunnel: (days?: number) =>
       fetchJson<FunnelStatsRes>(`/api/agentes/funnel${days ? `?days=${days}` : ""}`),
     getOperacaoHealth: () => fetchJson<OperacaoHealthRes>("/api/agentes/operacao/health"),
+    getOperacaoPipeline: (days?: number) =>
+      fetchJson<PipelineMetricsRes>(`/api/agentes/operacao/pipeline${days ? `?days=${days}` : ""}`),
+    getFollowUps: () =>
+      fetchJson<{ ok: boolean; items: FollowUpItemRes[]; total: number }>(
+        "/api/agentes/operacao/follow-ups"
+      ),
     getLeadTimeline: (leadId: number) =>
       fetchJson<{
         ok: boolean;
-        lead: { id: number; nome: string | null; id_instagram: string; whatsapp: string | null };
+        lead: LeadTimelineDetailRes;
         timeline: TimelineItemRes[];
       }>(`/api/agentes/leads/${leadId}/timeline`),
+    updateLead: (leadId: number, body: {
+      status?: string;
+      crm_notas?: string | null;
+      proximo_followup_em?: string | null;
+    }) =>
+      fetchJson<{ ok: boolean; lead: LeadListItemRes }>(`/api/agentes/leads/${leadId}`, {
+        method: "PATCH",
+        body,
+      }),
+    getLeadAiCoach: (leadId: number) =>
+      fetchJson<{ ok: boolean; coach: LeadCoachRes }>(`/api/agentes/leads/${leadId}/ai-coach`, {
+        method: "POST",
+        body: {},
+      }),
   },
 };

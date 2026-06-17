@@ -12,8 +12,15 @@ import {
   resolveEvolutionBaseUrl,
   setInstanceWebhook,
 } from "../services/evolution.js";
-import { listLeads } from "../store/leads.js";
-import { getFunnelStats, getLeadTimeline, getOperacaoHealth } from "../store/crmOperacao.js";
+import { listLeads, updateLeadCrm } from "../store/leads.js";
+import {
+  getFunnelStats,
+  getFollowUpQueue,
+  getLeadTimeline,
+  getOperacaoHealth,
+  getPipelineMetrics,
+} from "../store/crmOperacao.js";
+import { generateLeadCoach, isCrmAiConfigured } from "../services/crmAiCoach.js";
 import {
   backfillLeadWhatsappDigits,
   getWhatsappInstanceForOrg,
@@ -77,6 +84,22 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
     return reply.send(health);
   });
 
+  /** Métricas de conversão do pipeline (taxas entre etapas). */
+  app.get("/operacao/pipeline", async (request, reply) => {
+    const u = request.user as { orgId: string };
+    const q = request.query as { days?: string };
+    const days = q.days ? Number(q.days) : 30;
+    const metrics = await getPipelineMetrics(u.orgId, days);
+    return reply.send({ ok: true, ai_disponivel: isCrmAiConfigured(), ...metrics });
+  });
+
+  /** Fila de follow-ups prioritários (regras de conversão). */
+  app.get("/operacao/follow-ups", async (request, reply) => {
+    const u = request.user as { orgId: string };
+    const items = await getFollowUpQueue(u.orgId);
+    return reply.send({ ok: true, items, total: items.length });
+  });
+
   /** Timeline unificada de um lead (comentário + Direct + WhatsApp). */
   app.get<{ Params: { id: string } }>("/leads/:id/timeline", async (request, reply) => {
     const u = request.user as { orgId: string };
@@ -87,6 +110,85 @@ export async function agentesRoutes(app: FastifyInstance, _opts: FastifyPluginOp
     const result = await getLeadTimeline(u.orgId, leadId);
     if (!result) return reply.status(404).send({ error: "Lead não encontrado." });
     return reply.send({ ok: true, ...result });
+  });
+
+  /** Atualiza status, notas e follow-up manual do lead. */
+  app.patch<{ Params: { id: string } }>("/leads/:id", async (request, reply) => {
+    const u = request.user as { orgId: string };
+    const leadId = Number(request.params.id);
+    if (!Number.isFinite(leadId) || leadId < 1) {
+      return reply.status(400).send({ error: "ID de lead inválido." });
+    }
+    const body = request.body as {
+      status?: string;
+      crm_notas?: string | null;
+      proximo_followup_em?: string | null;
+    };
+    try {
+      const updated = await updateLeadCrm({
+        organizationId: u.orgId,
+        leadId,
+        status: body?.status,
+        crm_notas: body?.crm_notas,
+        proximo_followup_em: body?.proximo_followup_em,
+      });
+      if (!updated) {
+        return reply.status(400).send({ error: "Nenhum campo para atualizar." });
+      }
+      return reply.send({ ok: true, lead: updated });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro ao atualizar lead.";
+      return reply.status(400).send({ error: msg });
+    }
+  });
+
+  /** Sugestão de follow-up com IA (foco conversão/venda). */
+  app.post<{ Params: { id: string } }>("/leads/:id/ai-coach", async (request, reply) => {
+    const u = request.user as { orgId: string };
+    const leadId = Number(request.params.id);
+    if (!Number.isFinite(leadId) || leadId < 1) {
+      return reply.status(400).send({ error: "ID de lead inválido." });
+    }
+    if (!isCrmAiConfigured()) {
+      return reply.status(503).send({
+        error: "OPENAI_API_KEY não configurada na API — necessária para sugestões de IA.",
+      });
+    }
+
+    const result = await getLeadTimeline(u.orgId, leadId);
+    if (!result) return reply.status(404).send({ error: "Lead não encontrado." });
+
+    const empresaCfg = (await loadWorkspaceConfigStore(u.orgId)).empresa;
+    const snapshots = await getFollowUpQueue(u.orgId);
+    const ruleHint = snapshots.find((f) => f.lead_id === leadId)?.motivo ?? null;
+
+    try {
+      const coach = await generateLeadCoach({
+        empresa: {
+          nome_fantasia: empresaCfg.nome_fantasia ?? empresaCfg.nome ?? "",
+          segmento: empresaCfg.segmento ?? "",
+          objetivo_qualificacao: empresaCfg.objetivo_qualificacao ?? "",
+          criterios_qualificacao: empresaCfg.criterios_qualificacao ?? "",
+          tom_voz: empresaCfg.tom_voz ?? "",
+          link_produto_servico: empresaCfg.link_produto_servico ?? "",
+        },
+        lead: {
+          nome: result.lead.nome,
+          username_instagram: result.lead.username_instagram,
+          status: result.lead.status,
+          objetivo: result.lead.objetivo,
+          origem_interacao: result.lead.origem_interacao,
+          handoff_motivo: result.lead.handoff_motivo,
+          url_interesse: result.lead.url_interesse,
+        },
+        timeline: result.timeline,
+        rule_hint: ruleHint,
+      });
+      return reply.send({ ok: true, coach });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro ao gerar sugestão.";
+      return reply.status(502).send({ error: msg });
+    }
   });
 
   /** Configuração da instância WhatsApp / Evolution do workspace. */

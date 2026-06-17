@@ -1,3 +1,10 @@
+import {
+  evaluateFollowUp,
+  pct,
+  sortFollowUps,
+  type FollowUpItem,
+  type LeadActivitySnapshot,
+} from "../services/crmInsights.js";
 import { ensureTables, getPool } from "../db/index.js";
 import { isInstagramLoginToken } from "../util/graphToken.js";
 import {
@@ -21,11 +28,37 @@ export type FunnelStats = {
 };
 
 export type TimelineItem = {
-  canal: "comentario" | "direct" | "whatsapp";
+  canal: "comentario" | "direct" | "whatsapp" | "visita";
   direction: "inbound" | "outbound";
   text: string;
   at: string;
   ref: string | null;
+};
+
+export type PipelineMetrics = {
+  period_days: number;
+  taxa_comentario_para_lead: number | null;
+  taxa_lead_para_whatsapp: number | null;
+  taxa_whatsapp_para_handoff: number | null;
+  taxa_handoff_para_convertido: number | null;
+  leads_ativos: number;
+  leads_parados_72h: number;
+  follow_ups_pendentes: number;
+};
+
+export type LeadTimelineDetail = {
+  id: number;
+  nome: string | null;
+  id_instagram: string;
+  whatsapp: string | null;
+  username_instagram: string | null;
+  status: string;
+  objetivo: string | null;
+  origem_interacao: string | null;
+  url_interesse: string | null;
+  handoff_motivo: string | null;
+  crm_notas: string | null;
+  proximo_followup_em: string | null;
 };
 
 export type OperacaoIssue = {
@@ -145,7 +178,7 @@ export async function getFunnelStats(organizationId: string, days?: number): Pro
 export async function getLeadTimeline(
   organizationId: string,
   leadId: number
-): Promise<{ lead: { id: number; nome: string | null; id_instagram: string; whatsapp: string | null }; timeline: TimelineItem[] } | null> {
+): Promise<{ lead: LeadTimelineDetail; timeline: TimelineItem[] } | null> {
   await ensureTables();
   const pool = getPool();
 
@@ -155,8 +188,18 @@ export async function getLeadTimeline(
     id_instagram: string;
     whatsapp: string | null;
     whatsapp_digits: string | null;
+    username_instagram: string | null;
+    status: string;
+    objetivo: string | null;
+    origem_interacao: string | null;
+    url_interesse: string | null;
+    handoff_motivo: string | null;
+    crm_notas: string | null;
+    proximo_followup_em: Date | null;
   }>(
-    `SELECT id, nome, id_instagram, whatsapp, whatsapp_digits
+    `SELECT id, nome, id_instagram, whatsapp, whatsapp_digits, username_instagram,
+            status, objetivo, origem_interacao, url_interesse, handoff_motivo,
+            crm_notas, proximo_followup_em
      FROM leads WHERE id = $1 AND organization_id = $2::uuid LIMIT 1`,
     [leadId, organizationId]
   );
@@ -166,7 +209,7 @@ export async function getLeadTimeline(
   const igId = lead.id_instagram;
   const phone = lead.whatsapp_digits ?? "";
 
-  const [comR, dirR, waR] = await Promise.all([
+  const [comR, dirR, waR, visR] = await Promise.all([
     pool.query<{ at: Date; text: string | null; ref: string }>(
       `SELECT COALESCE(data_comentario, created_at) AS at, comment_text AS text, id_comentario AS ref
        FROM comentarios
@@ -186,6 +229,14 @@ export async function getLeadTimeline(
        WHERE organization_id = $1::uuid
          AND (lead_id = $2 OR ($3 <> '' AND telefone = $3))`,
       [organizationId, leadId, phone]
+    ),
+    pool.query<{ at: Date; text: string | null; ref: string; status: string }>(
+      `SELECT COALESCE(data_visita, created_at) AS at,
+              COALESCE(observacoes, 'Compromisso agendado') AS text,
+              id::text AS ref, status
+       FROM visitas
+       WHERE organization_id = $1::uuid AND lead_id = $2`,
+      [organizationId, leadId]
     ),
   ]);
 
@@ -218,6 +269,16 @@ export async function getLeadTimeline(
       ref: row.ref,
     });
   }
+  for (const row of visR.rows) {
+    const statusNote = row.status !== "agendada" ? ` (${row.status})` : "";
+    items.push({
+      canal: "visita",
+      direction: "outbound",
+      text: `${(row.text ?? "Compromisso").trim()}${statusNote}`,
+      at: new Date(row.at).toISOString(),
+      ref: row.ref,
+    });
+  }
 
   items.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
 
@@ -227,8 +288,157 @@ export async function getLeadTimeline(
       nome: lead.nome,
       id_instagram: lead.id_instagram,
       whatsapp: lead.whatsapp,
+      username_instagram: lead.username_instagram,
+      status: lead.status ?? "novo",
+      objetivo: lead.objetivo,
+      origem_interacao: lead.origem_interacao,
+      url_interesse: lead.url_interesse,
+      handoff_motivo: lead.handoff_motivo,
+      crm_notas: lead.crm_notas,
+      proximo_followup_em: lead.proximo_followup_em
+        ? new Date(lead.proximo_followup_em).toISOString()
+        : null,
     },
     timeline: items.filter((i) => i.text.length > 0),
+  };
+}
+
+async function fetchLeadActivitySnapshots(organizationId: string): Promise<LeadActivitySnapshot[]> {
+  await ensureTables();
+  const pool = getPool();
+
+  const r = await pool.query<{
+    id: number;
+    nome: string | null;
+    username_instagram: string | null;
+    whatsapp: string | null;
+    status: string;
+    objetivo: string | null;
+    handoff_at: Date | null;
+    handoff_motivo: string | null;
+    whatsapp_boas_vindas_enviado: boolean;
+    whatsapp_primeira_ia_enviada: boolean;
+    whatsapp_ia_agendada_em: Date | null;
+    proximo_followup_em: Date | null;
+    id_instagram: string;
+    last_inbound_at: Date | null;
+    last_outbound_at: Date | null;
+    last_any_at: Date | null;
+    has_direct: boolean;
+    has_whatsapp_msgs: boolean;
+    visita_proxima: Date | null;
+  }>(
+    `SELECT l.id, l.nome, l.username_instagram, l.whatsapp, l.status, l.objetivo,
+            l.handoff_at, l.handoff_motivo, l.whatsapp_boas_vindas_enviado,
+            l.whatsapp_primeira_ia_enviada, l.whatsapp_ia_agendada_em, l.proximo_followup_em,
+            l.id_instagram,
+            act.last_inbound_at, act.last_outbound_at, act.last_any_at,
+            act.has_direct, act.has_whatsapp_msgs,
+            (SELECT MIN(v.data_visita) FROM visitas v
+             WHERE v.lead_id = l.id AND v.organization_id = l.organization_id
+               AND v.status = 'agendada' AND v.data_visita >= NOW()) AS visita_proxima
+     FROM leads l
+     LEFT JOIN LATERAL (
+       SELECT
+         MAX(CASE WHEN ev.dir = 'in' THEN ev.at END) AS last_inbound_at,
+         MAX(CASE WHEN ev.dir = 'out' THEN ev.at END) AS last_outbound_at,
+         MAX(ev.at) AS last_any_at,
+         BOOL_OR(ev.src = 'direct') AS has_direct,
+         BOOL_OR(ev.src = 'wa') AS has_whatsapp_msgs
+       FROM (
+         SELECT COALESCE(c.data_comentario, c.created_at) AS at, 'in'::text AS dir, 'comentario'::text AS src
+         FROM comentarios c
+         WHERE c.organization_id = l.organization_id AND c.id_insta_lead = l.id_instagram
+         UNION ALL
+         SELECT COALESCE(d.data_direct, d.created_at),
+                CASE WHEN d.enviado_pelo_negocio THEN 'out' ELSE 'in' END,
+                'direct'
+         FROM direct d
+         WHERE d.organization_id = l.organization_id AND d.id_insta_lead = l.id_instagram
+         UNION ALL
+         SELECT wm.created_at,
+                CASE WHEN wm.direction = 'outbound' THEN 'out' ELSE 'in' END,
+                'wa'
+         FROM whatsapp_messages wm
+         WHERE wm.organization_id = l.organization_id
+           AND (wm.lead_id = l.id OR (COALESCE(l.whatsapp_digits, '') <> '' AND wm.telefone = l.whatsapp_digits))
+       ) ev
+     ) act ON true
+     WHERE l.organization_id = $1::uuid
+       AND l.status NOT IN ('convertido', 'perdido')
+     ORDER BY COALESCE(act.last_any_at, l.updated_at) DESC NULLS LAST
+     LIMIT 300`,
+    [organizationId]
+  );
+
+  return r.rows.map((row) => ({
+    id: row.id,
+    nome: row.nome,
+    username_instagram: row.username_instagram,
+    whatsapp: row.whatsapp,
+    status: row.status ?? "novo",
+    objetivo: row.objetivo,
+    handoff_at: row.handoff_at ? new Date(row.handoff_at).toISOString() : null,
+    handoff_motivo: row.handoff_motivo,
+    whatsapp_boas_vindas_enviado: Boolean(row.whatsapp_boas_vindas_enviado),
+    whatsapp_primeira_ia_enviada: Boolean(row.whatsapp_primeira_ia_enviada),
+    whatsapp_ia_agendada_em: row.whatsapp_ia_agendada_em
+      ? new Date(row.whatsapp_ia_agendada_em).toISOString()
+      : null,
+    proximo_followup_em: row.proximo_followup_em
+      ? new Date(row.proximo_followup_em).toISOString()
+      : null,
+    last_inbound_at: row.last_inbound_at ? new Date(row.last_inbound_at).toISOString() : null,
+    last_outbound_at: row.last_outbound_at ? new Date(row.last_outbound_at).toISOString() : null,
+    last_any_at: row.last_any_at ? new Date(row.last_any_at).toISOString() : null,
+    has_direct: Boolean(row.has_direct),
+    has_whatsapp_msgs: Boolean(row.has_whatsapp_msgs),
+    visita_proxima: row.visita_proxima ? new Date(row.visita_proxima).toISOString() : null,
+  }));
+}
+
+export async function getFollowUpQueue(organizationId: string): Promise<FollowUpItem[]> {
+  const snapshots = await fetchLeadActivitySnapshots(organizationId);
+  const items: FollowUpItem[] = [];
+  for (const snap of snapshots) {
+    const hit = evaluateFollowUp(snap);
+    if (hit) items.push(hit);
+  }
+  return sortFollowUps(items);
+}
+
+export async function getPipelineMetrics(
+  organizationId: string,
+  days?: number
+): Promise<PipelineMetrics> {
+  const funnel = await getFunnelStats(organizationId, days);
+  const snapshots = await fetchLeadActivitySnapshots(organizationId);
+  const followUps = snapshots
+    .map((s) => evaluateFollowUp(s))
+    .filter((x): x is FollowUpItem => x !== null);
+
+  const now = Date.now();
+  const parados72h = snapshots.filter((s) => {
+    if (!s.last_inbound_at) return false;
+    const h = (now - new Date(s.last_inbound_at).getTime()) / (1000 * 60 * 60);
+    return h >= 72;
+  }).length;
+
+  const convertidos = funnel.leads_por_status.convertido ?? 0;
+
+  return {
+    period_days: funnel.period_days,
+    taxa_comentario_para_lead:
+      funnel.comentarios > 0 ? pct(funnel.leads_total, funnel.comentarios) : null,
+    taxa_lead_para_whatsapp:
+      funnel.leads_total > 0 ? pct(funnel.leads_com_whatsapp, funnel.leads_total) : null,
+    taxa_whatsapp_para_handoff:
+      funnel.leads_com_whatsapp > 0 ? pct(funnel.handoffs, funnel.leads_com_whatsapp) : null,
+    taxa_handoff_para_convertido:
+      funnel.handoffs > 0 ? pct(convertidos, funnel.handoffs) : null,
+    leads_ativos: snapshots.length,
+    leads_parados_72h: parados72h,
+    follow_ups_pendentes: followUps.length,
   };
 }
 

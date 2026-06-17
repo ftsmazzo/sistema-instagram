@@ -404,5 +404,8 @@ export async function ensureTables(): Promise<void> {
   await p.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS agenda_config jsonb NOT NULL DEFAULT '{"dias_semana":[1,2,3,4,5],"horario_inicio":"09:00","horario_fim":"18:00","duracao_minutos":60}'::jsonb`);
   await p.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS criterios_qualificacao text NOT NULL DEFAULT ''`);
   await p.query(`ALTER TABLE organizations ADD COLUMN IF NOT EXISTS agenda_local text NOT NULL DEFAULT ''`);
+  await p.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS crm_notas TEXT`);
+  await p.query(`ALTER TABLE leads ADD COLUMN IF NOT EXISTS proximo_followup_em TIMESTAMPTZ`);
+  await p.query(`CREATE INDEX IF NOT EXISTS idx_leads_proximo_followup ON leads (organization_id, proximo_followup_em) WHERE proximo_followup_em IS NOT NULL`);
   initDone = true;
 }
