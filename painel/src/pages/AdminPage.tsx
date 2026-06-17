@@ -166,7 +166,7 @@ export function AdminPage() {
               value={empresa.objetivo_qualificacao}
               onChange={(e) => setEmpresa((x) => ({ ...x, objetivo_qualificacao: e.target.value }))}
               className="textarea-field min-h-[88px]"
-              placeholder="O que precisa estar claro antes de mandar pro WhatsApp?"
+              placeholder="O que precisa estar claro antes de fechar (link, agenda ou consultor)?"
             />
             <label className="label-field">Critérios (um por linha — o agente descobre na conversa)</label>
             <textarea
@@ -176,7 +176,7 @@ export function AdminPage() {
               placeholder={"Nome do lead\nInteresse / necessidade\nPrazo ou urgência\nWhatsApp"}
             />
             <p className="text-xs text-slate-500">
-              Dica: em <strong>Atendimento comercial</strong> configure link, WhatsApp do consultor e horários — o agente usa tudo junto.
+              Dica: critérios valem para <strong>Direct e WhatsApp</strong>. Em <strong>Atendimento comercial</strong> configure link, consultor e horários.
             </p>
           </ConfigSectionCard>
 
