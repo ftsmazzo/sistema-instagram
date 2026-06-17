@@ -20,6 +20,28 @@ function captionPreview(caption: string | null, max = 120): string {
   return t.length > max ? `${t.slice(0, max - 1)}…` : t;
 }
 
+function PostThumb({ mediaUrl, mediaType }: { mediaUrl: string | null; mediaType: string | null }) {
+  const [broken, setBroken] = useState(false);
+  const label = mediaType ?? "mídia";
+
+  if (!mediaUrl || broken) {
+    return (
+      <div className="flex h-24 w-24 flex-col items-center justify-center rounded-lg border border-slate-200 bg-slate-100 px-1 text-center text-[10px] text-slate-400">
+        <span>{broken ? "indisponível" : label}</span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={mediaUrl}
+      alt=""
+      className="h-24 w-24 rounded-lg border border-slate-200 bg-slate-100 object-cover"
+      onError={() => setBroken(true)}
+    />
+  );
+}
+
 export function PostagensPage() {
   const [postagens, setPostagens] = useState<PostagemListItemRes[]>([]);
   const [total, setTotal] = useState(0);
@@ -27,6 +49,7 @@ export function PostagensPage() {
   const [contaId, setContaId] = useState("");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,6 +104,28 @@ export function PostagensPage() {
     }
   };
 
+  const handleDelete = async (p: PostagemListItemRes) => {
+    const preview = captionPreview(p.caption_post, 60);
+    if (
+      !window.confirm(
+        `Remover este post do CRM?\n\n"${preview}"\n\nComentários e leads já capturados não serão apagados.`
+      )
+    ) {
+      return;
+    }
+    setDeletingId(p.id);
+    setError(null);
+    try {
+      await api.postagens.delete(p.id);
+      setMessage("Post removido do CRM.");
+      await load(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro ao remover post.");
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const semConta = contas.length === 0;
 
   return (
@@ -90,7 +135,7 @@ export function PostagensPage() {
         <>
           Sincronize os posts que você já publicou no Instagram. Eles alimentam o contexto dos agentes de{" "}
           <strong className="text-slate-700">comentário</strong>, <strong className="text-slate-700">Direct</strong> e{" "}
-          <strong className="text-slate-700">WhatsApp</strong>.
+          <strong className="text-slate-700">WhatsApp</strong>. Remova entradas inválidas ou posts que já foram apagados no Instagram.
         </>
       }
     >
@@ -166,17 +211,7 @@ export function PostagensPage() {
               className="card flex flex-col gap-4 sm:flex-row sm:items-start transition-shadow hover:shadow-md"
             >
               <div className="shrink-0">
-                {p.media_url ? (
-                  <img
-                    src={p.media_url}
-                    alt=""
-                    className="h-24 w-24 rounded-lg object-cover bg-slate-100 border border-slate-200"
-                  />
-                ) : (
-                  <div className="flex h-24 w-24 items-center justify-center rounded-lg bg-slate-100 text-xs text-slate-400 border border-slate-200">
-                    {p.media_type ?? "mídia"}
-                  </div>
-                )}
+                <PostThumb mediaUrl={p.media_url} mediaType={p.media_type} />
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
@@ -186,7 +221,7 @@ export function PostagensPage() {
                   <span className="text-xs text-slate-500">{formatDate(p.data_post)}</span>
                 </div>
                 <p className="mt-2 text-sm text-slate-800 leading-relaxed">{captionPreview(p.caption_post)}</p>
-                <div className="mt-3 flex flex-wrap gap-4 text-xs font-medium text-slate-500">
+                <div className="mt-3 flex flex-wrap items-center gap-4 text-xs font-medium text-slate-500">
                   <span>{p.comentarios_count} comentário(s)</span>
                   <span>{p.leads_count} lead(s)</span>
                   {p.link_post && (
@@ -199,6 +234,14 @@ export function PostagensPage() {
                       Ver no Instagram →
                     </a>
                   )}
+                  <button
+                    type="button"
+                    className="ml-auto text-red-600 hover:text-red-800 disabled:opacity-50"
+                    disabled={deletingId === p.id}
+                    onClick={() => void handleDelete(p)}
+                  >
+                    {deletingId === p.id ? "Removendo…" : "Remover do CRM"}
+                  </button>
                 </div>
               </div>
             </li>

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyPluginOptions } from "fastify";
 import { isDbConfigured } from "../db/index.js";
-import { listPostagens, syncPostagensFromInstagram } from "../store/crmPostagens.js";
+import { listPostagens, syncPostagensFromInstagram, deletePostagem } from "../store/crmPostagens.js";
 
 export async function postagensRoutes(app: FastifyInstance, _opts: FastifyPluginOptions) {
   app.addHook("preHandler", async (request, reply) => {
@@ -53,5 +53,20 @@ export async function postagensRoutes(app: FastifyInstance, _opts: FastifyPlugin
       request.log.warn({ err }, "sync postagens falhou");
       return reply.status(400).send({ ok: false, error: message });
     }
+  });
+
+  /** Remove post do CRM (ex.: apagado no Instagram ou entrada inválida). Não apaga comentários/leads. */
+  app.delete("/:id", async (request, reply) => {
+    const u = request.user as { orgId: string };
+    const id = Number((request.params as { id: string }).id);
+    if (!Number.isFinite(id) || id < 1) {
+      return reply.status(400).send({ ok: false, error: "ID inválido." });
+    }
+
+    const deleted = await deletePostagem(u.orgId, id);
+    if (!deleted) {
+      return reply.status(404).send({ ok: false, error: "Post não encontrado." });
+    }
+    return reply.send({ ok: true, deleted: true });
   });
 }

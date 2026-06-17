@@ -332,3 +332,14 @@ export async function listPostagens(params: {
 
   return { postagens, total };
 }
+
+export async function deletePostagem(organizationId: string, postagemId: number): Promise<boolean> {
+  if (!isDbConfigured()) return false;
+  await ensureTables();
+  const pool = getPool();
+  const r = await pool.query(
+    `DELETE FROM postagens WHERE organization_id = $1::uuid AND id = $2 RETURNING id`,
+    [organizationId, postagemId]
+  );
+  return (r.rowCount ?? 0) > 0;
+}

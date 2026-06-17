@@ -602,6 +602,8 @@ export const api = {
         account_nome: string;
         error?: string;
       }>("/api/postagens/sync", { method: "POST", body: body ?? {} }),
+    delete: (id: number) =>
+      fetchJson<{ ok: boolean; deleted: boolean }>(`/api/postagens/${id}`, { method: "DELETE" }),
   },
 
   agentes: {
