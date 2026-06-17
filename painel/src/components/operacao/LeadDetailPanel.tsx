@@ -3,7 +3,6 @@ import type {
   LeadCoachRes,
   LeadTimelineDetailRes,
   CrmFollowUpMessageRes,
-  PipelineMetricsRes,
   TimelineItemRes,
 } from "../../api/client";
 
