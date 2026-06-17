@@ -91,6 +91,22 @@ A lista de leads ordena por score decrescente.
 
 Atualização: ao abrir Operação (fila de follow-ups) + cron a cada 1 min.
 
+### Playbooks de qualificação (Empresa → agentes)
+
+Keywords centralizadas em `api/src/services/segmentoNichos.ts`. Em **Empresa → Qualificação**, playbooks disponíveis:
+
+| Playbook | Exemplos de segmento |
+|----------|----------------------|
+| Beleza | barbearia, salão, estética, manicure, spa |
+| Profissionais liberais | advocacia, contabilidade, engenharia |
+| Saúde & clínica | consultório, odonto, fisioterapia |
+| Imobiliário | corretor, imóvel, locação |
+| E-commerce | loja, varejo, moda |
+| Educação | curso, mentoria |
+| Serviços B2B | software, agência (fallback) |
+
+Alimentam prompts do Direct, WhatsApp e coach IA em Operação.
+
 ### Templates de cadência por segmento
 
 Presets prontos: **Imobiliária**, **Clínica/saúde**, **Beleza (barbearia/salão/estética)**, **Profissionais liberais (advogado, contador…)**, **Serviços B2B**, **E-commerce**.  

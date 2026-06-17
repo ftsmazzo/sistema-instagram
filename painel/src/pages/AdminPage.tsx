@@ -121,7 +121,7 @@ export function AdminPage() {
               value={empresa.segmento}
               onChange={(e) => setEmpresa((x) => ({ ...x, segmento: e.target.value }))}
               className="input-field"
-              placeholder="Ex.: clínica, e-commerce, imobiliária"
+              placeholder="Ex.: barbearia, advocacia, contabilidade, clínica, imobiliária, e-commerce"
             />
             <label className="label-field">Cidade / região de atuação</label>
             <input

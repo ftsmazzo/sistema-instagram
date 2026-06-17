@@ -5,6 +5,7 @@
 
 import type { PostadorBrandKit } from "./postadorBrand.js";
 import { brandKitToOverlayStyle, brandPaletaString } from "./postadorBrand.js";
+import { BELEZA_SEGMENTO_KEYWORDS, PROFISSIONAIS_SEGMENTO_KEYWORDS } from "./segmentoNichos.js";
 
 export type PostadorFormato = "feed" | "carrossel" | "reels" | "story";
 
@@ -19,8 +20,19 @@ export type PostadorNicheId =
   | "servicos_b2b"
   | "ecommerce"
   | "beleza_estetica"
+  | "profissionais_liberais"
   | "imobiliario"
   | "produtos_marcas";
+
+/** Nichos específicos têm prioridade sobre servicos_b2b genérico. */
+const NICHE_MATCH_ORDER: PostadorNicheId[] = [
+  "imobiliario",
+  "beleza_estetica",
+  "profissionais_liberais",
+  "ecommerce",
+  "produtos_marcas",
+  "servicos_b2b",
+];
 
 export type PostadorIngredientes = {
   hook: string;
@@ -168,41 +180,29 @@ export const POSTADOR_NICHES: PostadorNichePack[] = [
   },
   {
     id: "beleza_estetica",
-    label: "Beleza & Estética",
-    descricao: "Salões, clínicas, skincare, procedimentos — transformação e confiança.",
-    segmento_keywords: [
-      "beleza",
-      "estética",
-      "estetica",
-      "salão",
-      "salao",
-      "clínica",
-      "clinica",
-      "skincare",
-      "cabelo",
-      "spa",
-      "harmonização",
-    ],
-    tom_legenda: "acolhedor, aspiracional sem exagero; resultado real; empoderamento",
-    tom_visual: "luz suave, pele natural, antes/depois sutil (sem choque), tons quentes",
+    label: "Beleza — barbearia, salão & estética",
+    descricao: "Barbearia, salão, nails, estética — transformação, estilo e confiança.",
+    segmento_keywords: [...BELEZA_SEGMENTO_KEYWORDS],
+    tom_legenda: "acolhedor, aspiracional sem exagero; estilo e resultado real; tom de barbeiro/esteticista parceiro",
+    tom_visual: "luz suave, ambiente premium, detalhe de corte/pele/unhas, tons quentes ou barber shop moderno",
     paleta_sugerida: ["#fdf2f8", "#9d174d", "#fce7f3"],
     aspect_ratio_padrao: "4:5",
     templates: [
       {
         id: "transformacao_beleza",
-        label: "Transformação",
+        label: "Antes/depois ou transformação",
         formato: "carrossel",
         slides: 3,
-        hook_exemplo: "O que mudou em 45 minutos",
+        hook_exemplo: "O corte que mudou o visual em 30 minutos",
         legenda_max_chars: 800,
         hashtags_max: 6,
         prompt_imagem_base:
-          "Estética Instagram 4:5, ambiente clean spa, close natural, sem filtro exagerado, composição elegante feminina/masculina conforme briefing",
+          "Beleza Instagram 4:5, barbearia ou salão premium, close de corte/cabelo ou estética natural, sem filtro exagerado",
         regras_legenda: [
-          "Hook: resultado emocional, não nome técnico do procedimento",
-          "Corpo: o que a cliente sentiu + cuidado profissional",
+          "Hook: resultado emocional ou estilo (não só nome técnico)",
+          "Corpo: experiência no salão/barbearia + cuidado profissional",
           "Proibido: promessas médicas, 'milagre', antes/depois agressivo",
-          "CTA: 'Qual sua maior dúvida sobre [tema]? Comenta'",
+          "CTA: 'Qual look você quer experimentar? Comenta'",
         ],
       },
       {
@@ -210,15 +210,60 @@ export const POSTADOR_NICHES: PostadorNichePack[] = [
         label: "Reels dica rápida",
         formato: "reels",
         slides: 1,
-        hook_exemplo: "Erro que resseca seu cabelo no inverno",
+        hook_exemplo: "3 erros que estragam seu fade",
         legenda_max_chars: 600,
         hashtags_max: 5,
         prompt_imagem_base:
-          "Frame vertical 9:16, profissional em ação, movimento suave, salão/clínica bem iluminado, estética Reels beauty 2026",
+          "Frame vertical 9:16, barbeiro ou esteticista em ação, barbearia/salão bem iluminado, estética Reels beauty 2026",
         regras_legenda: [
           "Legenda ultra curta (Reels): complementa o vídeo, não repete",
           "1 CTA comentário",
-          "Tom de amiga especialista",
+          "Tom de especialista acessível",
+        ],
+      },
+    ],
+  },
+  {
+    id: "profissionais_liberais",
+    label: "Profissionais liberais",
+    descricao: "Advogado, contador, engenheiro — autoridade, clareza e consulta inicial.",
+    segmento_keywords: [...PROFISSIONAIS_SEGMENTO_KEYWORDS, "financeiro"],
+    tom_legenda: "formal-consultivo, claro e humano; educa sem juridiquês; prova de expertise",
+    tom_visual: "corporativo elegante, escritório moderno, luz natural, sensação de confiança",
+    paleta_sugerida: ["#1e293b", "#64748b", "#f8fafc"],
+    aspect_ratio_padrao: "4:5",
+    templates: [
+      {
+        id: "autoridade_servico",
+        label: "Autoridade (1 slide)",
+        formato: "feed",
+        slides: 1,
+        hook_exemplo: "Você sabia que esse prazo pode te custar caro?",
+        legenda_max_chars: 900,
+        hashtags_max: 5,
+        prompt_imagem_base:
+          "Post Instagram 4:5, escritório profissional moderno, luz natural, sensação de confiança e expertise, sem texto na imagem",
+        regras_legenda: [
+          "Hook: alerta educativo ou pergunta sobre risco/oportunidade",
+          "Corpo: 2-3 linhas claras (não parede de texto legal)",
+          "Proibido: prometer resultado de processo, linguagem alarmista",
+          "CTA: 'Tem dúvida sobre [tema]? Comenta'",
+        ],
+      },
+      {
+        id: "autoridade_servico",
+        label: "Carrossel educativo (5 slides)",
+        formato: "carrossel",
+        slides: 5,
+        hook_exemplo: "5 sinais de que você precisa de um contador agora",
+        legenda_max_chars: 750,
+        hashtags_max: 5,
+        prompt_imagem_base:
+          "Slide carrossel Instagram 4:5, design sóbrio profissional, tipografia serif ou sans elegante, tons navy e cinza",
+        regras_legenda: [
+          "Legenda curta: reforce o hook + 'Salva para consultar depois'",
+          "Cada slide: 1 insight prático, linguagem acessível",
+          "Último slide: CTA comentário para tirar dúvida",
         ],
       },
     ],
@@ -348,9 +393,10 @@ export const POSTADOR_CUSTO_ESTIMADO_USD = {
 
 export function suggestNicheFromSegmento(segmento: string): PostadorNicheId {
   const s = segmento.toLowerCase().normalize("NFD").replace(/\p{M}/gu, "");
-  for (const pack of POSTADOR_NICHES) {
+  for (const id of NICHE_MATCH_ORDER) {
+    const pack = getNichePack(id);
     if (pack.segmento_keywords.some((kw) => s.includes(kw.normalize("NFD").replace(/\p{M}/gu, "")))) {
-      return pack.id;
+      return id;
     }
   }
   return "servicos_b2b";
@@ -505,7 +551,9 @@ const CREATIVE_IMAGE_BASE: Partial<Record<PostadorNicheId, string>> = {
   ecommerce:
     "Arte editorial Instagram 4:5, still life ou lifestyle aspiracional que EVOCA a categoria pelo sensorial (texturas, ingredientes abstratos, luz, ambiente) — nunca packshot, nunca embalagem, nunca tentar recriar o produto físico",
   beleza_estetica:
-    "Beauty editorial 4:5, macro de textura (cabelo, pele, água, luz), mood spa ou glam — composição artística variada, sem frasco ou embalagem",
+    "Beauty editorial 4:5, macro de textura (cabelo, pele, água, luz), mood spa, barbearia ou glam — composição artística variada, sem frasco ou embalagem",
+  profissionais_liberais:
+    "Editorial profissional 4:5, escritório moderno, documentos abstratos, luz natural, sensação de confiança e expertise — sem rostos de celebridades",
   produtos_marcas:
     "Campanha D2C editorial 4:5, mood de marca e contexto de uso real ou still life de ingredientes/texturas — produto real não aparece (virá do upload)",
 };
@@ -517,6 +565,8 @@ const MOOD_KEYWORD_CUES: Array<{ pattern: RegExp; cue: string }> = [
   { pattern: /\b(japanese|jap[aã]o|jap[aã]nes)/i, cue: "estética japonesa minimalista, madeira clara, cerâmica, luz difusa zen" },
   { pattern: /\b(argan|oil|[óo]leo|keratin|silk|protein)/i, cue: "óleo dourado em movimento, reflexos sedosos, macro de textura líquida" },
   { pattern: /\b(spa|sal[aã]o|tratamento|treatment|ritual)/i, cue: "ambiente spa premium, vapor suave, toalhas brancas, luz acolhedora" },
+  { pattern: /\b(barber|barbearia|corte|fade|barba|grooming)/i, cue: "barbearia premium, ferramentas de corte, textura masculina, luz quente industrial moderna" },
+  { pattern: /\b(advogad|jur[ií]dic|cont[aá]bil|contador|escrit[oó]rio)/i, cue: "escritório profissional sóbrio, luz natural, sensação de confiança e expertise" },
   { pattern: /\b(mod[aã]|fashion|roupa|vestido|look)/i, cue: "editorial de moda, tecido em movimento, styling aspiracional, luz de estúdio fashion" },
   { pattern: /\b(cosm[eé]tico|makeup|maquiagem|beauty)/i, cue: "flat lay beauty artístico, pincéis e texturas, paleta harmoniosa, sem embalagens legíveis" },
   { pattern: /\b(unbox|lan[cç]amento|launch|d2c|marca)/i, cue: "bastidor de marca, mesa criativa, materiais premium, storytelling visual" },
@@ -663,6 +713,7 @@ const OVERLAY_BY_NICHE: Record<PostadorNicheId, PostadorOverlayStyle> = {
   servicos_b2b: { accentStart: "#60a5fa", accentMid: "#3b82f6", accentEnd: "#1d4ed8", panelTone: "dark" },
   ecommerce: { accentStart: "#fef3c7", accentMid: "#d4af37", accentEnd: "#b8860b", panelTone: "dark" },
   beleza_estetica: { accentStart: "#fce7f3", accentMid: "#f9a8d4", accentEnd: "#ec4899", panelTone: "dark" },
+  profissionais_liberais: { accentStart: "#e2e8f0", accentMid: "#64748b", accentEnd: "#334155", panelTone: "dark" },
   imobiliario: { accentStart: "#cbd5e1", accentMid: "#94a3b8", accentEnd: "#475569", panelTone: "dark" },
   produtos_marcas: { accentStart: "#fef3c7", accentMid: "#c4b5fd", accentEnd: "#8b5cf6", panelTone: "dark" },
 };

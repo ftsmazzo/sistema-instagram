@@ -9,14 +9,16 @@ import {
   parseAgendaConfig,
   type AgendaConfig,
 } from "./empresaConfigHelpers.js";
+import { BELEZA_SEGMENTO_KEYWORDS, PROFISSIONAIS_SEGMENTO_KEYWORDS } from "./segmentoNichos.js";
 
 export type QualificacaoPlaybookId =
-  | "servicos_b2b"
   | "imobiliario"
   | "beleza_estetica"
+  | "profissionais_liberais"
   | "saude_clinica"
   | "ecommerce"
-  | "educacao";
+  | "educacao"
+  | "servicos_b2b";
 
 export type QualificacaoCriterio = {
   id: string;
@@ -42,62 +44,6 @@ export type QualificacaoPlaybook = {
 };
 
 export const QUALIFICACAO_PLAYBOOKS: QualificacaoPlaybook[] = [
-  {
-    id: "servicos_b2b",
-    emoji: "⚡",
-    label: "Serviços & Tecnologia",
-    descricao: "Software, automação, agência, consultoria — lead com dor clara e decisão.",
-    segmento_keywords: [
-      "software",
-      "saas",
-      "automação",
-      "automacao",
-      "agência",
-      "agencia",
-      "consultoria",
-      "marketing",
-      "ia",
-      "inteligência artificial",
-      "b2b",
-      "serviço",
-      "servico",
-      "tecnologia",
-    ],
-    segmento: "Serviços & tecnologia B2B",
-    tom_voz: "consultivo, direto e humano — especialista que ouve antes de vender",
-    sobre_exemplo:
-      "Ajudamos empresas a vender e atender melhor com automação e presença digital (Instagram, WhatsApp e IA).",
-    objetivo_qualificacao:
-      "Entender a dor do negócio, urgência e encaminhar para uma conversa no WhatsApp com quem pode fechar.",
-    criterios: [
-      {
-        id: "nome",
-        label: "Nome para contato",
-        pergunta_guia: "Como prefere ser chamado?",
-        obrigatorio: true,
-      },
-      {
-        id: "dor",
-        label: "Problema ou objetivo principal",
-        pergunta_guia: "O que você quer resolver agora no seu negócio?",
-        obrigatorio: true,
-      },
-      {
-        id: "urgencia",
-        label: "Prazo ou urgência",
-        pergunta_guia: "É para agora ou você está só pesquisando?",
-        obrigatorio: true,
-      },
-      {
-        id: "whatsapp",
-        label: "WhatsApp",
-        pergunta_guia: "Posso te mandar os próximos passos no zap?",
-        obrigatorio: true,
-      },
-    ],
-    resultado_esperado:
-      "Lead com dor clara + prazo definido + WhatsApp — pronto para demo ou proposta no Zap.",
-  },
   {
     id: "imobiliario",
     emoji: "🏠",
@@ -141,20 +87,21 @@ export const QUALIFICACAO_PLAYBOOKS: QualificacaoPlaybook[] = [
   {
     id: "beleza_estetica",
     emoji: "✨",
-    label: "Beleza & Estética",
-    descricao: "Clínica estética, salão, spa — procedimento, expectativa e agendamento.",
-    segmento_keywords: ["beleza", "estética", "estetica", "salão", "salao", "spa", "harmonização", "cabelo"],
-    segmento: "Beleza & estética",
-    tom_voz: "caloroso e profissional — acolhe inseguranças sem julgar",
-    sobre_exemplo: "Cuidamos da sua autoestima com procedimentos personalizados e equipe especializada.",
+    label: "Beleza — barbearia, salão & estética",
+    descricao: "Barbearia, salão, estética, nails — serviço desejado, expectativa e horário.",
+    segmento_keywords: [...BELEZA_SEGMENTO_KEYWORDS],
+    segmento: "Beleza — barbearia, salão & estética",
+    tom_voz: "caloroso e profissional — acolhe inseguranças sem julgar, estilo de amigo especialista",
+    sobre_exemplo:
+      "Realçamos sua autoestima com atendimento personalizado — do corte clássico ao tratamento estético.",
     objetivo_qualificacao:
-      "Entender o que a pessoa quer melhorar, expectativa e agendar avaliação ou procedimento via WhatsApp.",
+      "Entender o serviço desejado, expectativa e agendar horário ou avaliação via WhatsApp.",
     criterios: [
       { id: "nome", label: "Nome", pergunta_guia: "Posso te chamar assim ou prefere outro nome?", obrigatorio: true },
       {
-        id: "procedimento",
-        label: "Procedimento ou interesse",
-        pergunta_guia: "O que você gostaria de tratar ou conhecer melhor?",
+        id: "servico",
+        label: "Serviço ou interesse",
+        pergunta_guia: "O que você gostaria de fazer — corte, coloração, procedimento ou outro serviço?",
         obrigatorio: true,
       },
       {
@@ -170,7 +117,42 @@ export const QUALIFICACAO_PLAYBOOKS: QualificacaoPlaybook[] = [
         obrigatorio: true,
       },
     ],
-    resultado_esperado: "Interesse no procedimento + WhatsApp — agendar avaliação.",
+    resultado_esperado: "Serviço definido + WhatsApp — agendar horário ou avaliação.",
+  },
+  {
+    id: "profissionais_liberais",
+    emoji: "⚖️",
+    label: "Profissionais liberais",
+    descricao: "Advogado, contador, engenheiro — entender o caso, urgência e consulta inicial.",
+    segmento_keywords: [...PROFISSIONAIS_SEGMENTO_KEYWORDS, "financeiro"],
+    segmento: "Profissionais liberais",
+    tom_voz: "formal-consultivo e humano — transmite confiança sem juridiquês ou burocracia",
+    sobre_exemplo:
+      "Atendimento especializado com foco em clareza, prazos e orientação segura para cada caso.",
+    objetivo_qualificacao:
+      "Entender a área do caso, urgência e agendar consulta ou triagem inicial pelo WhatsApp.",
+    criterios: [
+      { id: "nome", label: "Nome", pergunta_guia: "Como prefere ser chamado?", obrigatorio: true },
+      {
+        id: "area",
+        label: "Área ou tipo de demanda",
+        pergunta_guia: "Em que posso te ajudar — qual é a situação ou tipo de serviço que você busca?",
+        obrigatorio: true,
+      },
+      {
+        id: "urgencia",
+        label: "Urgência ou prazo",
+        pergunta_guia: "Existe algum prazo ou urgência envolvida?",
+        obrigatorio: true,
+      },
+      {
+        id: "whatsapp",
+        label: "WhatsApp",
+        pergunta_guia: "Posso te orientar sobre os próximos passos pelo WhatsApp?",
+        obrigatorio: true,
+      },
+    ],
+    resultado_esperado: "Demanda clara + urgência + WhatsApp — consulta inicial ou triagem com especialista.",
   },
   {
     id: "saude_clinica",
@@ -272,6 +254,62 @@ export const QUALIFICACAO_PLAYBOOKS: QualificacaoPlaybook[] = [
       },
     ],
     resultado_esperado: "Objetivo claro + WhatsApp — matrícula ou aula experimental.",
+  },
+  {
+    id: "servicos_b2b",
+    emoji: "⚡",
+    label: "Serviços & Tecnologia",
+    descricao: "Software, automação, agência, consultoria — lead com dor clara e decisão.",
+    segmento_keywords: [
+      "software",
+      "saas",
+      "automação",
+      "automacao",
+      "agência",
+      "agencia",
+      "consultoria",
+      "marketing",
+      "ia",
+      "inteligência artificial",
+      "b2b",
+      "serviço",
+      "servico",
+      "tecnologia",
+    ],
+    segmento: "Serviços & tecnologia B2B",
+    tom_voz: "consultivo, direto e humano — especialista que ouve antes de vender",
+    sobre_exemplo:
+      "Ajudamos empresas a vender e atender melhor com automação e presença digital (Instagram, WhatsApp e IA).",
+    objetivo_qualificacao:
+      "Entender a dor do negócio, urgência e encaminhar para uma conversa no WhatsApp com quem pode fechar.",
+    criterios: [
+      {
+        id: "nome",
+        label: "Nome para contato",
+        pergunta_guia: "Como prefere ser chamado?",
+        obrigatorio: true,
+      },
+      {
+        id: "dor",
+        label: "Problema ou objetivo principal",
+        pergunta_guia: "O que você quer resolver agora no seu negócio?",
+        obrigatorio: true,
+      },
+      {
+        id: "urgencia",
+        label: "Prazo ou urgência",
+        pergunta_guia: "É para agora ou você está só pesquisando?",
+        obrigatorio: true,
+      },
+      {
+        id: "whatsapp",
+        label: "WhatsApp",
+        pergunta_guia: "Posso te mandar os próximos passos no zap?",
+        obrigatorio: true,
+      },
+    ],
+    resultado_esperado:
+      "Lead com dor clara + prazo definido + WhatsApp — pronto para demo ou proposta no Zap.",
   },
 ];
 

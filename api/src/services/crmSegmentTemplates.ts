@@ -1,4 +1,5 @@
 import type { CrmCadenciaEtapa } from "./crmCadenciaConfig.js";
+import { BELEZA_SEGMENTO_KEYWORDS, PROFISSIONAIS_SEGMENTO_KEYWORDS } from "./segmentoNichos.js";
 
 export type CadenciaPreset = {
   id: string;
@@ -55,23 +56,7 @@ export const CADENCIA_PRESETS: CadenciaPreset[] = [
   {
     id: "beleza",
     label: "Beleza — barbearia, salão e estética",
-    segmentos: [
-      "beleza",
-      "barbearia",
-      "barber",
-      "salão",
-      "salao",
-      "estética",
-      "estetica",
-      "cabeleir",
-      "manicure",
-      "unha",
-      "spa",
-      "sobrancelha",
-      "depila",
-      "make",
-      "maquiagem",
-    ],
+    segmentos: [...BELEZA_SEGMENTO_KEYWORDS],
     etapas: [
       {
         horas_apos_parada: 24,
@@ -93,24 +78,7 @@ export const CADENCIA_PRESETS: CadenciaPreset[] = [
   {
     id: "profissionais",
     label: "Profissionais liberais — advogado, contador e similares",
-    segmentos: [
-      "advogad",
-      "jurídic",
-      "juridic",
-      "contab",
-      "contador",
-      "escritório contábil",
-      "escritorio contabil",
-      "contabilidade",
-      "notarial",
-      "cartório",
-      "cartorio",
-      "engenheir",
-      "arquitet",
-      "corretor de seguro",
-      "consultor financeiro",
-      "financeiro",
-    ],
+    segmentos: [...PROFISSIONAIS_SEGMENTO_KEYWORDS, "financeiro"],
     etapas: [
       {
         horas_apos_parada: 24,

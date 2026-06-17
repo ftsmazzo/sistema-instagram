@@ -11,7 +11,7 @@
 
 ## Pré-requisitos no painel
 
-1. **Empresa** — playbook de qualificação, agenda, link comercial, WhatsApp do consultor (handoff).
+1. **Empresa** — segmento + playbook de qualificação (Beleza, Profissionais liberais, Saúde, etc.), agenda, link comercial, WhatsApp do consultor (handoff).
 2. **Agentes Instagram** — IGAA no token agente; agente ativo.
 3. **WhatsApp & leads** — instância Evolution conectada; agente WA ativo; delay da 1ª msg (padrão 20 min).
 
