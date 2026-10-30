@@ -3,17 +3,57 @@
 Opera o Instagram **via API oficial da Meta** (sem PrintWindows / automação de tela).
 
 App Meta: **Máquina de Vendas** (`3250934181723132`)  
-Pasta do servidor: `mcp-instagram/`
+Serviço EasyPanel: projeto `mcp-instagram` / app `mcp`
 
-## O que isso é
+## Conexão (remoto — use isto)
 
 ```
-Claude Desktop  ──stdio──►  MCP Instagram  ──HTTPS──►  Graph API (Meta)
+Claude / Cursor  ──HTTPS + Bearer──►  EasyPanel MCP  ──Graph API──►  Instagram
 ```
 
-É o equivalente “caseiro” dos conectores pagos: o Claude chama tools (`ig_publish_image`, `ig_list_media`, `ig_send_dm`…).
+| Campo | Valor |
+|-------|--------|
+| URL MCP | `https://mcp-instagram-mcp.kxryyk.easypanel.host/mcp` |
+| Health | `https://mcp-instagram-mcp.kxryyk.easypanel.host/health` |
+| Auth | Header `Authorization: Bearer <MCP_API_KEY>` |
+| Painel | EasyPanel Fábrica → projeto **mcp-instagram** → serviço **mcp** |
 
-**Não confundir** com o MCP *Meta Social Technologies* (devtools do developers.facebook.com). Aquele gerencia o **app**. Este opera a **conta Instagram**.
+A `MCP_API_KEY` está nas **Environment Variables** do serviço no EasyPanel (não commitada).
+
+### Claude Desktop / Claude.ai (HTTP)
+
+```json
+{
+  "mcpServers": {
+    "instagram-maquina-de-vendas": {
+      "url": "https://mcp-instagram-mcp.kxryyk.easypanel.host/mcp",
+      "headers": {
+        "Authorization": "Bearer COLE_MCP_API_KEY_DO_EASYPANEL"
+      }
+    }
+  }
+}
+```
+
+Arquivo local (Windows): `%APPDATA%\Claude\claude_desktop_config.json`  
+Reinicie o Claude. Em **Settings → Developer / MCP**, o servidor deve ficar verde.
+
+### Cursor (`~/.cursor/mcp.json`)
+
+```json
+{
+  "mcpServers": {
+    "instagram-maquina-de-vendas": {
+      "url": "https://mcp-instagram-mcp.kxryyk.easypanel.host/mcp",
+      "headers": {
+        "Authorization": "Bearer COLE_MCP_API_KEY_DO_EASYPANEL"
+      }
+    }
+  }
+}
+```
+
+Não precisa instalar Node nem mexer em pasta local.
 
 ## Tools
 
@@ -30,75 +70,30 @@ Claude Desktop  ──stdio──►  MCP Instagram  ──HTTPS──►  Graph
 | `ig_send_dm` | Enviar DM (janela 24h Meta) |
 | `ig_media_insights` | Insights do post |
 
-## Setup rápido
+## Deploy / código
 
-### 1. Instalar
+- Repo: `ftsmazzo/sistema-instagram`, path `/mcp-instagram`
+- Dockerfile na pasta `mcp-instagram/`
+- Variáveis no EasyPanel: `MCP_API_KEY`, `IG_USER_ID`, `INSTAGRAM_ACCESS_TOKEN`, `META_GRAPH_VERSION`, `PORT=3000`, `HOST=0.0.0.0`
+
+Para redeploy: EasyPanel → **mcp-instagram** → **mcp** → Deploy (ou push em `main` se o webhook GitHub estiver ativo).
+
+## Modo local (opcional / debug)
+
+Só se precisar depurar sem EasyPanel:
 
 ```bash
 cd mcp-instagram
-npm install
-npm run build
+npm install && npm run build
+# .env com IG_USER_ID + INSTAGRAM_ACCESS_TOKEN + MCP_API_KEY
+npm run start:http   # ou: node dist/http.js
 ```
 
-### 2. Credenciais
-
-No painel **Máquina de Vendas → Administração**, copie:
-
-- `ig_user_id`
-- `access_token` (publicação, `EAA…`) **ou** `agent_access_token` (`IGAA…`)
-
-Crie `mcp-instagram/.env` (só local; **não commitar**):
-
-```env
-IG_USER_ID=seu_ig_user_id
-INSTAGRAM_ACCESS_TOKEN=seu_token
-# FACEBOOK_PAGE_ID=opcional_se_EAA_e_DM_via_pagina
-META_GRAPH_VERSION=v24.0
-```
-
-### 3. Claude Desktop
-
-Arquivo (Windows): `%APPDATA%\Claude\claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "instagram-maquina-de-vendas": {
-      "command": "node",
-      "args": [
-        "C:\\Users\\anjo_\\OneDrive\\Projetos-FabriaIA\\Agente-Instagram\\mcp-instagram\\dist\\index.js"
-      ],
-      "env": {
-        "IG_USER_ID": "COLE_AQUI",
-        "INSTAGRAM_ACCESS_TOKEN": "COLE_AQUI",
-        "META_GRAPH_VERSION": "v24.0"
-      }
-    }
-  }
-}
-```
-
-Reinicie o Claude Desktop. Em **Settings → Developer / MCP**, o servidor deve aparecer verde.
-
-### 4. Cursor (opcional)
-
-Em `~/.cursor/mcp.json`, mesma entrada `command`/`args`/`env`.
+Stdio (legado): `node dist/index.js` com env no `claude_desktop_config.json` — ver `mcp-instagram/claude_desktop_config.example.json`.
 
 ## Limitações (Meta)
 
 - Conta **Business ou Creator**.
-- App Review: várias permissões Instagram ainda **rejeitadas** no Máquina de Vendas — em contas **admin/tester** do app o modo desenvolvimento costuma funcionar; para clientes externos precisa aprovação.
-- DM: regras da janela de 24h / Human Agent.
-- Publicar: `image_url` precisa ser acessível pela Meta (HTTPS público).
-
-## Checklist App (já no app)
-
-Use case **INSTAGRAM_BUSINESS** já está. Para produção ampla, concluir App Review de:
-
-- `instagram_business_basic`
-- `instagram_business_content_publish`
-- `instagram_business_manage_messages`
-- `instagram_business_manage_comments`
-- `instagram_business_manage_insights` (opcional)
-
-E inscrever webhook tópico `instagram` (`messages`, `comments`) se quiser eventos em tempo real no n8n — o MCP em si é **pull/push sob demanda**, não substitui webhook.
+- App Review: várias permissões ainda **rejeitadas** no Máquina de Vendas — em contas admin/tester o modo desenvolvimento costuma funcionar.
+- DM: janela 24h / Human Agent.
+- Publicar: `image_url` HTTPS pública acessível pela Meta.
