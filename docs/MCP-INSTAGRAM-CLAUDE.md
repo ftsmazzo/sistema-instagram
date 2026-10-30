@@ -20,23 +20,43 @@ Claude / Cursor  ──HTTPS + Bearer──►  EasyPanel MCP  ──Graph API�
 
 A `MCP_API_KEY` está nas **Environment Variables** do serviço no EasyPanel (não commitada).
 
-### Claude Desktop / Claude.ai (HTTP)
+### Claude Desktop (`claude_desktop_config.json`)
+
+O Desktop **não** aceita `url`/`headers` no JSON (isso é formato Cursor). Usa um bridge `mcp-remote` → EasyPanel:
+
+Arquivo: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
   "mcpServers": {
     "instagram-maquina-de-vendas": {
-      "url": "https://mcp-instagram-mcp.kxryyk.easypanel.host/mcp",
-      "headers": {
-        "Authorization": "Bearer COLE_MCP_API_KEY_DO_EASYPANEL"
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote@latest",
+        "https://mcp-instagram-mcp.kxryyk.easypanel.host/mcp",
+        "--transport",
+        "http-only",
+        "--header",
+        "Authorization:${AUTH_HEADER}"
+      ],
+      "env": {
+        "AUTH_HEADER": "Bearer COLE_MCP_API_KEY_DO_EASYPANEL"
       }
     }
   }
 }
 ```
 
-Arquivo local (Windows): `%APPDATA%\Claude\claude_desktop_config.json`  
-Reinicie o Claude. Em **Settings → Developer / MCP**, o servidor deve ficar verde.
+**Feche o Claude por completo** (bandeja do sistema, não só a janela) e abra de novo. Em Settings → Developer o servidor deve ficar verde. Precisa ter Node.js no PATH.
+
+### Claude.ai / app (Custom Connector)
+
+1. **Customize → Connectors → Add custom connector**
+2. Nome: `Instagram Máquina de Vendas`
+3. URL: `https://mcp-instagram-mcp.kxryyk.easypanel.host/mcp`
+4. Authentication: **No sign in**
+5. Request headers: `Authorization` = `Bearer COLE_MCP_API_KEY_DO_EASYPANEL`
 
 ### Cursor (`~/.cursor/mcp.json`)
 
@@ -44,6 +64,7 @@ Reinicie o Claude. Em **Settings → Developer / MCP**, o servidor deve ficar ve
 {
   "mcpServers": {
     "instagram-maquina-de-vendas": {
+      "type": "http",
       "url": "https://mcp-instagram-mcp.kxryyk.easypanel.host/mcp",
       "headers": {
         "Authorization": "Bearer COLE_MCP_API_KEY_DO_EASYPANEL"
@@ -52,8 +73,6 @@ Reinicie o Claude. Em **Settings → Developer / MCP**, o servidor deve ficar ve
   }
 }
 ```
-
-Não precisa instalar Node nem mexer em pasta local.
 
 ## Tools
 

@@ -1,9 +1,18 @@
 {
   "mcpServers": {
     "instagram-maquina-de-vendas": {
-      "url": "https://mcp-instagram-mcp.kxryyk.easypanel.host/mcp",
-      "headers": {
-        "Authorization": "Bearer COLE_MCP_API_KEY_DO_EASYPANEL"
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote@latest",
+        "https://mcp-instagram-mcp.kxryyk.easypanel.host/mcp",
+        "--transport",
+        "http-only",
+        "--header",
+        "Authorization:${AUTH_HEADER}"
+      ],
+      "env": {
+        "AUTH_HEADER": "Bearer COLE_MCP_API_KEY_DO_EASYPANEL"
       }
     }
   }
