@@ -1,18 +1,13 @@
 {
   "mcpServers": {
     "instagram-maquina-de-vendas": {
-      "command": "npx",
+      "command": "node",
       "args": [
-        "-y",
-        "mcp-remote@latest",
-        "https://mcp-instagram-mcp.kxryyk.easypanel.host/mcp",
-        "--transport",
-        "http-only",
-        "--header",
-        "Authorization:${AUTH_HEADER}"
+        "C:\\Users\\anjo_\\OneDrive\\Projetos-FabriaIA\\Agente-Instagram\\mcp-instagram\\scripts\\mcp-stdio.mjs"
       ],
       "env": {
-        "AUTH_HEADER": "Bearer COLE_MCP_API_KEY_DO_EASYPANEL"
+        "MCP_REMOTE_URL": "https://mcp-instagram-mcp.kxryyk.easypanel.host/mcp",
+        "MCP_TOKEN": "COLE_MCP_API_KEY_DO_EASYPANEL"
       }
     }
   }

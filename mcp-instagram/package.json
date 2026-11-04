@@ -1,6 +1,6 @@
 {
   "name": "mcp-instagram-maquina-de-vendas",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "MCP Instagram (Máquina de Vendas / Meta Graph API) para Claude Desktop e Cursor",
   "type": "module",
@@ -11,6 +11,7 @@
     "build": "tsc -p tsconfig.json",
     "start": "node dist/http.js",
     "start:stdio": "node dist/index.js",
+    "start:bridge": "node scripts/mcp-stdio.mjs",
     "dev": "tsx src/http.ts",
     "dev:stdio": "tsx src/index.ts"
   },
